@@ -146,6 +146,8 @@ class StatuslineGenerator {
       let contextUsedTokens = 0, lastStopReason = null;
       let hasError = false, lastToolCall = null;
 
+      let lastAssistantIndex = -1;
+
       // 从最后一行开始解析，找到最新的assistant消息的usage信息
       for (let i = lines.length - 1; i >= 0; i--) {
         const line = lines[i].trim(); // 模拟Python的strip()
@@ -155,20 +157,21 @@ class StatuslineGenerator {
           const entry = JSON.parse(line);
 
           // Token统计 - 完全模拟Python脚本的条件检查
-          if (entry.type === 'assistant' && 
-              'message' in entry && 
-              'usage' in entry.message) {
-            
+          if (entry.type === 'assistant' &&
+            'message' in entry &&
+            'usage' in entry.message) {
+
             const usage = entry.message.usage;
             const requiredKeys = ['input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens', 'output_tokens'];
-            
+
             // 模拟Python的all()函数检查
             if (requiredKeys.every(key => key in usage)) {
-              contextUsedTokens = usage.input_tokens + 
-                                usage.cache_creation_input_tokens + 
-                                usage.cache_read_input_tokens + 
-                                usage.output_tokens;
+              contextUsedTokens = usage.input_tokens +
+                usage.cache_creation_input_tokens +
+                usage.cache_read_input_tokens +
+                usage.output_tokens;
               lastStopReason = entry.message.stop_reason;
+              lastAssistantIndex = i;
               break; // 找到第一个匹配后退出
             }
           }
@@ -178,8 +181,44 @@ class StatuslineGenerator {
         }
       }
 
-      // 单独循环处理工具调用和错误检测
-      for (const line of lines) {
+      // 错误检测逻辑：
+      // 1. 检查最新assistant消息是否因错误停止
+      let assistantError = false;
+      let recentErrors = false;
+
+      if (lastAssistantIndex >= 0) {
+        try {
+          const assistantLine = lines[lastAssistantIndex].trim();
+          if (assistantLine) {
+            const assistantEntry = JSON.parse(assistantLine);
+            // 检查assistant消息本身是否是错误响应
+            assistantError = this.isErrorEntry(assistantEntry);
+          }
+        } catch (e) {
+          // 忽略解析错误
+        }
+      }
+
+      // 2. 检查最近20条消息中是否有错误（用于括号提示）
+      const recentLines = lines.slice(-20);
+      for (const line of recentLines) {
+        if (!line.trim()) continue;
+
+        try {
+          const entry = JSON.parse(line);
+          if (this.isErrorEntry(entry)) {
+            recentErrors = true;
+            break;
+          }
+        } catch (parseError) {
+          // 忽略单行解析错误
+        }
+      }
+
+      hasError = assistantError;
+
+      // 工具调用检测 - 复用上面的recentLines
+      for (const line of recentLines) {
         if (!line.trim()) continue;
 
         try {
@@ -193,18 +232,13 @@ class StatuslineGenerator {
             }
           }
 
-          // 错误检测
-          if (!hasError) {
-            hasError = this.isErrorEntry(entry);
-          }
-
         } catch (parseError) {
           // 忽略单行解析错误，继续处理其他行
         }
       }
 
       // 计算结果
-      const result = this.calculateDisplayInfo(contextUsedTokens, lastStopReason, hasError, lastToolCall);
+      const result = this.calculateDisplayInfo(contextUsedTokens, lastStopReason, hasError, lastToolCall, recentErrors);
 
       // 更新缓存
       this.cachedTranscriptData = result;
@@ -224,8 +258,8 @@ class StatuslineGenerator {
     // 检查工具使用结果中的错误，但排除权限相关的阻止
     if (entry.toolUseResult) {
       const errorMsg = entry.toolUseResult.error || entry.toolUseResult;
-      if (typeof errorMsg === 'string' && 
-          (errorMsg.includes('was blocked') || errorMsg.includes('For security'))) {
+      if (typeof errorMsg === 'string' &&
+        (errorMsg.includes('was blocked') || errorMsg.includes('For security'))) {
         return false; // 权限阻止不算真正错误
       }
       if (entry.toolUseResult.error || entry.toolUseResult.type === 'error') {
@@ -239,8 +273,8 @@ class StatuslineGenerator {
         if (item.type === 'tool_result' && item.is_error === true) {
           // 检查是否是权限相关的阻止
           const content = item.content || '';
-          if (typeof content === 'string' && 
-              (content.includes('was blocked') || content.includes('For security'))) {
+          if (typeof content === 'string' &&
+            (content.includes('was blocked') || content.includes('For security'))) {
             return false; // 权限阻止不算真正错误
           }
           return true; // 其他错误才算真正错误
@@ -259,23 +293,23 @@ class StatuslineGenerator {
     const totalBars = 15;
     const mainThreshold = 85; // 主要区域阈值
     const mainBars = Math.floor(totalBars * mainThreshold / 100); // 85%对应的进度条数量
-    
+
     const currentBars = Math.floor(totalBars * percentage / 100);
     const mainUsed = Math.min(currentBars, mainBars);
     const backupUsed = Math.max(0, currentBars - mainBars);
-    
+
     // 主要区域 (实心块)
     const mainProgress = '█'.repeat(mainUsed) + '░'.repeat(mainBars - mainUsed);
     // 后备区域 (斜纹块)  
     const backupProgress = '▓'.repeat(backupUsed) + '░'.repeat(totalBars - mainBars - backupUsed);
-    
+
     return `[${mainProgress}${backupProgress}]`;
   }
 
   /**
    * 计算显示信息
    */
-  calculateDisplayInfo(contextUsedTokens, lastStopReason, hasError, lastToolCall) {
+  calculateDisplayInfo(contextUsedTokens, lastStopReason, hasError, lastToolCall, recentErrors = false) {
     // Token信息
     let tokenInfo;
     const contextWindow = 200000;
@@ -307,6 +341,7 @@ class StatuslineGenerator {
     // 状态信息
     let status;
     if (hasError) {
+      // assistant消息本身有错误，直接显示Error
       status = `${colors.red}${icons.error} Error${colors.reset}`;
     } else if (lastStopReason === 'tool_use') {
       const toolInfo = lastToolCall ? ` ${lastToolCall}` : '';
@@ -315,6 +350,11 @@ class StatuslineGenerator {
       status = `${colors.green}${icons.ready} Ready${colors.reset}`;
     } else {
       status = `${colors.yellow}${icons.thinking} Thinking${colors.reset}`;
+    }
+
+    // 如果最近有错误但不是assistant直接错误，添加错误提示
+    if (!hasError && recentErrors) {
+      status += `${colors.dim} (${colors.red}${icons.warning} Recent Error${colors.reset}${colors.dim})${colors.reset}`;
     }
 
     return { tokenInfo, status };
