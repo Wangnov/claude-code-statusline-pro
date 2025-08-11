@@ -1,16 +1,49 @@
 {
-  "name": "cc-statusline-pro",
+  "name": "claude-code-statusline-pro",
   "version": "1.0.0",
-  "description": "",
+  "description": "Enhanced configurable statusline for Claude Code with TOML configuration, themes, and cross-platform support",
   "main": "claude-code-statusline.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "bin": {
+    "claude-statusline-config": "./statusline-config.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "scripts": {
+    "test": "node test-current-setup.js",
+    "config": "node statusline-config.js"
+  },
+  "keywords": [
+    "claude-code",
+    "statusline",
+    "cli",
+    "terminal",
+    "configuration",
+    "toml",
+    "themes"
+  ],
+  "author": "wangnov",
+  "license": "MIT",
   "type": "commonjs",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wangnov/claude-code-statusline-pro.git"
+  },
+  "files": [
+    "claude-code-statusline.js",
+    "config.js",
+    "statusline-config.js",
+    "statusline.config.toml",
+    "README.md"
+  ],
   "dependencies": {
     "@iarna/toml": "^2.2.5"
-  }
+  },
+  "devDependencies": {},
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "preferGlobal": false
 }
