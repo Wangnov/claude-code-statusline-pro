@@ -1,73 +1,73 @@
-# Claude Code Statusline 配置文件
-# TOML格式 - 简洁明了的配置语言
+# Claude Code Statusline 配置文件 | Configuration File
+# TOML格式 - 简洁明了的配置语言 | TOML format - Simple and clear configuration language
 
 # ================================
-# 显示组件配置
+# 显示组件配置 | Component Configuration
 # ================================
 [components]
-# 组件显示顺序（从左到右）
+# 组件显示顺序（从左到右） | Component display order (left to right)
 order = ["project", "model", "branch", "tokens", "status"]
 
-# 项目名称显示
+# 项目名称显示 | Project name display
 [components.project]
 enabled = true
 icon = "📁"
 color = "magenta"
 show_when_empty = false
 
-# 模型信息显示  
+# 模型信息显示 | Model information display
 [components.model]
 enabled = true
 icon = "🤖"
 color = "cyan" 
-show_full_name = false  # true显示完整模型名，false显示缩写
+show_full_name = false  # true显示完整模型名，false显示缩写 | true shows full model name, false shows abbreviation
 
-# 自定义模型显示名称
+# 自定义模型显示名称 | Custom model display names
 [components.model.custom_names]
 "claude-sonnet-4" = "S4"
 "claude-opus-4" = "O4" 
 "claude-haiku-3.5" = "H3.5"
 
-# Git分支显示
+# Git分支显示 | Git branch display
 [components.branch]
 enabled = true
 icon = "🌿"
 color = "green"
 show_when_no_git = false
-max_length = 20  # 分支名最大长度，超过会截断
+max_length = 20  # 分支名最大长度，超过会截断 | Maximum branch name length, truncated if exceeded
 
-# Token使用情况显示
+# Token使用情况显示 | Token usage display
 [components.tokens]
 enabled = true
 icon = "📊"
 show_progress_bar = true
 show_percentage = true  
-show_absolute = true    # 显示绝对数值如 160k/200k
+show_absolute = true    # 显示绝对数值如 160k/200k | Show absolute values like 160k/200k
 
-# Token颜色配置
+# Token颜色配置 | Token color configuration
 [components.tokens.colors]
 safe = "green"      # <60%
 warning = "yellow"  # 60-85%  
 danger = "red"      # 85%+
 
-# Token阈值配置
+# Token阈值配置 | Token threshold configuration
 [components.tokens.thresholds]
-warning = 60        # 警告阈值百分比
-danger = 85         # 危险阈值百分比  
-backup = 85         # 后备区域开始百分比
-critical = 95       # 深度后备区域百分比
+warning = 60        # 警告阈值百分比 | Warning threshold percentage
+danger = 85         # 危险阈值百分比 | Danger threshold percentage
+backup = 85         # 后备区域开始百分比 | Backup zone start percentage
+critical = 95       # 深度后备区域百分比 | Critical backup zone percentage
 
-# 状态图标配置
+# 状态图标配置 | Status icon configuration
 [components.tokens.status_icons]
-backup = "⚡"        # 进入后备区域
-critical = "🔥"      # 深度后备区域
+backup = "⚡"        # 进入后备区域 | Entering backup zone
+critical = "🔥"      # 深度后备区域 | Deep backup zone
 
-# 状态信息显示
+# 状态信息显示 | Status information display
 [components.status]
 enabled = true
-show_recent_errors = true  # 显示最近错误提示
+show_recent_errors = true  # 显示最近错误提示 | Show recent error hints
 
-# 状态图标配置
+# 状态图标配置 | Status icon configuration
 [components.status.icons]
 ready = "✅"
 thinking = "💭"
@@ -75,7 +75,7 @@ tool = "🔧"
 error = "❌"
 warning = "⚠️"
 
-# 状态颜色配置  
+# 状态颜色配置 | Status color configuration
 [components.status.colors]
 ready = "green"
 thinking = "yellow"
@@ -83,44 +83,44 @@ tool = "blue"
 error = "red"
 
 # ================================
-# 全局样式配置
+# 全局样式配置 | Global Style Configuration
 # ================================
 [style]
-separator = " | "               # 组件间分隔符
-enable_colors = "auto"          # true/false/"auto"(自动检测终端支持)
-enable_emoji = "auto"           # true/false/"auto"(自动检测终端支持) 
-compact_mode = false            # 紧凑模式，减少空格和图标
-max_width = 0                   # 最大宽度限制，0表示无限制
+separator = " | "               # 组件间分隔符 | Component separator
+enable_colors = "auto"          # true/false/"auto"(自动检测终端支持) | true/false/"auto"(auto-detect terminal support)
+enable_emoji = "auto"           # true/false/"auto"(自动检测终端支持) | true/false/"auto"(auto-detect terminal support)
+compact_mode = false            # 紧凑模式，减少空格和图标 | Compact mode, reduce spaces and icons
+max_width = 0                   # 最大宽度限制，0表示无限制 | Maximum width limit, 0 means unlimited
 
 # ================================
-# 高级配置
+# 高级配置 | Advanced Configuration
 # ================================
 [advanced]
-cache_enabled = true            # 启用transcript解析缓存
-recent_error_count = 20         # 检查最近错误的消息数量
-git_timeout = 1000              # git命令超时时间(ms)
+cache_enabled = true            # 启用transcript解析缓存 | Enable transcript parsing cache
+recent_error_count = 20         # 检查最近错误的消息数量 | Number of recent messages to check for errors
+git_timeout = 1000              # git命令超时时间(ms) | Git command timeout (ms)
 
-# 自定义ANSI颜色代码
+# 自定义ANSI颜色代码 | Custom ANSI color codes
 [advanced.custom_color_codes]
-# 示例：添加自定义颜色
+# 示例：添加自定义颜色 | Example: Add custom colors
 # orange = "\x1b[38;5;208m"
 
 # ================================  
-# 实验性功能
+# 实验性功能 | Experimental Features
 # ================================
 [experimental]
-show_context_health = false     # 显示上下文健康度指标
-adaptive_colors = false         # 根据usage动态调整所有颜色
-show_timestamp = false          # 显示最后更新时间
-show_session_info = false       # 显示会话相关信息
+show_context_health = false     # 显示上下文健康度指标 | Show context health metrics
+adaptive_colors = false         # 根据usage动态调整所有颜色 | Dynamically adjust all colors based on usage
+show_timestamp = false          # 显示最后更新时间 | Show last update time
+show_session_info = false       # 显示会话相关信息 | Show session-related information
 
 # ================================
-# 主题预设
+# 主题预设 | Theme Presets
 # ================================
 
-# 最小化主题
+# 简洁主题 | Minimal Theme
 [themes.minimal]
-description = "只显示核心信息的简洁主题"
+description = "只显示核心信息的简洁主题 | Minimal theme showing only core information"
 
 [themes.minimal.components]
 order = ["model", "tokens", "status"] 
@@ -135,9 +135,9 @@ enabled = false
 compact_mode = true
 enable_emoji = false
 
-# 详细主题
+# 详细主题 | Verbose Theme
 [themes.verbose]
-description = "显示所有信息的详细主题"
+description = "显示所有信息的详细主题 | Verbose theme showing all information"
 
 [themes.verbose.components.model]
 show_full_name = true
@@ -149,9 +149,9 @@ show_absolute = true
 show_timestamp = true
 show_context_health = true
 
-# 开发者主题
+# 开发者主题 | Developer Theme
 [themes.developer] 
-description = "面向开发者的信息丰富主题"
+description = "面向开发者的信息丰富主题 | Developer-oriented information-rich theme"
 
 [themes.developer.components]
 order = ["project", "branch", "model", "tokens", "status"]
@@ -164,20 +164,20 @@ show_session_info = true
 adaptive_colors = true
 
 # ================================
-# 快捷配置模板
+# 快捷配置模板 | Quick Configuration Templates
 # ================================
 
-# 无色彩模式（适用于不支持颜色的终端）
+# 无色彩模式（适用于不支持颜色的终端） | No-color mode (for terminals that don't support colors)
 [templates.no_color]
-description = "禁用所有颜色和表情符号"
+description = "禁用所有颜色和表情符号 | Disable all colors and emoji"
 
 [templates.no_color.style]
 enable_colors = false
 enable_emoji = false
 
-# 高对比度模式
+# 高对比度模式 | High contrast mode
 [templates.high_contrast]
-description = "高对比度显示，提升可读性"
+description = "高对比度显示，提升可读性 | High contrast display for better readability"
 
 [templates.high_contrast.components.tokens.colors]
 safe = "bright_green"
