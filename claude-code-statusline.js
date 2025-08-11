@@ -442,6 +442,7 @@ class ConfigurableStatuslineGenerator {
       // 错误检测逻辑
       let assistantError = false;
       let recentErrors = false;
+      let errorDetails = 'Error';
 
       if (lastAssistantIndex >= 0) {
         try {
@@ -449,6 +450,9 @@ class ConfigurableStatuslineGenerator {
           if (assistantLine) {
             const assistantEntry = JSON.parse(assistantLine);
             assistantError = this.isErrorEntry(assistantEntry);
+            if (assistantError) {
+              errorDetails = this.getErrorDetails(assistantEntry);
+            }
           }
         } catch (e) {
           // 忽略解析错误
@@ -465,6 +469,9 @@ class ConfigurableStatuslineGenerator {
           const entry = JSON.parse(line);
           if (this.isErrorEntry(entry)) {
             recentErrors = true;
+            if (!assistantError) {
+              errorDetails = this.getErrorDetails(entry);
+            }
             break;
           }
         } catch (parseError) {
@@ -472,7 +479,7 @@ class ConfigurableStatuslineGenerator {
         }
       }
 
-      hasError = assistantError;
+      hasError = assistantError || recentErrors;
 
       // 工具调用检测
       for (const line of recentLines) {
@@ -494,7 +501,7 @@ class ConfigurableStatuslineGenerator {
       }
 
       // 计算结果
-      const result = this.calculateDisplayInfo(contextUsedTokens, lastStopReason, hasError, lastToolCall, recentErrors, lastEntryType, lines, lastAssistantIndex);
+      const result = this.calculateDisplayInfo(contextUsedTokens, lastStopReason, hasError, lastToolCall, recentErrors, lastEntryType, lines, lastAssistantIndex, errorDetails);
 
       // 更新缓存
       if (this.config.advanced.cache_enabled) {
@@ -508,11 +515,36 @@ class ConfigurableStatuslineGenerator {
       // 简化错误输出 | Simplified error output
       return {
         tokenInfo: this.config.components.tokens.enabled ? `${this.icons.token} ?/200k` : '',
-        status: this.config.components.status.enabled ? `${this.icons.warning} Error` : ''
+        status: this.config.components.status.enabled ? `${this.icons.error} Error` : ''
       };
     }
   }
 
+
+  /**
+   * 获取错误详细信息
+   */
+  getErrorDetails(entry) {
+    // 检查stop_reason为stop_sequence的API错误
+    if (entry.message?.stop_reason === 'stop_sequence') {
+      if (entry.message?.content && Array.isArray(entry.message.content)) {
+        for (const item of entry.message.content) {
+          if (item.type === 'text' && item.text) {
+            const text = item.text;
+            // API Error 403 配额不足
+            if (text.startsWith('API Error: 403') && text.includes('user quota is not enough')) {
+              return '403配额不足';
+            }
+            // filter错误
+            if (text.includes('filter')) {
+              return 'Filter错误';
+            }
+          }
+        }
+      }
+    }
+    return 'Error';
+  }
 
   /**
    * 检测条目是否包含真正的错误
@@ -532,7 +564,7 @@ class ConfigurableStatuslineGenerator {
 
     // 检查消息内容中的工具错误，但排除权限相关
     if (entry.message?.content && Array.isArray(entry.message.content)) {
-      return entry.message.content.some(item => {
+      const hasToolError = entry.message.content.some(item => {
         if (item.type === 'tool_result' && item.is_error === true) {
           const content = item.content || '';
           if (typeof content === 'string' &&
@@ -543,6 +575,26 @@ class ConfigurableStatuslineGenerator {
         }
         return false;
       });
+      if (hasToolError) return true;
+    }
+
+    // 检查stop_reason为stop_sequence的API错误
+    if (entry.message?.stop_reason === 'stop_sequence') {
+      if (entry.message?.content && Array.isArray(entry.message.content)) {
+        for (const item of entry.message.content) {
+          if (item.type === 'text' && item.text) {
+            const text = item.text;
+            // API Error 403 配额不足
+            if (text.startsWith('API Error: 403') && text.includes('user quota is not enough')) {
+              return true;
+            }
+            // filter错误
+            if (text.includes('filter')) {
+              return true;
+            }
+          }
+        }
+      }
     }
 
     return false;
@@ -573,7 +625,7 @@ class ConfigurableStatuslineGenerator {
   /**
    * 计算显示信息
    */
-  calculateDisplayInfo(contextUsedTokens, lastStopReason, hasError, lastToolCall, recentErrors = false, lastEntryType = null, lines = null, lastAssistantIndex = -1) {
+  calculateDisplayInfo(contextUsedTokens, lastStopReason, hasError, lastToolCall, recentErrors = false, lastEntryType = null, lines = null, lastAssistantIndex = -1, errorDetails = 'Error') {
     // Token信息
     let tokenInfo = '';
     const contextWindow = 200000;
@@ -619,7 +671,7 @@ class ConfigurableStatuslineGenerator {
       const statusColors = this.config.components.status.colors;
 
       if (hasError) {
-        status = `${this.colors[statusColors.error] || ''}${this.icons.error} Error${this.colors.reset}`;
+        status = `${this.colors[statusColors.error] || ''}${this.icons.error} ${errorDetails}${this.colors.reset}`;
       } else if (lastStopReason === 'tool_use') {
         const toolInfo = lastToolCall ? ` ${lastToolCall}` : '';
         status = `${this.colors[statusColors.tool] || ''}${this.icons.tool} Tool${toolInfo}${this.colors.reset}`;
@@ -662,7 +714,7 @@ class ConfigurableStatuslineGenerator {
 
       // 如果启用了最近错误显示且有最近错误
       if (!hasError && recentErrors && this.config.components.status.show_recent_errors) {
-        status += `${this.colors.dim} (${this.colors.red}${this.icons.warning} Recent Error${this.colors.reset}${this.colors.dim})${this.colors.reset}`;
+        status += `${this.colors.dim} (${this.colors.red}${this.icons.error} Recent ${errorDetails}${this.colors.reset}${this.colors.dim})${this.colors.reset}`;
       }
     }
 
@@ -818,7 +870,7 @@ if (require.main === module) {
 
   process.stdin.on('error', () => {
     // 简化错误输出，确保单行 | Simplified error output, ensure single line  
-    console.log(`${statusGenerator.icons.warning} Input Error`);
+    console.log(`${statusGenerator.icons.error} Input Error`);
   });
 }
 
