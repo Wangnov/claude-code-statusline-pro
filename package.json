@@ -4,6 +4,7 @@
   "description": "Enhanced configurable statusline for Claude Code with TOML configuration, themes, and cross-platform support",
   "main": "claude-code-statusline.js",
   "bin": {
+    "claude-code-statusline-pro": "./claude-code-statusline.js",
     "claude-statusline-config": "./statusline-config.js"
   },
   "scripts": {
@@ -34,7 +35,9 @@
     "config.js",
     "statusline-config.js",
     "statusline.config.toml",
-    "README.md"
+    "README.md",
+    "README_EN.md",
+    "LICENSE"
   ],
   "dependencies": {
     "@iarna/toml": "^2.2.5"
