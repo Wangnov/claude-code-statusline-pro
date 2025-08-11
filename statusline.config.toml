@@ -1,6 +1,11 @@
 # Claude Code Statusline 配置文件 | Configuration File
 # TOML格式 - 简洁明了的配置语言 | TOML format - Simple and clear configuration language
 
+# 预设组件排布 | Preset component layout
+# P=project, M=model, B=branch, T=tokens, S=status
+# 例如: "PMBTS"=全部组件, "MT"=仅模型和token | Example: "PMBTS"=all components, "MT"=only model and tokens
+preset = "PMBT"
+  
 # ================================
 # 显示组件配置 | Component Configuration
 # ================================
@@ -97,7 +102,7 @@ max_width = 0                   # 最大宽度限制，0表示无限制 | Maximu
 # ================================
 [advanced]
 cache_enabled = true            # 启用transcript解析缓存 | Enable transcript parsing cache
-recent_error_count = 20         # 检查最近错误的消息数量 | Number of recent messages to check for errors
+recent_error_count = 5         # 检查最近错误的消息数量 | Number of recent messages to check for errors
 git_timeout = 1000              # git命令超时时间(ms) | Git command timeout (ms)
 
 # 自定义ANSI颜色代码 | Custom ANSI color codes
@@ -115,53 +120,18 @@ show_timestamp = false          # 显示最后更新时间 | Show last update ti
 show_session_info = false       # 显示会话相关信息 | Show session-related information
 
 # ================================
-# 主题预设 | Theme Presets
+# 预设配置映射 | Preset Configuration Mapping
 # ================================
+# 根据preset字符串自动配置组件启用状态和顺序
+# Auto-configure component enablement and order based on preset string
 
-# 简洁主题 | Minimal Theme
-[themes.minimal]
-description = "只显示核心信息的简洁主题 | Minimal theme showing only core information"
-
-[themes.minimal.components]
-order = ["model", "tokens", "status"] 
-
-[themes.minimal.components.project]
-enabled = false
-
-[themes.minimal.components.branch]  
-enabled = false
-
-[themes.minimal.style]
-compact_mode = true
-enable_emoji = false
-
-# 详细主题 | Verbose Theme
-[themes.verbose]
-description = "显示所有信息的详细主题 | Verbose theme showing all information"
-
-[themes.verbose.components.model]
-show_full_name = true
-
-[themes.verbose.components.tokens]
-show_absolute = true
-
-[themes.verbose.experimental]
-show_timestamp = true
-show_context_health = true
-
-# 开发者主题 | Developer Theme
-[themes.developer] 
-description = "面向开发者的信息丰富主题 | Developer-oriented information-rich theme"
-
-[themes.developer.components]
-order = ["project", "branch", "model", "tokens", "status"]
-
-[themes.developer.components.branch]
-max_length = 30
-
-[themes.developer.experimental]
-show_session_info = true
-adaptive_colors = true
+# 组件字母映射 | Component letter mapping
+[preset_mapping]
+P = "project"     # 项目名称 | Project name
+M = "model"       # 模型信息 | Model information  
+B = "branch"      # Git分支 | Git branch
+T = "tokens"      # Token使用情况 | Token usage
+S = "status"      # 状态信息 | Status information
 
 # ================================
 # 快捷配置模板 | Quick Configuration Templates

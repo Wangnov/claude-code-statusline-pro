@@ -18,13 +18,13 @@ const MODEL_CONFIGS = {
 };
 
 class ConfigurableStatuslineGenerator {
-  constructor() {
+  constructor(overridePreset = null) {
     this.cachedTranscriptData = null;
     this.lastTranscriptMtime = null;
     this.lastUpdate = 0;
     this.lastGeneratedResult = null; // 缓存上次生成结果 | Cache last generated result
     this.updateInterval = 300; // 官方建议的300ms更新间隔 | Official 300ms update interval
-    this.config = configManager.loadConfig();
+    this.config = configManager.loadConfig(null, overridePreset);
     this.setupCapabilities();
     this.setupColors();
     this.setupIcons();
@@ -639,9 +639,57 @@ class ConfigurableStatuslineGenerator {
   }
 }
 
+// 解析命令行参数 | Parse command line arguments
+function parseCommandLineArgs() {
+  const args = process.argv.slice(2);
+  let overridePreset = null;
+  
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg === '--preset' || arg === '-p') {
+      // --preset PMBTS 或 -p MT
+      if (i + 1 < args.length) {
+        overridePreset = args[i + 1];
+        i++; // 跳过下一个参数
+      }
+    } else if (arg.startsWith('--preset=')) {
+      // --preset=PMBTS
+      overridePreset = arg.split('=')[1];
+    } else if (arg.match(/^[PMBTSA-Z]+$/)) {
+      // 直接的预设字符串，如 PMBTS 或 MT
+      overridePreset = arg;
+    } else if (arg === '--help' || arg === '-h') {
+      console.log(`Claude Code Statusline Pro - 预设组件排布系统
+      
+使用方法:
+  npx claude-code-statusline-pro [preset]
+  npx claude-code-statusline-pro --preset [preset]
+  npx claude-code-statusline-pro -p [preset]
+  
+预设字符说明:
+  P = project  (项目名称)
+  M = model    (模型信息)  
+  B = branch   (Git分支)
+  T = tokens   (Token使用情况)
+  S = status   (状态信息)
+  
+示例:
+  npx claude-code-statusline-pro PMBTS    # 显示所有组件
+  npx claude-code-statusline-pro MT       # 仅显示模型和token
+  npx claude-code-statusline-pro --preset BT  # 仅显示分支和token
+`);
+      process.exit(0);
+    }
+  }
+  
+  return overridePreset;
+}
+
 // 只有在直接运行时才启动主程序
 if (require.main === module) {
-  const statusGenerator = new ConfigurableStatuslineGenerator();
+  const overridePreset = parseCommandLineArgs();
+  const statusGenerator = new ConfigurableStatuslineGenerator(overridePreset);
 
   process.stdin.setEncoding('utf8');
   let inputData = '';

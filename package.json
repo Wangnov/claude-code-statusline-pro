@@ -1,7 +1,7 @@
 {
   "name": "claude-code-statusline-pro",
-  "version": "1.0.2",
-  "description": "Enhanced configurable statusline for Claude Code with TOML configuration, themes, and cross-platform support",
+  "version": "1.1.0",
+  "description": "Enhanced configurable statusline for Claude Code with preset system, TOML configuration, and cross-platform support",
   "main": "claude-code-statusline.js",
   "bin": {
     "claude-code-statusline-pro": "./claude-code-statusline.js",
@@ -18,7 +18,8 @@
     "terminal",
     "configuration",
     "toml",
-    "themes"
+    "preset",
+    "customizable"
   ],
   "author": "wangnov",
   "license": "MIT",
