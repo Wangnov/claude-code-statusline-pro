@@ -34,7 +34,7 @@ class ConfigManager {
           show_full_name: false,
           custom_names: {
             "claude-sonnet-4": "S4",
-            "claude-opus-4": "O4",
+            "claude-opus-4.1": "O4.1",
             "claude-haiku-3.5": "H3.5"
           }
         },

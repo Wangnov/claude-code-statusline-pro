@@ -25,7 +25,7 @@ show_full_name = false  # true显示完整模型名，false显示缩写 | true s
 # 自定义模型显示名称 | Custom model display names
 [components.model.custom_names]
 "claude-sonnet-4" = "S4"
-"claude-opus-4" = "O4" 
+"claude-opus-4.1" = "O4.1"
 "claude-haiku-3.5" = "H3.5"
 
 # Git分支显示 | Git branch display
