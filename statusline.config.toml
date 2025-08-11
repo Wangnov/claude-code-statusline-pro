@@ -4,7 +4,7 @@
 # 预设组件排布 | Preset component layout
 # P=project, M=model, B=branch, T=tokens, S=status
 # 例如: "PMBTS"=全部组件, "MT"=仅模型和token | Example: "PMBTS"=all components, "MT"=only model and tokens
-preset = "PMBT"
+preset = "PMBTS"
   
 # ================================
 # 显示组件配置 | Component Configuration
@@ -104,6 +104,7 @@ max_width = 0                   # 最大宽度限制，0表示无限制 | Maximu
 cache_enabled = true            # 启用transcript解析缓存 | Enable transcript parsing cache
 recent_error_count = 5         # 检查最近错误的消息数量 | Number of recent messages to check for errors
 git_timeout = 1000              # git命令超时时间(ms) | Git command timeout (ms)
+debug_mode = false              # 调试模式，显示接收的JSON数据 | Debug mode, show received JSON data
 
 # 自定义ANSI颜色代码 | Custom ANSI color codes
 [advanced.custom_color_codes]
