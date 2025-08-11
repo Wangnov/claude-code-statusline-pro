@@ -19,6 +19,14 @@ class ConfigManager {
    */
   getDefaultConfig() {
     return {
+      preset: "PMBTS", // 默认预设：P=project, M=model, B=branch, T=tokens, S=status
+      preset_mapping: {
+        P: "project",
+        M: "model", 
+        B: "branch",
+        T: "tokens",
+        S: "status"
+      },
       components: {
         order: ["project", "model", "branch", "tokens", "status"],
         project: {
@@ -134,7 +142,7 @@ class ConfigManager {
   /**
    * 加载配置文件
    */
-  loadConfig(customPath = null) {
+  loadConfig(customPath = null, overridePreset = null) {
     try {
       // 使用指定路径或查找配置文件
       this.configPath = customPath || this.findConfigFile();
@@ -142,15 +150,22 @@ class ConfigManager {
       if (!this.configPath) {
         console.warn('未找到配置文件，使用默认配置');
         this.config = this.defaults;
-        return this.config;
+      } else {
+        // 读取并解析TOML文件
+        const configContent = fs.readFileSync(this.configPath, 'utf8');
+        const parsedConfig = TOML.parse(configContent);
+        
+        // 深度合并配置（用户配置覆盖默认配置）
+        this.config = this.deepMerge(this.defaults, parsedConfig);
       }
-
-      // 读取并解析TOML文件
-      const configContent = fs.readFileSync(this.configPath, 'utf8');
-      const parsedConfig = TOML.parse(configContent);
       
-      // 深度合并配置（用户配置覆盖默认配置）
-      this.config = this.deepMerge(this.defaults, parsedConfig);
+      // 如果提供了命令行预设参数，优先使用
+      if (overridePreset) {
+        this.config.preset = overridePreset;
+      }
+      
+      // 应用预设配置
+      this.applyPreset();
       
       // 验证配置
       this.validateConfig();
@@ -161,6 +176,13 @@ class ConfigManager {
       console.error(`配置加载失败: ${error.message}`);
       console.warn('使用默认配置');
       this.config = this.defaults;
+      
+      // 即使是默认配置也要应用预设
+      if (overridePreset) {
+        this.config.preset = overridePreset;
+      }
+      this.applyPreset();
+      
       return this.config;
     }
   }
@@ -255,23 +277,42 @@ class ConfigManager {
   }
 
   /**
-   * 应用主题
+   * 应用预设配置
+   * 根据preset字符串配置组件启用状态和顺序
    */
-  applyTheme(themeName) {
-    if (!this.config) {
-      this.loadConfig();
-    }
-
-    const theme = this.config.themes?.[themeName];
-    if (!theme) {
-      console.warn(`主题 "${themeName}" 不存在`);
-      return false;
-    }
-
-    // 应用主题配置（深度合并）
-    this.config = this.deepMerge(this.config, theme);
+  applyPreset() {
+    if (!this.config || !this.config.preset) return;
     
-    return true;
+    const preset = this.config.preset.toUpperCase();
+    const mapping = this.config.preset_mapping;
+    
+    // 验证预设字符串
+    for (const char of preset) {
+      if (!mapping[char]) {
+        console.warn(`未知的预设字符: ${char}`);
+        return;
+      }
+    }
+    
+    // 根据预设字符串生成组件顺序
+    const newOrder = [];
+    for (const char of preset) {
+      const componentName = mapping[char];
+      if (componentName) {
+        newOrder.push(componentName);
+      }
+    }
+    
+    // 更新组件顺序
+    this.config.components.order = newOrder;
+    
+    // 更新组件启用状态
+    const allComponents = Object.keys(mapping).map(k => mapping[k]);
+    for (const componentName of allComponents) {
+      if (this.config.components[componentName]) {
+        this.config.components[componentName].enabled = newOrder.includes(componentName);
+      }
+    }
   }
 
   /**
