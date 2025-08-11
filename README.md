@@ -13,22 +13,48 @@ Enhanced configurable statusline for Claude Code with TOML configuration, themes
 - 🔧 **高度灵活**: 可自定义颜色、图标、顺序、阈值 | **Flexible**: Customizable colors, icons, order, thresholds
 - 📱 **终端自适应**: 自动检测终端能力 | **Terminal Adaptive**: Auto-detects terminal capabilities
 
-## 🚀 快速开始 Quick Start
+## 🚀 安装和配置 Installation & Setup
 
-### 安装 Installation
+### 推荐方式 Recommended Methods
+
+**方式1：使用npx (无需安装) | Method 1: Using npx (no installation required)**
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "npx claude-code-statusline-pro"
+  }
+}
+```
+
+**方式2：全局安装 | Method 2: Global installation**
 
 ```bash
-# 克隆或下载 Clone or download
+# 全局安装 Global install
+npm install -g claude-code-statusline-pro
+```
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "claude-code-statusline-pro"
+  }
+}
+```
+
+### 其他安装方式 Alternative Methods
+
+**从源码安装 | Install from source**
+
+```bash
+# 克隆仓库 Clone repository
 git clone https://github.com/wangnov/claude-code-statusline-pro.git
 cd claude-code-statusline-pro
 npm install
-```
 
-### Claude Code 配置 Configuration
-
-添加到您的Claude Code设置中 | Add to your Claude Code settings:
-
-```json
+# Claude Code配置 Claude Code configuration
 {
   "statusLine": {
     "type": "command",
@@ -37,26 +63,28 @@ npm install
 }
 ```
 
-### 基本使用 Basic Usage
+## 🎨 配置管理 Configuration
+
+### 快速开始 Quick Start
 
 ```bash
-# 创建默认配置 Create default config
-node statusline-config.js init
+# 创建默认配置 Create default config (全局安装后 after global install)
+claude-statusline-config init
 
-# 测试您的设置 Test your setup
-node statusline-config.js test
+# 或使用npx Or using npx
+npx claude-statusline-config init
+
+# 测试配置 Test configuration
+claude-statusline-config test
 
 # 查看当前配置 View current config
-node statusline-config.js show
+claude-statusline-config show
 
-# 列出可用主题 List available themes
-node statusline-config.js themes
-
-# 预览主题效果 Preview a theme
-node statusline-config.js preview minimal
+# 预览主题 Preview themes
+claude-statusline-config preview minimal
 ```
 
-## 🎨 配置 Configuration
+### 配置文件 Configuration File
 
 状态栏使用 `statusline.config.toml` 进行配置  
 The statusline uses `statusline.config.toml` for configuration:
@@ -106,37 +134,45 @@ separator = " | "
 
 ```bash
 # 预览简洁主题 Preview minimal theme
-node statusline-config.js preview minimal
+claude-statusline-config preview minimal
 # 输出 Output: [M] S4 | [T] 80.1%(160k/200k) | [OK] Ready
+
+# 列出所有主题 List all themes  
+claude-statusline-config themes
 ```
 
 ## 🖥️ Windows兼容性 Windows Compatibility
 
-状态栏包含强大的Windows支持  
-The statusline includes robust Windows support:
+状态栏包含强大的Windows支持，自动检测终端能力  
+The statusline includes robust Windows support with automatic terminal detection:
 
-### **表情检测 Emoji Detection**
-```javascript
-emoji: enableEmoji === true || 
-  (enableEmoji === "auto" && (
-    process.platform !== 'win32' ||      // 非Windows系统总是可用 Non-Windows always OK
-    process.env.WT_SESSION ||             // Windows Terminal
-    process.env.TERM_PROGRAM === 'vscode' || // VS Code
-    process.env.ConEmuPID                 // ConEmu
-  ))
-```
+### **智能检测 Smart Detection**
+- **Windows Terminal** ✅ 完全支持 Full support
+- **VS Code Terminal** ✅ 完全支持 Full support
+- **Git Bash** ✅ 完全支持 Full support
+- **PowerShell** ⚠️ 自动回退到文本模式 Auto-fallback to text mode
+- **CMD** ⚠️ 有限支持，安全回退 Limited support, safe fallback
 
 ### **安全回退 Safe Fallbacks**
 - 表情→文本替代 | Emoji → Text alternatives (`📁` → `[P]`, `🤖` → `[M]`)
 - 颜色→优雅降级为纯文本 | Colors → Graceful degradation to plain text
 - 进度条→简单百分比显示 | Progress bars → Simple percentage display
 
-### **Windows测试 Windows Testing**
+## 📊 输出示例 Output Examples
 
-```bash
-# 强制Windows兼容模式 Force Windows compatibility mode
-node statusline-config.js preview minimal
-# 在不支持的终端上显示纯文本输出 Will show text-only output on unsupported terminals
+### 默认主题 Default Theme
+```
+📁 my-project | 🤖 S4 | 🌿 main | 📊 [████████████░░░] 80.1%(160k/200k) | ✅ Ready
+```
+
+### 简洁主题(Windows安全) Minimal Theme (Windows Safe)
+```
+[M] S4 | [T] 80.1%(160k/200k) | [OK] Ready
+```
+
+### 带错误提示 With Error Indication
+```
+📁 project | 🤖 S4 | 🌿 main | 📊 [████████████▓░░] 90.5%(181k/200k)⚡ | 💭 Thinking (⚠️ Recent Error)
 ```
 
 ## 🛠️ 高级配置 Advanced Configuration
@@ -167,73 +203,48 @@ adaptive_colors = true        # 动态颜色调整 Dynamic color adjustment
 show_timestamp = true         # 最后更新时间 Last update time
 ```
 
-## 📊 输出示例 Output Examples
-
-### 默认主题 Default Theme
-```
-📁 my-project | 🤖 S4 | 🌿 main | 📊 [████████████░░░] 80.1%(160k/200k) | ✅ Ready
-```
-
-### 简洁主题(Windows安全) Minimal Theme (Windows Safe)
-```
-[M] S4 | [T] 80.1%(160k/200k) | [OK] Ready
-```
-
-### 带错误提示 With Error Indication
-```
-📁 project | 🤖 S4 | 🌿 main | 📊 [████████████▓░░] 90.5%(181k/200k)⚡ | 💭 Thinking (⚠️ Recent Error)
-```
-
 ## 🔧 故障排除 Troubleshooting
 
 ### 常见问题 Common Issues
 
 1. **Claude Code中无输出 No output in Claude Code**
    ```bash
-   # 检查权限 Check permissions
-   chmod +x claude-code-statusline.js
+   # 测试命令是否工作 Test if command works
+   echo '{"model":{"id":"claude-sonnet-4"}}' | claude-code-statusline-pro
    
-   # 手动测试 Test manually
-   echo '{"model":{"id":"claude-sonnet-4"}}' | node claude-code-statusline.js
+   # 或使用npx Or using npx
+   echo '{"model":{"id":"claude-sonnet-4"}}' | npx claude-code-statusline-pro
    ```
 
 2. **表情不工作 Emoji not working**
-   - 检查终端：推荐Windows Terminal、VS Code或ConEmu | Check terminal: Windows Terminal, VS Code, or ConEmu recommended
-   - 强制文本模式：在配置中设置 `enable_emoji = false` | Force text mode: Set `enable_emoji = false` in config
+   - 推荐终端 Recommended terminals: Windows Terminal、VS Code、ConEmu
+   - 强制文本模式 Force text mode: 设置 `enable_emoji = false` | Set `enable_emoji = false`
 
-3. **颜色不工作 Colors not working**
-   - 需要现代终端 | Modern terminals required
-   - 强制禁用：设置 `enable_colors = false` | Force disable: Set `enable_colors = false`
+3. **配置文件未找到 Config file not found**
+   ```bash
+   # 创建配置文件 Create config file
+   claude-statusline-config init
+   
+   # 检查配置路径 Check config paths
+   claude-statusline-config show
+   ```
 
-### Windows特定 Windows Specific
+### 配置文件位置 Config File Locations
 
-- **PowerShell**: 配合Windows Terminal工作 | Works with Windows Terminal
-- **CMD**: 有限的表情支持，自动回退 | Limited emoji support, automatic fallback
-- **Git Bash**: 完全支持 | Full support
-- **VS Code Terminal**: 完全支持 | Full support
-
-## 📦 发布选项 Distribution Options
-
-### GitHub发布 GitHub Release
-1. 标记版本 Tag version: `git tag v1.0.0`
-2. 推送 Push: `git push --tags`
-3. 创建包含二进制文件的发布 | Create release with binaries
-
-### NPM包 NPM Package
-```bash
-# 准备npm Prepare for npm
-npm pack
-
-# 发布(如果需要) Publish (if desired)
-npm publish
-```
+按优先级查找 | Search priority order:
+1. `./statusline.config.toml` (当前目录 current directory)
+2. `./.statusline.toml`
+3. `~/.config/claude-statusline/config.toml`
+4. `~/.statusline.toml`
+5. 包安装目录中的默认配置 | Default config in package directory
 
 ## 🤝 贡献 Contributing
 
 1. Fork仓库 | Fork the repository
 2. 创建功能分支 | Create feature branch
-3. 为Windows兼容性添加测试 | Add tests for Windows compatibility
-4. 提交拉取请求 | Submit pull request
+3. 提交更改 | Commit changes
+4. 推送分支 | Push branch
+5. 创建Pull Request | Create Pull Request
 
 ## 📄 许可证 License
 
@@ -243,4 +254,10 @@ MIT License - see LICENSE file
 ## 🙏 致谢 Acknowledgments
 
 - 为Anthropic的Claude Code构建 | Built for Claude Code by Anthropic
+- 受官方Python状态栏实现启发 | Inspired by the official Python statusline implementation
 - TOML配置由@iarna/toml提供支持 | TOML configuration powered by @iarna/toml
+
+---
+
+⭐ 如果这个项目对您有帮助，请给个Star！  
+⭐ If this project helps you, please give it a star!
