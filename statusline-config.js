@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const { configManager, ConfigManager } = require('./config');
-const { ConfigurableStatuslineGenerator } = require('./claude-code-statusline-v2');
+const { ConfigurableStatuslineGenerator } = require('./claude-code-statusline');
 
 class StatuslineConfigTool {
   constructor() {
