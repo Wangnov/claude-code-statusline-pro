@@ -1,5 +1,11 @@
 # Claude Code Statusline Pro
 
+[![npm version](https://badge.fury.io/js/claude-code-statusline-pro.svg)](https://badge.fury.io/js/claude-code-statusline-pro)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-16+-green.svg)](https://nodejs.org/)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/wangnov/claude-code-statusline-pro)
+[![Downloads](https://img.shields.io/npm/dt/claude-code-statusline-pro.svg)](https://www.npmjs.com/package/claude-code-statusline-pro)
+
 Claude Code 增强版可配置状态栏，支持TOML配置、主题系统和跨平台兼容  
 Enhanced configurable statusline for Claude Code with TOML configuration, themes, and cross-platform support.
 
@@ -19,6 +25,20 @@ Enhanced configurable statusline for Claude Code with TOML configuration, themes
 
 **方式1：使用npx (无需安装) | Method 1: Using npx (no installation required)**
 
+**方式2：全局安装 | Method 2: Global installation**
+
+```bash
+# 全局安装 Global install
+npm install -g claude-code-statusline-pro
+```
+
+### Claude Code 配置 Configuration
+
+**配置选项 Configuration Options:**
+
+**1. 项目级配置 (推荐) | Project-level Config (Recommended)**
+在项目根目录创建 `.claude/settings.json` | Create `.claude/settings.json` in project root:
+
 ```json
 {
   "statusLine": {
@@ -28,12 +48,8 @@ Enhanced configurable statusline for Claude Code with TOML configuration, themes
 }
 ```
 
-**方式2：全局安装 | Method 2: Global installation**
-
-```bash
-# 全局安装 Global install
-npm install -g claude-code-statusline-pro
-```
+**2. 用户级配置 (全局) | User-level Config (Global)**  
+在家目录创建 `.claude/settings.json` | Create `.claude/settings.json` in home directory:
 
 ```json
 {
@@ -43,6 +59,14 @@ npm install -g claude-code-statusline-pro
   }
 }
 ```
+
+**配置优先级 Priority Order:**
+1. 项目级 `.claude/settings.json` (最高优先级 | Highest priority)
+2. 用户级 `~/.claude/settings.json` (全局默认 | Global fallback)
+
+**使用建议 Usage Recommendations:**
+- ✅ **项目级**: 团队协作项目，确保一致的状态栏配置
+- ✅ **用户级**: 个人全局配置，所有项目共享设置
 
 ### 其他安装方式 Alternative Methods
 
@@ -217,17 +241,12 @@ show_timestamp = true         # 最后更新时间 Last update time
    ```
 
 2. **表情不工作 Emoji not working**
-   - 推荐终端 Recommended terminals: Windows Terminal、VS Code、ConEmu
-   - 强制文本模式 Force text mode: 设置 `enable_emoji = false` | Set `enable_emoji = false`
+   - 检查终端：推荐Windows Terminal、VS Code或ConEmu | Check terminal: Windows Terminal, VS Code, or ConEmu recommended
+   - 强制文本模式：在配置中设置 `enable_emoji = false` | Force text mode: Set `enable_emoji = false` in config
 
-3. **配置文件未找到 Config file not found**
-   ```bash
-   # 创建配置文件 Create config file
-   claude-statusline-config init
-   
-   # 检查配置路径 Check config paths
-   claude-statusline-config show
-   ```
+3. **颜色不工作 Colors not working**
+   - 需要现代终端 | Modern terminals required
+   - 强制禁用：设置 `enable_colors = false` | Force disable: Set `enable_colors = false`
 
 ### 配置文件位置 Config File Locations
 
