@@ -4,7 +4,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-16+-green.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/wangnov/claude-code-statusline-pro)
-[![Downloads](https://img.shields.io/npm/dt/claude-code-statusline-pro.svg)](https://www.npmjs.com/package/claude-code-statusline-pro)
 
 Claude Code 增强版可配置状态栏，支持TOML配置、主题系统和跨平台兼容  
 Enhanced configurable statusline for Claude Code with TOML configuration, themes, and cross-platform support.
