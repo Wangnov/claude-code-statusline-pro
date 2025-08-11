@@ -9,11 +9,11 @@ const { execSync } = require('child_process');
 const path = require('path');
 const { configManager } = require('./config');
 
-// 模型配置 - 将被配置文件覆盖
+// 模型配置 - 将被配置文件覆盖 | Model configurations - will be overridden by config file
 const MODEL_CONFIGS = {
   'claude-sonnet-4': { contextWindow: 200000, shortName: 'S4' },
   'claude-sonnet-3.7': { contextWindow: 200000, shortName: 'S3.7' },
-  'claude-opus-4.1': { contextWindow: 200000, shortName: 'O4' },
+  'claude-opus-4.1': { contextWindow: 200000, shortName: 'O4.1' }, // 修正为O4.1 | Fixed to O4.1
   'claude-haiku-3.5': { contextWindow: 200000, shortName: 'H3.5' }
 };
 
@@ -21,10 +21,52 @@ class ConfigurableStatuslineGenerator {
   constructor() {
     this.cachedTranscriptData = null;
     this.lastTranscriptMtime = null;
+    this.lastUpdate = 0;
+    this.lastGeneratedResult = null; // 缓存上次生成结果 | Cache last generated result
+    this.updateInterval = 300; // 官方建议的300ms更新间隔 | Official 300ms update interval
     this.config = configManager.loadConfig();
     this.setupCapabilities();
     this.setupColors();
     this.setupIcons();
+  }
+
+  /**
+   * 解析官方标准输入数据格式，保持向后兼容 | Parse official standard input format with backward compatibility
+   */
+  parseOfficialInput(data) {
+    // 支持官方标准字段 | Support official standard fields
+    const parsedData = {
+      // 官方字段 | Official fields
+      hookEventName: data.hook_event_name || 'Status',
+      sessionId: data.session_id || null,
+      transcriptPath: data.transcript_path || null,
+      cwd: data.cwd || process.cwd(),
+      model: data.model || {},
+      workspace: data.workspace || {},
+      
+      // 向后兼容字段 | Backward compatibility fields
+      gitBranch: data.gitBranch || null
+    };
+
+    // 确保workspace有基本结构 | Ensure workspace has basic structure
+    if (!parsedData.workspace.current_dir && !parsedData.workspace.project_dir) {
+      parsedData.workspace.current_dir = parsedData.cwd;
+      parsedData.workspace.project_dir = parsedData.cwd;
+    }
+
+    return parsedData;
+  }
+
+  /**
+   * 检查更新频率限制 | Check update rate limit
+   */
+  shouldUpdate() {
+    const now = Date.now();
+    if (now - this.lastUpdate < this.updateInterval) {
+      return false;
+    }
+    this.lastUpdate = now;
+    return true;
   }
 
   /**
@@ -260,10 +302,18 @@ class ConfigurableStatuslineGenerator {
   // ... (继续其他方法，包括parseTranscriptFile等，需要适配配置)
 
   /**
-   * 主要生成方法
+   * 主要生成方法 | Main generation method
    */
-  generate(data) {
+  generate(rawData) {
     try {
+      // 解析官方标准输入格式 | Parse official standard input format
+      const data = this.parseOfficialInput(rawData);
+
+      // 频率控制：如果更新太频繁，返回缓存结果 | Rate limiting: return cached result if updates too frequent
+      if (!this.shouldUpdate() && this.lastGeneratedResult) {
+        return this.lastGeneratedResult;
+      }
+
       const components = [];
       const order = this.config.components.order;
 
@@ -271,11 +321,11 @@ class ConfigurableStatuslineGenerator {
         project: () => this.generateProjectComponent(data),
         model: () => this.generateModelComponent(data),
         branch: () => this.generateBranchComponent(data),
-        tokens: () => this.generateTokensComponent(data.transcript_path),
-        status: () => this.generateStatusComponent(data.transcript_path)
+        tokens: () => this.generateTokensComponent(data.transcriptPath),
+        status: () => this.generateStatusComponent(data.transcriptPath)
       };
 
-      // 按配置顺序生成组件
+      // 按配置顺序生成组件 | Generate components in configured order
       for (const componentName of order) {
         const generator = componentGenerators[componentName];
         if (generator) {
@@ -286,32 +336,57 @@ class ConfigurableStatuslineGenerator {
         }
       }
 
-      // 应用样式设置
+      // 应用样式设置 | Apply style settings
       const separator = this.config.style.separator;
-      const result = components.join(separator);
+      let result = components.join(separator);
 
-      // 应用宽度限制
+      // 确保单行输出，移除换行符 | Ensure single-line output, remove newlines
+      result = result.replace(/\n/g, ' ').replace(/\r/g, '');
+
+      // 应用宽度限制 | Apply width limit
       const maxWidth = this.config.style.max_width;
       if (maxWidth && maxWidth > 0 && result.length > maxWidth) {
-        // 这里可以实现智能截断逻辑
-        return result.substring(0, maxWidth - 3) + '...';
+        result = result.substring(0, maxWidth - 3) + '...';
       }
 
+      // 缓存结果 | Cache result
+      this.lastGeneratedResult = result;
       return result;
 
     } catch (error) {
-      return `${this.colors.red}${this.icons.error} Error${this.colors.reset}`;
+      // 简化错误输出，确保单行 | Simplified error output, ensure single line
+      return `${this.icons.error} Error`;
     }
   }
 
   /**
-   * 解析transcript文件（带缓存）
+   * 解析transcript文件（带缓存）| Parse transcript file (with caching)
    */
   parseTranscriptFile(transcriptPath) {
-    if (!transcriptPath || !fs.existsSync(transcriptPath)) {
+    // 改进的transcript文件存在性检查 | Improved transcript file existence check
+    if (!transcriptPath) {
       return {
-        tokenInfo: `${this.icons.token} ?/200k`,
-        status: `${this.icons.warning} No Data`
+        tokenInfo: this.config.components.tokens.enabled ? `${this.icons.token} ?/200k` : '',
+        status: this.config.components.status.enabled ? `${this.icons.ready} Ready` : ''
+      };
+    }
+
+    // 安全的文件存在性检查 | Safe file existence check
+    let fileExists = false;
+    try {
+      fileExists = fs.existsSync(transcriptPath) && fs.statSync(transcriptPath).isFile();
+    } catch (error) {
+      // 文件访问错误时的优雅回退 | Graceful fallback on file access error
+      return {
+        tokenInfo: this.config.components.tokens.enabled ? `${this.icons.token} ?/200k` : '',
+        status: this.config.components.status.enabled ? `${this.icons.warning} No Access` : ''
+      };
+    }
+
+    if (!fileExists) {
+      return {
+        tokenInfo: this.config.components.tokens.enabled ? `${this.icons.token} ?/200k` : '',
+        status: this.config.components.status.enabled ? `${this.icons.ready} Ready` : ''
       };
     }
 
@@ -431,9 +506,10 @@ class ConfigurableStatuslineGenerator {
       return result;
 
     } catch (error) {
+      // 简化错误输出 | Simplified error output
       return {
-        tokenInfo: `${this.icons.token} err/200k`,
-        status: `${this.icons.warning} Parse Error`
+        tokenInfo: this.config.components.tokens.enabled ? `${this.icons.token} ?/200k` : '',
+        status: this.config.components.status.enabled ? `${this.icons.warning} Error` : ''
       };
     }
   }
@@ -579,12 +655,14 @@ if (require.main === module) {
       const data = JSON.parse(inputData.trim());
       console.log(statusGenerator.generate(data));
     } catch (error) {
-      console.log(`${statusGenerator.colors.red}${statusGenerator.icons.error} Parse Error${statusGenerator.colors.reset}`);
+      // 简化错误输出，确保单行 | Simplified error output, ensure single line
+      console.log(`${statusGenerator.icons.error} Parse Error`);
     }
   });
 
   process.stdin.on('error', () => {
-    console.log(`${statusGenerator.colors.red}${statusGenerator.icons.warning} Input Error${statusGenerator.colors.reset}`);
+    // 简化错误输出，确保单行 | Simplified error output, ensure single line  
+    console.log(`${statusGenerator.icons.warning} Input Error`);
   });
 }
 
