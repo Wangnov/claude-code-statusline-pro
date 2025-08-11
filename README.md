@@ -10,7 +10,9 @@ Claude Code增强版可配置状态栏，支持预设系统快速配置组件排
 ## ✨ 核心特性
 
 - 🎯 **预设系统**: 通过字母组合快速配置组件 (`PMBTS`, `MT`, `BT`)
-- 📊 **可视化进度条**: 85%最佳区域vs15%后备区域上下文使用情况
+- 📊 **可视化进度条**: 85%最佳区域vs15%后备区域上下文使用情况  
+- 🧠 **智能状态**: 基于tokens数量精准识别Thinking vs Ready状态
+- 🔍 **Debug模式**: 彩色JSON数据显示，便于调试和排错
 - 🌈 **跨平台兼容**: Windows、macOS、Linux智能适配
 - ⚡ **高性能**: 缓存优化，300ms更新间隔
 - 🔧 **完全可配置**: 颜色、图标、阈值、顺序
@@ -181,6 +183,24 @@ echo '{"model":{"id":"claude-sonnet-4"}}' | npx claude-code-statusline-pro MT
 - **表情不显示**: 推荐使用Windows Terminal
 - **颜色异常**: 设置 `enable_colors = false`
 - **编码问题**: 确保终端UTF-8编码
+
+## 🆕 更新日志
+
+### v1.1.1 (2025-08-11)
+
+#### 新功能
+- 🔍 **Debug模式**: 添加`advanced.debug_mode`配置，可显示接收到的JSON数据
+- 🧠 **智能状态判断**: 基于output_tokens数量智能区分Thinking和Ready状态
+- 🎨 **彩色JSON显示**: Debug模式下JSON数据语法高亮显示
+
+#### 改进
+- 🚀 **状态精度**: 修复`stop_reason: null`的状态判断逻辑
+- 📊 **新会话显示**: 无transcript文件时正确显示0%进度条
+- 💡 **帮助完善**: 更新`--help`信息包含debug功能说明
+
+#### 技术改进
+- ⚡ **性能优化**: 简化状态判断逻辑，提升响应速度
+- 🔧 **错误处理**: 增强transcript文件解析的容错性
 
 ## 📄 许可证
 

@@ -365,10 +365,8 @@ class ConfigurableStatuslineGenerator {
   parseTranscriptFile(transcriptPath) {
     // 改进的transcript文件存在性检查 | Improved transcript file existence check
     if (!transcriptPath) {
-      return {
-        tokenInfo: this.config.components.tokens.enabled ? `${this.icons.token} ?/200k` : '',
-        status: this.config.components.status.enabled ? `${this.icons.ready} Ready` : ''
-      };
+      // 没有transcript文件时，使用0 tokens调用正常的显示逻辑
+      return this.calculateDisplayInfo(0, null, false, null, false, null, null, -1);
     }
 
     // 安全的文件存在性检查 | Safe file existence check
@@ -384,10 +382,8 @@ class ConfigurableStatuslineGenerator {
     }
 
     if (!fileExists) {
-      return {
-        tokenInfo: this.config.components.tokens.enabled ? `${this.icons.token} ?/200k` : '',
-        status: this.config.components.status.enabled ? `${this.icons.ready} Ready` : ''
-      };
+      // 文件不存在时，使用0 tokens调用正常的显示逻辑
+      return this.calculateDisplayInfo(0, null, false, null, false, null, null, -1);
     }
 
     try {
@@ -406,17 +402,20 @@ class ConfigurableStatuslineGenerator {
 
       let contextUsedTokens = 0, lastStopReason = null;
       let hasError = false, lastToolCall = null;
-      let lastAssistantIndex = -1;
+      let lastAssistantIndex = -1, lastEntryType = null;
 
-      // 从最后一行开始解析，找到最新的assistant消息的usage信息
+      // 首先检查最后一条记录的类型
       for (let i = lines.length - 1; i >= 0; i--) {
         const line = lines[i].trim();
         if (!line) continue;
 
         try {
           const entry = JSON.parse(line);
-
-          // Token统计
+          if (lastEntryType === null) {
+            lastEntryType = entry.type;
+          }
+          
+          // Token统计 - 找到最新的assistant消息的usage信息
           if (entry.type === 'assistant' &&
             'message' in entry &&
             'usage' in entry.message) {
@@ -495,7 +494,7 @@ class ConfigurableStatuslineGenerator {
       }
 
       // 计算结果
-      const result = this.calculateDisplayInfo(contextUsedTokens, lastStopReason, hasError, lastToolCall, recentErrors);
+      const result = this.calculateDisplayInfo(contextUsedTokens, lastStopReason, hasError, lastToolCall, recentErrors, lastEntryType, lines, lastAssistantIndex);
 
       // 更新缓存
       if (this.config.advanced.cache_enabled) {
@@ -513,6 +512,7 @@ class ConfigurableStatuslineGenerator {
       };
     }
   }
+
 
   /**
    * 检测条目是否包含真正的错误
@@ -573,7 +573,7 @@ class ConfigurableStatuslineGenerator {
   /**
    * 计算显示信息
    */
-  calculateDisplayInfo(contextUsedTokens, lastStopReason, hasError, lastToolCall, recentErrors = false) {
+  calculateDisplayInfo(contextUsedTokens, lastStopReason, hasError, lastToolCall, recentErrors = false, lastEntryType = null, lines = null, lastAssistantIndex = -1) {
     // Token信息
     let tokenInfo = '';
     const contextWindow = 200000;
@@ -625,6 +625,37 @@ class ConfigurableStatuslineGenerator {
         status = `${this.colors[statusColors.tool] || ''}${this.icons.tool} Tool${toolInfo}${this.colors.reset}`;
       } else if (lastStopReason === 'end_turn') {
         status = `${this.colors[statusColors.ready] || ''}${this.icons.ready} Ready${this.colors.reset}`;
+      } else if (lastStopReason === null) {
+        // 当stop_reason为null时，需要更智能的判断
+        if (lastEntryType === 'user') {
+          // 最后一条是用户消息，Claude正在思考
+          status = `${this.colors[statusColors.thinking] || ''}${this.icons.thinking} Thinking${this.colors.reset}`;
+        } else if (lastEntryType === 'assistant') {
+          // 最后一条是assistant消息但stop_reason为null
+          // 使用简单的tokens数量判断：少于50tokens可能是中间状态
+          let isComplete = true;
+          try {
+            const assistantLine = lines[lastAssistantIndex].trim();
+            const assistantEntry = JSON.parse(assistantLine);
+            if (assistantEntry.message && assistantEntry.message.usage) {
+              const outputTokens = assistantEntry.message.usage.output_tokens || 0;
+              if (outputTokens < 50) {
+                isComplete = false;
+              }
+            }
+          } catch (e) {
+            // 解析错误时默认为完成
+          }
+          
+          if (isComplete) {
+            status = `${this.colors[statusColors.ready] || ''}${this.icons.ready} Ready${this.colors.reset}`;
+          } else {
+            status = `${this.colors[statusColors.thinking] || ''}${this.icons.thinking} Thinking${this.colors.reset}`;
+          }
+        } else {
+          // 其他情况（如新会话）默认为ready
+          status = `${this.colors[statusColors.ready] || ''}${this.icons.ready} Ready${this.colors.reset}`;
+        }
       } else {
         status = `${this.colors[statusColors.thinking] || ''}${this.icons.thinking} Thinking${this.colors.reset}`;
       }
@@ -636,6 +667,71 @@ class ConfigurableStatuslineGenerator {
     }
 
     return { tokenInfo, status };
+  }
+
+  /**
+   * 生成调试信息显示
+   */
+  generateDebugInfo(rawInput) {
+    if (!rawInput) return '';
+    
+    try {
+      const data = JSON.parse(rawInput);
+      const debugLines = [];
+      
+      // 调试信息标题
+      debugLines.push(`${this.colors.cyan || ''}━━━ DEBUG INFO ━━━${this.colors.reset || ''}`);
+      
+      // 显示原始JSON数据（格式化）
+      const formattedJson = JSON.stringify(data, null, 2);
+      const jsonLines = formattedJson.split('\n');
+      
+      jsonLines.forEach(line => {
+        const coloredLine = this.colorizeJsonLine(line);
+        debugLines.push(`${this.colors.dim || ''}${coloredLine}${this.colors.reset || ''}`);
+      });
+      
+      // 关键字段提取
+      debugLines.push(`${this.colors.cyan || ''}━━━ KEY FIELDS ━━━${this.colors.reset || ''}`);
+      if (data.model?.id) {
+        debugLines.push(`${this.colors.blue || ''}Model:${this.colors.reset || ''} ${data.model.id}`);
+      }
+      if (data.transcript_path) {
+        debugLines.push(`${this.colors.blue || ''}Transcript:${this.colors.reset || ''} ${data.transcript_path}`);
+      }
+      if (data.cwd) {
+        debugLines.push(`${this.colors.blue || ''}CWD:${this.colors.reset || ''} ${data.cwd}`);
+      }
+      if (data.session_id) {
+        debugLines.push(`${this.colors.blue || ''}Session:${this.colors.reset || ''} ${data.session_id}`);
+      }
+      
+      return debugLines.join('\n');
+    } catch (error) {
+      return `${this.colors.red || ''}DEBUG ERROR: Invalid JSON${this.colors.reset || ''}`;
+    }
+  }
+
+  /**
+   * 为JSON行添加颜色
+   */
+  colorizeJsonLine(line) {
+    // 字段名着色（引号内的键名）
+    line = line.replace(/"([^"]+)":/g, `${this.colors.green || ''}"$1"${this.colors.reset || ''}:`);
+    
+    // 字符串值着色
+    line = line.replace(/: "([^"]*)"([,}]?)/g, `: ${this.colors.yellow || ''}"$1"${this.colors.reset || ''}$2`);
+    
+    // 数字值着色
+    line = line.replace(/: (\d+)([,}]?)/g, `: ${this.colors.cyan || ''}$1${this.colors.reset || ''}$2`);
+    
+    // 布尔值着色
+    line = line.replace(/: (true|false)([,}]?)/g, `: ${this.colors.magenta || ''}$1${this.colors.reset || ''}$2`);
+    
+    // null值着色
+    line = line.replace(/: null([,}]?)/g, `: ${this.colors.dim || ''}null${this.colors.reset || ''}$1`);
+    
+    return line;
   }
 }
 
@@ -678,6 +774,10 @@ function parseCommandLineArgs() {
   npx claude-code-statusline-pro PMBTS    # 显示所有组件
   npx claude-code-statusline-pro MT       # 仅显示模型和token
   npx claude-code-statusline-pro --preset BT  # 仅显示分支和token
+
+调试功能:
+  在statusline.config.toml中设置 advanced.debug_mode = true 
+  开启后会在statusline下方显示接收到的JSON数据，用于调试和排错
 `);
       process.exit(0);
     }
@@ -701,7 +801,15 @@ if (require.main === module) {
   process.stdin.on('end', () => {
     try {
       const data = JSON.parse(inputData.trim());
-      console.log(statusGenerator.generate(data));
+      const result = statusGenerator.generate(data);
+      
+      // 检查是否启用debug模式
+      if (statusGenerator.config.advanced.debug_mode) {
+        console.log(result);
+        console.log(statusGenerator.generateDebugInfo(inputData.trim()));
+      } else {
+        console.log(result);
+      }
     } catch (error) {
       // 简化错误输出，确保单行 | Simplified error output, ensure single line
       console.log(`${statusGenerator.icons.error} Parse Error`);
