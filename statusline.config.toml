@@ -18,6 +18,7 @@ order = ["project", "model", "branch", "tokens", "status"]
 enabled = true
 icon = "📁"
 nerd_icon = "\U0000f07b"          # Font Awesome folder | Font Awesome folder
+text_icon = "[P]"                 # 纯字符图标 | Plain text icon
 color = "magenta"
 show_when_empty = false
 
@@ -26,6 +27,7 @@ show_when_empty = false
 enabled = true
 icon = "🤖"
 nerd_icon = "\U0000f085"          # Font Awesome cogs (机器/模型) | Font Awesome cogs (machine/model)
+text_icon = "[M]"                 # 纯字符图标 | Plain text icon
 color = "cyan" 
 show_full_name = false  # true显示完整模型名，false显示缩写 | true shows full model name, false shows abbreviation
 
@@ -40,6 +42,7 @@ show_full_name = false  # true显示完整模型名，false显示缩写 | true s
 enabled = true
 icon = "🌿"
 nerd_icon = "\U0000f126"          # Font Awesome code-branch | Font Awesome code-branch
+text_icon = "[B]"                 # 纯字符图标 | Plain text icon
 color = "green"
 show_when_no_git = false
 max_length = 20  # 分支名最大长度，超过会截断 | Maximum branch name length, truncated if exceeded
@@ -49,6 +52,7 @@ max_length = 20  # 分支名最大长度，超过会截断 | Maximum branch name
 enabled = true
 icon = "📊"
 nerd_icon = "\U0000f080"          # Font Awesome bar-chart | Font Awesome bar-chart
+text_icon = "[T]"                 # 纯字符图标 | Plain text icon
 show_progress_bar = true
 show_percentage = true  
 show_absolute = true    # 显示绝对数值如 160k/200k | Show absolute values like 160k/200k
@@ -71,6 +75,16 @@ critical = 95       # 深度后备区域百分比 | Critical backup zone percent
 backup = "⚡"        # 进入后备区域 | Entering backup zone
 critical = "🔥"      # 深度后备区域 | Deep backup zone
 
+# Nerd Font状态图标配置（Token区域） | Nerd Font status icon configuration (Token area)
+[components.tokens.status_nerd_icons]
+backup = "\U0000f0e7"      # Font Awesome bolt | Font Awesome bolt
+critical = "\U0000f06d"    # Font Awesome fire | Font Awesome fire
+
+# 纯字符状态图标配置（Token区域） | Plain text status icon configuration (Token area)
+[components.tokens.status_text_icons]
+backup = "[!]"             # 进入后备区域 | Entering backup zone
+critical = "[X]"           # 深度后备区域 | Deep backup zone
+
 # 状态信息显示 | Status information display
 [components.status]
 enabled = true
@@ -91,6 +105,14 @@ thinking = "\U0000f110"         # Font Awesome spinner
 tool = "\U0000f0ad"             # Font Awesome wrench
 error = "\U0000f00d"            # Font Awesome times
 warning = "\U0000f071"          # Font Awesome exclamation-triangle
+
+# 纯字符状态图标配置 | Plain text status icon configuration
+[components.status.text_icons]
+ready = "[OK]"                  # 就绪状态 | Ready status
+thinking = "[...]"              # 思考状态 | Thinking status
+tool = "[TOOL]"                 # 工具状态 | Tool status
+error = "[ERR]"                 # 错误状态 | Error status
+warning = "[WARN]"              # 警告状态 | Warning status
 
 # 状态颜色配置 | Status color configuration
 [components.status.colors]
