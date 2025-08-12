@@ -17,6 +17,7 @@ order = ["project", "model", "branch", "tokens", "status"]
 [components.project]
 enabled = true
 icon = "📁"
+nerd_icon = "\U0000f07b"          # Font Awesome folder | Font Awesome folder
 color = "magenta"
 show_when_empty = false
 
@@ -24,6 +25,7 @@ show_when_empty = false
 [components.model]
 enabled = true
 icon = "🤖"
+nerd_icon = "\U0000f085"          # Font Awesome cogs (机器/模型) | Font Awesome cogs (machine/model)
 color = "cyan" 
 show_full_name = false  # true显示完整模型名，false显示缩写 | true shows full model name, false shows abbreviation
 
@@ -37,6 +39,7 @@ show_full_name = false  # true显示完整模型名，false显示缩写 | true s
 [components.branch]
 enabled = true
 icon = "🌿"
+nerd_icon = "\U0000f126"          # Font Awesome code-branch | Font Awesome code-branch
 color = "green"
 show_when_no_git = false
 max_length = 20  # 分支名最大长度，超过会截断 | Maximum branch name length, truncated if exceeded
@@ -45,6 +48,7 @@ max_length = 20  # 分支名最大长度，超过会截断 | Maximum branch name
 [components.tokens]
 enabled = true
 icon = "📊"
+nerd_icon = "\U0000f080"          # Font Awesome bar-chart | Font Awesome bar-chart
 show_progress_bar = true
 show_percentage = true  
 show_absolute = true    # 显示绝对数值如 160k/200k | Show absolute values like 160k/200k
@@ -80,6 +84,14 @@ tool = "🔧"
 error = "❌"
 warning = "⚠️"
 
+# Nerd Font状态图标配置 | Nerd Font status icon configuration
+[components.status.nerd_icons]
+ready = "\U0000f00c"            # Font Awesome check
+thinking = "\U0000f110"         # Font Awesome spinner
+tool = "\U0000f0ad"             # Font Awesome wrench
+error = "\U0000f00d"            # Font Awesome times
+warning = "\U0000f071"          # Font Awesome exclamation-triangle
+
 # 状态颜色配置 | Status color configuration
 [components.status.colors]
 ready = "green"
@@ -94,6 +106,7 @@ error = "red"
 separator = " | "               # 组件间分隔符 | Component separator
 enable_colors = "auto"          # true/false/"auto"(自动检测终端支持) | true/false/"auto"(auto-detect terminal support)
 enable_emoji = "auto"           # true/false/"auto"(自动检测终端支持) | true/false/"auto"(auto-detect terminal support)
+enable_nerd_font = "auto"       # true/false/"auto"(自动检测Nerd Font支持) | true/false/"auto"(auto-detect Nerd Font support)
 compact_mode = false            # 紧凑模式，减少空格和图标 | Compact mode, reduce spaces and icons
 max_width = 0                   # 最大宽度限制，0表示无限制 | Maximum width limit, 0 means unlimited
 
@@ -119,6 +132,7 @@ show_context_health = false     # 显示上下文健康度指标 | Show context 
 adaptive_colors = false         # 根据usage动态调整所有颜色 | Dynamically adjust all colors based on usage
 show_timestamp = false          # 显示最后更新时间 | Show last update time
 show_session_info = false       # 显示会话相关信息 | Show session-related information
+force_nerd_font = true         # 强制启用Nerd Font（用于测试） | Force enable Nerd Font (for testing)
 
 # ================================
 # 预设配置映射 | Preset Configuration Mapping

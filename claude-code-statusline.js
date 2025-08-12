@@ -75,6 +75,7 @@ class ConfigurableStatuslineGenerator {
   setupCapabilities() {
     const enableColors = this.config.style.enable_colors;
     const enableEmoji = this.config.style.enable_emoji;
+    const enableNerdFont = this.config.style.enable_nerd_font;
 
     this.capabilities = {
       colors: enableColors === true ||
@@ -89,8 +90,70 @@ class ConfigurableStatuslineGenerator {
           process.env.WT_SESSION ||
           process.env.TERM_PROGRAM === 'vscode' ||
           process.env.ConEmuPID
-        ))
+        )),
+      nerdFont: enableNerdFont === true ||
+        (enableNerdFont === "auto" && this.detectNerdFont()) ||
+        (this.config.experimental?.force_nerd_font === true)
     };
+  }
+
+  /**
+   * 检测Nerd Font支持 | Detect Nerd Font support
+   */
+  detectNerdFont() {
+    // 检查常见的Nerd Font环境指标 | Check common Nerd Font environment indicators
+    
+    // 1. 检查是否安装了Hack Nerd Font | Check if Hack Nerd Font is installed
+    try {
+      const { execSync } = require('child_process');
+      const fontCheck = execSync('fc-list | grep -i "hack.*nerd"', { encoding: 'utf8', timeout: 1000 });
+      if (fontCheck.trim()) {
+        return true; // 找到Hack Nerd Font
+      }
+    } catch (e) {
+      // 忽略错误，继续其他检测
+    }
+
+    // 2. 检查终端程序对Nerd Font的支持 | Check terminal program Nerd Font support
+    const supportedTerminals = [
+      'iterm', 'iterm2', 'kitty', 'alacritty', 'wezterm', 
+      'windows terminal', 'hyper', 'terminus'
+    ];
+    
+    const termProgram = (process.env.TERM_PROGRAM || '').toLowerCase();
+    const terminalApp = (process.env.TERMINAL_EMULATOR || '').toLowerCase();
+    
+    if (supportedTerminals.some(term => 
+      termProgram.includes(term) || terminalApp.includes(term)
+    )) {
+      return true;
+    }
+
+    // 3. 检查Nerd Font相关环境变量 | Check Nerd Font related environment variables
+    if (process.env.NERD_FONT || process.env.POWERLINE_FONTS) {
+      return true;
+    }
+
+    // 4. 检查字体名称环境变量 | Check font name environment variables
+    const fontName = (process.env.FONT_NAME || process.env.TERM_FONT || '').toLowerCase();
+    const nerdFontNames = [
+      'nerd', 'hack', 'fira code', 'jetbrains mono', 'source code pro',
+      'droid sans mono', 'dejavu sans mono', 'ubuntu mono', 'cascadia code'
+    ];
+    
+    if (nerdFontNames.some(name => fontName.includes(name))) {
+      return true;
+    }
+
+    // 5. 对于VS Code，检查更多细节 | For VS Code, check more details
+    if (process.env.TERM_PROGRAM === 'vscode') {
+      // VS Code通常配置了Nerd Font，但需要用户手动设置
+      // 默认保守，除非有明确指示
+      return false;
+    }
+
+    // 6. 默认不启用，避免显示乱码 | Default disabled to avoid garbled characters
+    return false;
   }
 
   /**
@@ -129,27 +192,47 @@ class ConfigurableStatuslineGenerator {
   }
 
   /**
-   * 设置图标系统
+   * 设置图标系统 | Setup icon system
    */
   setupIcons() {
-    const fallbackIcons = {
-      model: '[M]', branch: '[B]', token: '[T]', ready: '[OK]',
-      tool: '[TOOL]', thinking: '[...]', paused: '[PAUSE]',
-      error: '[ERR]', warning: '[WARN]', clock: '[T]', project: '[P]'
+    // 第一层：Nerd Font图标 (Font Awesome系列) | First tier: Nerd Font icons (Font Awesome series)
+    const nerdFontIcons = {
+      project: this.config.components.project.nerd_icon || '\uf07b',  // fa-folder
+      model: this.config.components.model.nerd_icon || '\uf085',      // fa-cogs (机器/模型)
+      branch: this.config.components.branch.nerd_icon || '\uf126',    // fa-code-branch (git分支)
+      token: this.config.components.tokens.nerd_icon || '\uf080',     // fa-bar-chart
+      ready: this.config.components.status.nerd_icons?.ready || '\uf00c',     // fa-check
+      thinking: this.config.components.status.nerd_icons?.thinking || '\uf110', // fa-spinner
+      tool: this.config.components.status.nerd_icons?.tool || '\uf0ad',        // fa-wrench
+      error: this.config.components.status.nerd_icons?.error || '\uf00d',      // fa-times
+      warning: this.config.components.status.nerd_icons?.warning || '\uf071'   // fa-exclamation-triangle
     };
 
-    if (this.capabilities.emoji) {
-      this.icons = {
-        project: this.config.components.project.icon || '📁',
-        model: this.config.components.model.icon || '🤖',
-        branch: this.config.components.branch.icon || '🌿',
-        token: this.config.components.tokens.icon || '📊',
-        ready: this.config.components.status.icons.ready || '✅',
-        thinking: this.config.components.status.icons.thinking || '💭',
-        tool: this.config.components.status.icons.tool || '🔧',
-        error: this.config.components.status.icons.error || '❌',
-        warning: this.config.components.status.icons.warning || '⚠️'
-      };
+    // 第二层：Emoji图标 | Second tier: Emoji icons
+    const emojiIcons = {
+      project: this.config.components.project.icon || '📁',
+      model: this.config.components.model.icon || '🤖',
+      branch: this.config.components.branch.icon || '🌿',
+      token: this.config.components.tokens.icon || '📊',
+      ready: this.config.components.status.icons.ready || '✅',
+      thinking: this.config.components.status.icons.thinking || '💭',
+      tool: this.config.components.status.icons.tool || '🔧',
+      error: this.config.components.status.icons.error || '❌',
+      warning: this.config.components.status.icons.warning || '⚠️'
+    };
+
+    // 第三层：文本图标 | Third tier: Text icons
+    const fallbackIcons = {
+      project: '[P]', model: '[M]', branch: '[B]', token: '[T]', 
+      ready: '[OK]', tool: '[TOOL]', thinking: '[...]', 
+      error: '[ERR]', warning: '[WARN]'
+    };
+
+    // 根据能力选择图标集 | Select icon set based on capabilities
+    if (this.capabilities.nerdFont) {
+      this.icons = nerdFontIcons;
+    } else if (this.capabilities.emoji) {
+      this.icons = emojiIcons;
     } else {
       this.icons = fallbackIcons;
     }
@@ -603,6 +686,9 @@ class ConfigurableStatuslineGenerator {
   /**
    * 生成上下文使用进度条
    */
+  /**
+   * 生成进度条
+   */
   generateProgressBar(percentage) {
     if (!this.config.components.tokens.show_progress_bar) return '';
 
@@ -656,13 +742,13 @@ class ConfigurableStatuslineGenerator {
       }
 
       // 组装token信息
-      const parts = [this.icons.token];
-      if (progressBar) parts.push(`${tokenColor}${progressBar}`);
-      if (this.config.components.tokens.show_percentage) parts.push(`${percentage}%`);
-      if (this.config.components.tokens.show_absolute) parts.push(`(${displayTokens}/${maxDisplay})`);
+      const parts = [`${tokenColor}${this.icons.token}${this.colors.reset}`];
+      if (progressBar) parts.push(`${tokenColor}${progressBar}${this.colors.reset}`);
+      if (this.config.components.tokens.show_percentage) parts.push(`${tokenColor}${percentage}%${this.colors.reset}`);
+      if (this.config.components.tokens.show_absolute) parts.push(`${tokenColor}(${displayTokens}/${maxDisplay})${this.colors.reset}`);
       if (statusSuffix) parts.push(statusSuffix);
 
-      tokenInfo = parts.join(' ') + this.colors.reset;
+      tokenInfo = parts.join(' ');
     }
 
     // 状态信息
