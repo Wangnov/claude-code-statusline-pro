@@ -1,15 +1,38 @@
 {
   "name": "claude-code-statusline-pro",
-  "version": "1.1.1",
+  "version": "2.0.0-beta.1",
   "description": "Enhanced configurable statusline for Claude Code with preset system, TOML configuration, and cross-platform support",
-  "main": "claude-code-statusline.js",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
-    "claude-code-statusline-pro": "./claude-code-statusline.js",
-    "claude-statusline-config": "./statusline-config.js"
+    "claude-code-statusline-pro": "./dist/cli.cjs",
+    "claude-statusline-config": "./dist/cli.cjs"
   },
   "scripts": {
-    "test": "node test-current-setup.js",
-    "config": "node statusline-config.js"
+    "dev": "tsx src/cli/main.ts",
+    "build": "tsup",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest --coverage",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist",
+    "config": "tsx src/cli/config.ts",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "changeset publish"
   },
   "keywords": [
     "claude-code",
@@ -23,27 +46,42 @@
   ],
   "author": "wangnov",
   "license": "MIT",
-  "type": "commonjs",
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/wangnov/claude-code-statusline-pro.git"
   },
   "files": [
-    "claude-code-statusline.js",
-    "config.js",
-    "statusline-config.js",
+    "dist/",
     "statusline.config.toml",
     "README.md",
     "README_EN.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "dependencies": {
-    "@iarna/toml": "^2.2.5"
+    "@iarna/toml": "^2.2.5",
+    "@inquirer/checkbox": "^4.2.0",
+    "@inquirer/confirm": "^5.1.14",
+    "@inquirer/input": "^4.2.1",
+    "@inquirer/prompts": "^7.8.1",
+    "@inquirer/select": "^4.3.1",
+    "commander": "^14.0.0",
+    "zod": "^4.0.17"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@biomejs/biome": "^2.1.4",
+    "@changesets/cli": "^2.27.8",
+    "@types/node": "^24.2.1",
+    "@vitest/coverage-v8": "^3.2.4",
+    "rimraf": "^6.0.1",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
   "os": [
     "linux",
     "darwin",
