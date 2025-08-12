@@ -3,8 +3,8 @@
  * 负责加载、验证和管理statusline配置
  */
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 const TOML = require('@iarna/toml');
 
 class ConfigManager {
@@ -19,99 +19,99 @@ class ConfigManager {
    */
   getDefaultConfig() {
     return {
-      preset: "PMBTS", // 默认预设：P=project, M=model, B=branch, T=tokens, S=status
+      preset: 'PMBTS', // 默认预设：P=project, M=model, B=branch, T=tokens, S=status
       preset_mapping: {
-        P: "project",
-        M: "model", 
-        B: "branch",
-        T: "tokens",
-        S: "status"
+        P: 'project',
+        M: 'model',
+        B: 'branch',
+        T: 'tokens',
+        S: 'status',
       },
       components: {
-        order: ["project", "model", "branch", "tokens", "status"],
+        order: ['project', 'model', 'branch', 'tokens', 'status'],
         project: {
           enabled: true,
-          icon: "📁",
-          color: "magenta",
-          show_when_empty: false
+          icon: '📁',
+          color: 'magenta',
+          show_when_empty: false,
         },
         model: {
           enabled: true,
-          icon: "🤖",
-          color: "cyan",
+          icon: '🤖',
+          color: 'cyan',
           show_full_name: false,
           custom_names: {
-            "claude-sonnet-4": "S4",
-            "claude-opus-4.1": "O4.1",
-            "claude-haiku-3.5": "H3.5"
-          }
+            'claude-sonnet-4': 'S4',
+            'claude-opus-4.1': 'O4.1',
+            'claude-haiku-3.5': 'H3.5',
+          },
         },
         branch: {
           enabled: true,
-          icon: "🌿",
-          color: "green",
+          icon: '🌿',
+          color: 'green',
           show_when_no_git: false,
-          max_length: 20
+          max_length: 20,
         },
         tokens: {
           enabled: true,
-          icon: "📊",
+          icon: '📊',
           show_progress_bar: true,
           show_percentage: true,
           show_absolute: true,
           colors: {
-            safe: "green",
-            warning: "yellow",
-            danger: "red"
+            safe: 'green',
+            warning: 'yellow',
+            danger: 'red',
           },
           thresholds: {
             warning: 60,
             danger: 85,
             backup: 85,
-            critical: 95
+            critical: 95,
           },
           status_icons: {
-            backup: "⚡",
-            critical: "🔥"
-          }
+            backup: '⚡',
+            critical: '🔥',
+          },
         },
         status: {
           enabled: true,
           show_recent_errors: true,
           icons: {
-            ready: "✅",
-            thinking: "💭",
-            tool: "🔧",
-            error: "❌",
-            warning: "⚠️"
+            ready: '✅',
+            thinking: '💭',
+            tool: '🔧',
+            error: '❌',
+            warning: '⚠️',
           },
           colors: {
-            ready: "green",
-            thinking: "yellow",
-            tool: "blue",
-            error: "red"
-          }
-        }
+            ready: 'green',
+            thinking: 'yellow',
+            tool: 'blue',
+            error: 'red',
+          },
+        },
       },
       style: {
-        separator: " | ",
-        enable_colors: "auto",
-        enable_emoji: "auto",
+        separator: ' | ',
+        enable_colors: 'auto',
+        enable_emoji: 'auto',
         compact_mode: false,
-        max_width: 0
+        max_width: 0,
       },
       advanced: {
         cache_enabled: true,
         recent_error_count: 20,
         git_timeout: 1000,
-        custom_color_codes: {}
+        custom_color_codes: {},
       },
       experimental: {
         show_context_health: false,
         adaptive_colors: false,
         show_timestamp: false,
-        show_session_info: false
-      }
+        show_session_info: false,
+      },
     };
   }
 
@@ -124,10 +124,15 @@ class ConfigManager {
       path.join(process.cwd(), 'statusline.config.toml'),
       path.join(process.cwd(), '.statusline.toml'),
       // 用户主目录
-      path.join(process.env.HOME || process.env.USERPROFILE, '.config', 'claude-statusline', 'config.toml'),
+      path.join(
+        process.env.HOME || process.env.USERPROFILE,
+        '.config',
+        'claude-statusline',
+        'config.toml'
+      ),
       path.join(process.env.HOME || process.env.USERPROFILE, '.statusline.toml'),
       // 脚本目录
-      path.join(__dirname, 'statusline.config.toml')
+      path.join(__dirname, 'statusline.config.toml'),
     ];
 
     for (const configPath of possiblePaths) {
@@ -146,7 +151,7 @@ class ConfigManager {
     try {
       // 使用指定路径或查找配置文件
       this.configPath = customPath || this.findConfigFile();
-      
+
       if (!this.configPath) {
         console.warn('未找到配置文件，使用默认配置');
         this.config = this.defaults;
@@ -154,35 +159,34 @@ class ConfigManager {
         // 读取并解析TOML文件
         const configContent = fs.readFileSync(this.configPath, 'utf8');
         const parsedConfig = TOML.parse(configContent);
-        
+
         // 深度合并配置（用户配置覆盖默认配置）
         this.config = this.deepMerge(this.defaults, parsedConfig);
       }
-      
+
       // 如果提供了命令行预设参数，优先使用
       if (overridePreset) {
         this.config.preset = overridePreset;
       }
-      
+
       // 应用预设配置
       this.applyPreset();
-      
+
       // 验证配置
       this.validateConfig();
-      
+
       return this.config;
-      
     } catch (error) {
       console.error(`配置加载失败: ${error.message}`);
       console.warn('使用默认配置');
       this.config = this.defaults;
-      
+
       // 即使是默认配置也要应用预设
       if (overridePreset) {
         this.config.preset = overridePreset;
       }
       this.applyPreset();
-      
+
       return this.config;
     }
   }
@@ -192,7 +196,7 @@ class ConfigManager {
    */
   deepMerge(target, source) {
     const result = { ...target };
-    
+
     for (const key in source) {
       if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
         result[key] = this.deepMerge(target[key] || {}, source[key]);
@@ -200,7 +204,7 @@ class ConfigManager {
         result[key] = source[key];
       }
     }
-    
+
     return result;
   }
 
@@ -216,10 +220,15 @@ class ConfigManager {
     }
 
     // 验证颜色值
-    const validColors = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'gray', 'bright_red', 'bright_green', 'bright_yellow', 'bright_blue', 'bright_magenta', 'bright_cyan', 'bright_white'];
-    
-    this.validateColorConfig(this.config.components?.tokens?.colors, this.defaults.components.tokens.colors);
-    this.validateColorConfig(this.config.components?.status?.colors, this.defaults.components.status.colors);
+
+    this.validateColorConfig(
+      this.config.components?.tokens?.colors,
+      this.defaults.components.tokens.colors
+    );
+    this.validateColorConfig(
+      this.config.components?.status?.colors,
+      this.defaults.components.status.colors
+    );
 
     // 验证阈值
     const thresholds = this.config.components?.tokens?.thresholds;
@@ -236,9 +245,19 @@ class ConfigManager {
    */
   validateColorConfig(colorConfig, defaultColors) {
     if (!colorConfig) return;
-    
-    const validColors = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'gray'];
-    
+
+    const validColors = [
+      'black',
+      'red',
+      'green',
+      'yellow',
+      'blue',
+      'magenta',
+      'cyan',
+      'white',
+      'gray',
+    ];
+
     for (const [key, value] of Object.entries(colorConfig)) {
       if (!validColors.includes(value) && !value.startsWith('\x1b[')) {
         console.warn(`无效的颜色值 "${value}"，使用默认颜色 "${defaultColors[key]}"`);
@@ -257,7 +276,7 @@ class ConfigManager {
 
     const keys = path.split('.');
     let current = this.config;
-    
+
     for (const key of keys) {
       if (current && typeof current === 'object' && key in current) {
         current = current[key];
@@ -265,7 +284,7 @@ class ConfigManager {
         return defaultValue;
       }
     }
-    
+
     return current;
   }
 
@@ -282,10 +301,10 @@ class ConfigManager {
    */
   applyPreset() {
     if (!this.config || !this.config.preset) return;
-    
+
     const preset = this.config.preset.toUpperCase();
     const mapping = this.config.preset_mapping;
-    
+
     // 验证预设字符串
     for (const char of preset) {
       if (!mapping[char]) {
@@ -293,7 +312,7 @@ class ConfigManager {
         return;
       }
     }
-    
+
     // 根据预设字符串生成组件顺序
     const newOrder = [];
     for (const char of preset) {
@@ -302,12 +321,12 @@ class ConfigManager {
         newOrder.push(componentName);
       }
     }
-    
+
     // 更新组件顺序
     this.config.components.order = newOrder;
-    
+
     // 更新组件启用状态
-    const allComponents = Object.keys(mapping).map(k => mapping[k]);
+    const allComponents = Object.keys(mapping).map((k) => mapping[k]);
     for (const componentName of allComponents) {
       if (this.config.components[componentName]) {
         this.config.components[componentName].enabled = newOrder.includes(componentName);
@@ -323,12 +342,12 @@ class ConfigManager {
 
     return {
       configPath: this.configPath,
-      enabledComponents: this.config.components.order.filter(name => 
-        this.config.components[name]?.enabled !== false
+      enabledComponents: this.config.components.order.filter(
+        (name) => this.config.components[name]?.enabled !== false
       ),
       colorsEnabled: this.config.style.enable_colors,
       emojiEnabled: this.config.style.enable_emoji,
-      compactMode: this.config.style.compact_mode
+      compactMode: this.config.style.compact_mode,
     };
   }
 }
