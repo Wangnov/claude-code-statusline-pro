@@ -101,23 +101,65 @@ class ConfigurableStatuslineGenerator {
    * 检测Nerd Font支持 | Detect Nerd Font support
    */
   detectNerdFont() {
-    // 检查常见的Nerd Font环境指标 | Check common Nerd Font environment indicators
+    // 专业方法：测试特定 Nerd Font 字符是否可用 | Professional method: test specific Nerd Font characters
     
-    // 1. 检查是否安装了Hack Nerd Font | Check if Hack Nerd Font is installed
+    // 1. 优先检查环境变量 - 最可靠的方法 | Priority: check environment variables - most reliable
+    if (process.env.NERD_FONT === '1' || process.env.NERD_FONT === 'true') {
+      return true;
+    }
+    
+    // 2. 字符能力测试 - 测试核心 Nerd Font 字符 | Character capability test - test core Nerd Font characters
+    try {
+      // 测试几个关键的 Nerd Font 字符集
+      // Testing key Nerd Font character sets
+      const testChars = [
+        '\ue0b0', // Powerline right solid
+        '\uf07c', // Font Awesome folder-open  
+        '\uf126', // Font Awesome code-branch
+        '\ue700', // Devicons git-branch
+        '\uf085'  // Font Awesome cogs
+      ];
+      
+      // 在支持的终端中，这些字符应该能正确渲染
+      // In supported terminals, these characters should render correctly
+      // 注意：我们无法完美检测渲染结果，但可以检测字符是否被字体支持
+      // Note: We can't perfectly detect rendering result, but can check if characters are font-supported
+      
+      const { execSync } = require('child_process');
+      // 检查当前字体是否支持这些字符
+      for (const char of testChars) {
+        const codepoint = char.charCodeAt(0).toString(16).toUpperCase();
+        try {
+          // 检查系统字体是否包含这个 codepoint
+          const result = execSync(`fc-list :charset=${codepoint}`, { encoding: 'utf8', timeout: 500 });
+          if (result.trim()) {
+            return true; // 找到支持该字符的字体
+          }
+        } catch (e) {
+          // 单个字符检测失败，继续检测其他字符
+          continue;
+        }
+      }
+    } catch (e) {
+      // 字符测试失败，继续其他检测方法
+    }
+
+    // 3. 通用字体名称检测 | Universal font name detection
     try {
       const { execSync } = require('child_process');
-      const fontCheck = execSync('fc-list | grep -i "hack.*nerd"', { encoding: 'utf8', timeout: 1000 });
+      // 检查任何包含"nerd"、"powerline"或"NF"的字体
+      const fontCheck = execSync('fc-list | grep -i -E "(nerd|powerline|\\bNF\\b|nerdfont)"', { encoding: 'utf8', timeout: 1000 });
       if (fontCheck.trim()) {
-        return true; // 找到Hack Nerd Font
+        return true; // 找到任何Nerd Font或Powerline字体
       }
     } catch (e) {
       // 忽略错误，继续其他检测
     }
 
-    // 2. 检查终端程序对Nerd Font的支持 | Check terminal program Nerd Font support
+    // 4. 检查终端程序对Nerd Font的支持 | Check terminal program Nerd Font support
     const supportedTerminals = [
       'iterm', 'iterm2', 'kitty', 'alacritty', 'wezterm', 
-      'windows terminal', 'hyper', 'terminus'
+      'windows terminal', 'hyper', 'terminus', 'rio'
     ];
     
     const termProgram = (process.env.TERM_PROGRAM || '').toLowerCase();
@@ -129,30 +171,40 @@ class ConfigurableStatuslineGenerator {
       return true;
     }
 
-    // 3. 检查Nerd Font相关环境变量 | Check Nerd Font related environment variables
-    if (process.env.NERD_FONT || process.env.POWERLINE_FONTS) {
+    // 5. 检查Nerd Font相关环境变量 | Check Nerd Font related environment variables
+    if (process.env.POWERLINE_FONTS) {
       return true;
     }
 
-    // 4. 检查字体名称环境变量 | Check font name environment variables
+    // 6. 检查字体名称环境变量中的Nerd Font关键词 | Check font name env vars for Nerd Font keywords
     const fontName = (process.env.FONT_NAME || process.env.TERM_FONT || '').toLowerCase();
-    const nerdFontNames = [
-      'nerd', 'hack', 'fira code', 'jetbrains mono', 'source code pro',
-      'droid sans mono', 'dejavu sans mono', 'ubuntu mono', 'cascadia code'
+    const nerdFontKeywords = [
+      'nerd', 'powerline',  // 通用关键词
+      // 常见的Nerd Font字体名称
+      'hack', 'fira code', 'jetbrains mono', 'source code pro',
+      'droid sans mono', 'dejavu sans mono', 'ubuntu mono', 'cascadia code',
+      'maple', 'iosevka', 'inconsolata', 'liberation mono', 'victor mono',
+      'cousine', 'anonymous pro', 'space mono', 'roboto mono'
     ];
     
-    if (nerdFontNames.some(name => fontName.includes(name))) {
+    if (nerdFontKeywords.some(keyword => fontName.includes(keyword))) {
       return true;
     }
 
-    // 5. 对于VS Code，检查更多细节 | For VS Code, check more details
-    if (process.env.TERM_PROGRAM === 'vscode') {
-      // VS Code通常配置了Nerd Font，但需要用户手动设置
-      // 默认保守，除非有明确指示
-      return false;
+    // 7. 检查TERM环境变量中的特殊标识 | Check TERM env var for special indicators
+    const term = (process.env.TERM || '').toLowerCase();
+    if (term.includes('256color') && (termProgram.includes('iterm') || termProgram.includes('kitty'))) {
+      return true; // 现代终端通常支持Nerd Font
     }
 
-    // 6. 默认不启用，避免显示乱码 | Default disabled to avoid garbled characters
+    // 8. 对于VS Code，检查更多细节 | For VS Code, check more details
+    if (process.env.TERM_PROGRAM === 'vscode') {
+      // VS Code终端通常支持Nerd Font，但需要用户配置
+      // 检查是否有相关的配置提示
+      return false; // 保守起见，除非明确配置
+    }
+
+    // 9. 默认不启用，避免显示乱码 | Default disabled to avoid garbled characters
     return false;
   }
 

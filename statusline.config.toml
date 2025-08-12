@@ -132,7 +132,7 @@ show_context_health = false     # 显示上下文健康度指标 | Show context 
 adaptive_colors = false         # 根据usage动态调整所有颜色 | Dynamically adjust all colors based on usage
 show_timestamp = false          # 显示最后更新时间 | Show last update time
 show_session_info = false       # 显示会话相关信息 | Show session-related information
-force_nerd_font = true         # 强制启用Nerd Font（用于测试） | Force enable Nerd Font (for testing)
+force_nerd_font = false         # 强制启用Nerd Font（用于测试） | Force enable Nerd Font (for testing)
 
 # ================================
 # 预设配置映射 | Preset Configuration Mapping
