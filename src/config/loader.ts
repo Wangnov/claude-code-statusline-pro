@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import TOML from '@iarna/toml';
 import type { ZodError } from 'zod';
-import { type Config, ConfigSchema } from './schema.js';
+import type { TerminalCapabilities } from '../terminal/detector.js';
+import { ConfigMigrator } from './migrator.js';
+import { type ComponentsConfig, type Config, ConfigSchema } from './schema.js';
 
 // 获取当前目录，兼容 ESM 和 CJS
 function getCurrentDir(): string {
@@ -43,29 +45,65 @@ export class ConfigLoader {
   private configPath: string | null = null;
 
   /**
+   * 检测配置文件格式 | Detect config file format
+   * @param configPath 配置文件路径 | Config file path
+   * @returns 格式类型 | Format type
+   */
+  private detectConfigFormat(configPath: string): 'new' | 'old' | 'unknown' {
+    const filename = path.basename(configPath);
+
+    if (filename === 'config.toml') {
+      return 'new';
+    } else if (filename === 'statusline.config.toml' || filename === '.statusline.toml') {
+      return 'old';
+    }
+
+    return 'unknown';
+  }
+
+  /**
    * 查找配置文件 | Find config file
+   * 新的查找优先级：优先查找 config.toml，然后是 statusline.config.toml
+   * New search priority: prioritize config.toml, then statusline.config.toml
    */
   private findConfigFile(): string | null {
     const possiblePaths = [
-      // 当前目录 | Current directory
+      // 当前目录 - 新格式优先 | Current directory - new format first
+      path.join(process.cwd(), 'config.toml'),
       path.join(process.cwd(), 'statusline.config.toml'),
-      path.join(process.cwd(), '.statusline.toml'),
 
-      // 用户主目录 | User home directory
+      // 用户配置目录 - 新格式优先 | User config directory - new format first
       path.join(
         process.env.HOME || process.env.USERPROFILE || '',
         '.config',
         'claude-statusline',
         'config.toml'
       ),
-      path.join(process.env.HOME || process.env.USERPROFILE || '', '.statusline.toml'),
+      path.join(
+        process.env.HOME || process.env.USERPROFILE || '',
+        '.config',
+        'claude-statusline',
+        'statusline.config.toml'
+      ),
 
-      // 包目录 | Package directory (fallback)
-      path.join(getCurrentDir(), '../../statusline.config.toml'),
+      // 包目录 - 新格式优先 | Package directory - new format first
+      path.join(getCurrentDir(), '../../configs/config.toml'),
+      path.join(getCurrentDir(), '../../configs/statusline.config.toml'),
+      path.join(getCurrentDir(), '../../statusline.config.toml'), // 保持现有备用路径
     ];
 
     for (const configPath of possiblePaths) {
       if (fs.existsSync(configPath)) {
+        // 检测到旧格式时给出友好提示 | Show friendly hint when old format detected
+        const format = this.detectConfigFormat(configPath);
+        if (format === 'old') {
+          console.warn(`检测到旧版配置文件格式: ${configPath}`);
+          console.warn('建议使用新格式 config.toml，系统将自动处理配置兼容性');
+          console.warn(
+            'Detected old config format, system will handle compatibility automatically'
+          );
+        }
+
         return configPath;
       }
     }
@@ -177,64 +215,108 @@ export class ConfigLoader {
   }
 
   /**
-   * 应用主题配置覆盖 | Apply theme config overrides
+   * 应用主题配置 | Apply theme config (暂时简化处理)
    */
   private async applyThemeConfig(config: Config): Promise<Config> {
     if (!config.theme) return config;
 
-    // 首先尝试从模板中加载主题 | First try loading theme from templates
-    const templateConfig = config.templates?.[config.theme];
+    // 主题系统暂时禁用，直接使用模板系统 | Theme system temporarily disabled, use template system directly
+
+    // 回退到模板系统 | Fallback to template system
+    // 注意：templates 已被 themes 替代，这里保留向后兼容
+    const legacyConfig = config as Config & { templates?: Record<string, unknown> };
+    const templateConfig = legacyConfig.templates?.[config.theme];
     if (templateConfig) {
       // 使用TOML中定义的模板配置 | Use template config from TOML
-      return this.applyTemplateConfig(config, templateConfig);
+      return this.applyTemplateConfig(config, templateConfig as Record<string, unknown>);
     }
 
-    console.warn(`Theme "${config.theme}" not found in templates`);
+    console.warn(`Theme "${config.theme}" not found in templates or themes`);
     return config;
   }
 
   /**
    * 应用模板配置 | Apply template config
    */
-  private applyTemplateConfig(config: Config, templateConfig: any): Config {
+  private applyTemplateConfig(config: Config, templateConfig: Record<string, unknown>): Config {
     const mergedConfig = { ...config };
 
     // 应用模板的样式配置 | Apply template style config
     if (templateConfig.style) {
       mergedConfig.style = {
-        ...mergedConfig.style,
-        ...templateConfig.style,
+        separator: ' | ',
+        enable_colors: 'auto',
+        enable_emoji: 'auto',
+        enable_nerd_font: 'auto',
+        separator_color: 'white',
+        separator_before: ' ',
+        separator_after: ' ',
+        compact_mode: false,
+        max_width: 0,
+        ...(mergedConfig.style || {}),
+        ...(templateConfig.style as Record<string, unknown>),
       };
     }
 
     // 应用模板的组件配置 | Apply template components config
-    if (templateConfig.components) {
+    if (templateConfig.components && typeof templateConfig.components === 'object') {
       if (!mergedConfig.components) {
-        mergedConfig.components = {} as any;
+        mergedConfig.components = {} as ComponentsConfig;
       }
+
+      const templateComponents = templateConfig.components as Record<string, unknown>;
 
       // 对于每个组件，深度合并配置 | Deep merge config for each component
       const knownComponents = ['project', 'model', 'branch', 'tokens', 'status'] as const;
       for (const componentName of knownComponents) {
-        const templateComponentConfig = templateConfig.components[componentName];
-        if (templateComponentConfig) {
-          if (!mergedConfig.components[componentName]) {
-            mergedConfig.components[componentName] = {} as any;
+        const templateComponentConfig = templateComponents[componentName];
+        if (templateComponentConfig && typeof templateComponentConfig === 'object') {
+          const currentComponents = mergedConfig.components as Record<string, unknown>;
+          if (!currentComponents[componentName]) {
+            currentComponents[componentName] = {};
           }
-          mergedConfig.components[componentName] = {
-            ...mergedConfig.components[componentName],
-            ...templateComponentConfig,
+          currentComponents[componentName] = {
+            ...(currentComponents[componentName] as Record<string, unknown>),
+            ...(templateComponentConfig as Record<string, unknown>),
           };
         }
       }
 
       // 应用组件顺序 | Apply component order
-      if (templateConfig.components.order) {
-        mergedConfig.components.order = templateConfig.components.order;
+      if (templateComponents.order && Array.isArray(templateComponents.order)) {
+        const currentComponents = mergedConfig.components as Record<string, unknown>;
+        currentComponents.order = templateComponents.order;
       }
     }
 
     return mergedConfig;
+  }
+
+  /**
+   * 处理配置迁移 | Handle configuration migration
+   */
+  private async handleMigration(rawConfig: unknown): Promise<Config> {
+    const migrator = new ConfigMigrator();
+    const migrationResult = migrator.migrate(rawConfig);
+
+    if (!migrationResult.success) {
+      console.error('配置迁移失败 | Configuration migration failed:');
+      migrationResult.errors.forEach((error) => console.error(`  • ${error}`));
+    }
+
+    if (migrationResult.warnings.length > 0) {
+      console.warn('配置迁移警告 | Configuration migration warnings:');
+      migrationResult.warnings.forEach((warning) => console.warn(`  • ${warning}`));
+    }
+
+    if (migrationResult.changes.length > 0 && process.env.DEBUG) {
+      console.log('配置迁移变更 | Configuration migration changes:');
+      migrationResult.changes.forEach((change) =>
+        console.log(`  • [${change.type}] ${change.description}`)
+      );
+    }
+
+    return migrationResult.config;
   }
 
   /**
@@ -257,10 +339,47 @@ export class ConfigLoader {
           const configContent = await fs.promises.readFile(this.configPath, 'utf8');
           const parsedToml = TOML.parse(configContent);
           // 深度清理 TOML 解析后的 Symbol 属性
-          userConfig = this.cleanSymbols(parsedToml) as Partial<Config>;
+          const cleanedConfig = this.cleanSymbols(parsedToml);
+
+          // 检测配置格式并自动迁移 | Detect config format and auto-migrate
+          const format = this.detectConfigFormat(this.configPath);
+          const needsMigration = ConfigMigrator.needsMigration(cleanedConfig, this.configPath);
+
+          if (format === 'old' || needsMigration) {
+            console.log(
+              `🔄 检测到旧版配置格式，正在自动迁移... | Detected old config format, migrating automatically...`
+            );
+            const migratedConfig = await this.handleMigration(cleanedConfig);
+            userConfig = migratedConfig;
+
+            // 提示配置格式兼容性处理完成
+            if (process.env.NODE_ENV !== 'test') {
+              console.log(
+                '💡 配置格式已自动处理并兼容 | Configuration format automatically handled and compatible'
+              );
+            }
+          } else {
+            // 新格式配置直接验证
+            userConfig = ConfigSchema.parse(cleanedConfig);
+          }
         } catch (error) {
           console.warn(`Failed to parse config file ${this.configPath}:`, error);
+          // 解析失败时尝试迁移
+          try {
+            const configContent = await fs.promises.readFile(this.configPath, 'utf8');
+            const parsedToml = TOML.parse(configContent);
+            const cleanedConfig = this.cleanSymbols(parsedToml);
+            userConfig = await this.handleMigration(cleanedConfig);
+          } catch (_migrationError) {
+            console.error(
+              '配置迁移也失败了，使用默认配置 | Migration also failed, using default config'
+            );
+            throw error; // 重新抛出原始错误
+          }
         }
+      } else {
+        // 没有找到配置文件，使用默认配置
+        userConfig = ConfigSchema.parse({});
       }
 
       // 命令行预设覆盖 | Command line preset override
@@ -268,25 +387,25 @@ export class ConfigLoader {
         userConfig.preset = options.overridePreset;
       }
 
-      // 使用 Zod 解析和验证配置 | Parse and validate with Zod
-      if (process.env.DEBUG) {
-        console.error(
-          'Before ConfigSchema.parse, userConfig:',
-          JSON.stringify(userConfig, null, 2)
-        );
+      // 确保配置是完整的Config类型
+      let finalConfig: Config;
+      if ('preset' in userConfig && userConfig.preset) {
+        // 已经是完整配置
+        finalConfig = userConfig as Config;
+      } else {
+        // 使用Schema解析确保完整性
+        finalConfig = ConfigSchema.parse(userConfig);
       }
-      const config = ConfigSchema.parse(userConfig);
+
       if (process.env.DEBUG) {
-        console.error('After ConfigSchema.parse, config keys:', Object.keys(config));
+        console.error('Final config keys:', Object.keys(finalConfig));
       }
 
       // 应用预设 | Apply preset
-      let finalConfig = this.applyPreset(config);
+      finalConfig = this.applyPreset(finalConfig);
 
       // 应用主题配置 | Apply theme config
-      if (finalConfig.theme) {
-        finalConfig = await this.applyThemeConfig(finalConfig);
-      }
+      finalConfig = await this.applyThemeConfig(finalConfig);
 
       // 缓存配置 | Cache config
       this.cachedConfig = finalConfig;
@@ -384,25 +503,94 @@ export class ConfigLoader {
   }
 
   /**
-   * 创建默认配置文件
+   * 创建默认配置文件 | Create default config file
+   * 支持智能终端检测和主题选择 | Support intelligent terminal detection and theme selection
+   * 默认使用新格式文件名 config.toml | Default to new format filename config.toml
    */
-  async createDefaultConfig(configPath?: string): Promise<void> {
-    const defaultConfig = ConfigSchema.parse({});
-    const targetPath = configPath || path.join(process.cwd(), 'statusline.config.toml');
+  async createDefaultConfig(
+    configPath?: string,
+    theme?: string,
+    capabilities?: TerminalCapabilities
+  ): Promise<void> {
+    try {
+      // 读取默认配置模板 | Read default config template
+      const templatePath = path.join(getCurrentDir(), '../../configs/config.toml');
+      let configContent: string;
 
-    const tomlContent = TOML.stringify(defaultConfig as TOML.JsonMap);
-    await fs.promises.writeFile(targetPath, tomlContent, 'utf8');
+      if (fs.existsSync(templatePath)) {
+        // 使用完整的配置模板 | Use complete config template
+        configContent = await fs.promises.readFile(templatePath, 'utf8');
 
-    this.configPath = targetPath;
-    this.cachedConfig = defaultConfig;
+        // 解析TOML并应用自定义选项 | Parse TOML and apply custom options
+        const parsedConfig = TOML.parse(configContent);
+
+        // 应用主题设置 | Apply theme setting
+        if (theme) {
+          (parsedConfig as Record<string, unknown>).theme = theme;
+        }
+
+        // 根据终端能力调整配置 | Adjust config based on terminal capabilities
+        if (capabilities) {
+          const styleSection =
+            ((parsedConfig as Record<string, unknown>).style as Record<string, unknown>) || {};
+
+          // 根据终端能力设置显示选项 | Set display options based on terminal capabilities
+          if (typeof capabilities.colors === 'boolean') {
+            styleSection.enable_colors = capabilities.colors;
+          }
+          if (typeof capabilities.emoji === 'boolean') {
+            styleSection.enable_emoji = capabilities.emoji;
+          }
+          if (typeof capabilities.nerdFont === 'boolean') {
+            styleSection.enable_nerd_font = capabilities.nerdFont;
+          }
+
+          (parsedConfig as Record<string, unknown>).style = styleSection;
+        }
+
+        // 重新生成TOML内容 | Regenerate TOML content
+        configContent = TOML.stringify(parsedConfig as TOML.JsonMap);
+      } else {
+        // 回退到基础配置 | Fallback to basic config
+        console.warn('Default config template not found, using basic configuration');
+        const defaultConfig = ConfigSchema.parse({
+          preset: 'PMBTS',
+          theme: theme || 'classic',
+        });
+        configContent = TOML.stringify(defaultConfig as TOML.JsonMap);
+      }
+
+      // 写入配置文件 | Write config file
+      const targetPath = configPath || path.join(process.cwd(), 'config.toml');
+      await fs.promises.writeFile(targetPath, configContent, 'utf8');
+
+      this.configPath = targetPath;
+      // 清除缓存以强制重新加载 | Clear cache to force reload
+      this.cachedConfig = null;
+    } catch (error) {
+      console.error('Failed to create default config from template, using fallback:', error);
+
+      // 最终回退：创建基础配置 | Final fallback: create basic config
+      const fallbackConfig = ConfigSchema.parse({
+        preset: 'PMBTS',
+        theme: theme || 'classic',
+      });
+      const targetPath = configPath || path.join(process.cwd(), 'config.toml');
+      const tomlContent = TOML.stringify(fallbackConfig as TOML.JsonMap);
+      await fs.promises.writeFile(targetPath, tomlContent, 'utf8');
+
+      this.configPath = targetPath;
+      this.cachedConfig = fallbackConfig;
+    }
   }
 
   /**
-   * 保存配置到文件
+   * 保存配置到文件 | Save config to file
+   * 优先保存为新格式 config.toml | Prefer saving as new format config.toml
    */
   async save(config: Config, configPath?: string): Promise<void> {
-    const targetPath =
-      configPath || this.configPath || path.join(process.cwd(), 'statusline.config.toml');
+    const targetPath = configPath || this.configPath || path.join(process.cwd(), 'config.toml'); // 默认使用新格式 | Default to new format
+
     const tomlContent = TOML.stringify(config as TOML.JsonMap);
     await fs.promises.writeFile(targetPath, tomlContent, 'utf8');
     this.cachedConfig = config;
@@ -426,7 +614,7 @@ export class ConfigLoader {
     // 这里应该有主题配置逻辑，暂时简化处理
     const themedConfig = {
       ...currentConfig,
-      theme: themeName,
+      theme: themeName as 'classic' | 'powerline' | 'capsule',
     };
 
     await this.save(themedConfig, configPath);
@@ -437,6 +625,14 @@ export class ConfigLoader {
    */
   getDefaultConfig(): Config {
     return ConfigSchema.parse({});
+  }
+
+  /**
+   * 检查配置文件格式 | Check config file format
+   * 公共方法，允许外部检测配置文件格式 | Public method for external format detection
+   */
+  checkConfigFormat(configPath: string): 'new' | 'old' | 'unknown' {
+    return this.detectConfigFormat(configPath);
   }
 }
 
