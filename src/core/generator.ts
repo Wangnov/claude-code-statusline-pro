@@ -7,6 +7,7 @@ import { TokensComponentFactory } from '../components/tokens.js';
 import type { ComponentConfig, Config, InputData, RenderContext } from '../config/schema.js';
 import { TerminalRenderer } from '../terminal/colors.js';
 import { detect, getCapabilityInfo } from '../terminal/detector.js';
+import { createThemeRenderer } from '../themes/index.js';
 
 /**
  * 生成器选项 | Generator options
@@ -67,9 +68,9 @@ export class StatuslineGenerator {
       // 检测终端能力 | Detect terminal capabilities
       const capabilities = detect(
         this.config.style?.enable_colors,
-        this.config.style?.enable_emoji,
-        this.config.style?.enable_nerd_font,
-        this.config.experimental?.force_nerd_font
+        this.config.terminal?.force_emoji,
+        this.config.terminal?.force_nerd_font,
+        this.config.terminal?.force_text
       );
 
       // 初始化终端渲染器 | Initialize terminal renderer
@@ -116,9 +117,8 @@ export class StatuslineGenerator {
         }
       }
 
-      // 合并组件结果 | Combine component results
-      const separator = this.config.style?.separator || ' ';
-      const result = componentResults.join(separator);
+      // 合并组件结果 | Combine component results using theme renderer
+      const result = await this.combineComponentsWithTheme(componentResults, context);
 
       // 缓存结果 | Cache result
       this.lastResult = result;
@@ -129,6 +129,61 @@ export class StatuslineGenerator {
       // 返回简化的错误状态 | Return simplified error status
       return this.generateFallbackStatus(inputData);
     }
+  }
+
+  /**
+   * 使用主题渲染器合并组件 | Combine components using theme renderer
+   */
+  private async combineComponentsWithTheme(
+    componentResults: string[],
+    _context: RenderContext
+  ): Promise<string> {
+    // 如果没有组件结果，返回空字符串 | Return empty string if no component results
+    if (componentResults.length === 0) {
+      return '';
+    }
+
+    // 获取主题名称 | Get theme name
+    const themeName = this.config.theme || 'classic';
+
+    try {
+      // 创建主题渲染器 | Create theme renderer
+      const themeRenderer = createThemeRenderer(themeName, this.renderer);
+
+      if (themeRenderer) {
+        // 提取组件颜色 | Extract component colors
+        const colors = this.extractComponentColors();
+
+        // 使用主题渲染器 | Use theme renderer
+        return themeRenderer.renderStatusline(componentResults, colors, this.config);
+      }
+    } catch (error) {
+      console.warn(
+        `主题渲染器 '${themeName}' 创建失败，使用默认合并 | Theme renderer '${themeName}' creation failed, using default merging:`,
+        error
+      );
+    }
+
+    // 回退到默认合并方式 | Fallback to default merging
+    const separator = this.config.style?.separator || ' ';
+    return componentResults.join(separator);
+  }
+
+  /**
+   * 提取组件颜色 | Extract component colors
+   */
+  private extractComponentColors(): string[] {
+    const colors: string[] = [];
+    const componentOrder = this.getComponentOrder();
+
+    for (const componentName of componentOrder) {
+      const componentConfig = this.getComponentConfig(componentName) as ComponentConfig;
+      if (componentConfig?.enabled) {
+        colors.push(componentConfig.icon_color || 'blue');
+      }
+    }
+
+    return colors;
   }
 
   /**
