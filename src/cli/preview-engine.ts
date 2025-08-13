@@ -15,6 +15,8 @@ import type { Config } from '../config/schema.js';
 import { StatuslineGenerator } from '../core/generator.js';
 import type { TerminalCapabilities } from '../terminal/detector.js';
 import { TerminalDetector } from '../terminal/detector.js';
+import { ThemeManager } from '../themes/manager.js';
+import type { ThemeCompatibilityResult } from '../themes/types.js';
 import { MockDataGenerator, type MockScenario } from './mock-data.js';
 
 // ANSI转义序列正则表达式 | ANSI escape sequence regex
@@ -63,6 +65,10 @@ export class LivePreviewEngine {
   private mockGenerator: MockDataGenerator;
   private terminalDetector: TerminalDetector;
   private currentConfig!: Config;
+  private themeManager!: ThemeManager; // 主题管理器实例 | Theme manager instance
+  private availableThemes = ['classic', 'powerline', 'capsule']; // 可用主题列表 | Available themes list
+  private currentThemeIndex = 0; // 当前主题索引 | Current theme index
+  private lastThemeMessage = ''; // 最后的主题消息 | Last theme message
   private options: {
     configPath?: string;
     theme?: string;
@@ -104,6 +110,17 @@ export class LivePreviewEngine {
         await this.configLoader.applyTheme(this.options.theme);
         this.currentConfig = await this.configLoader.load();
       }
+
+      // 初始化主题管理器 | Initialize theme manager
+      this.themeManager = new ThemeManager(this.currentConfig);
+
+      // 设置当前主题索引 | Set current theme index
+      const currentTheme = this.themeManager.getCurrentTheme();
+      this.currentThemeIndex = this.availableThemes.indexOf(currentTheme);
+      if (this.currentThemeIndex === -1) {
+        this.currentThemeIndex = 0; // 默认classic主题 | Default to classic theme
+      }
+
       // 在预览模式下禁用缓存，确保每个场景都能正确渲染
       this.generator = new StatuslineGenerator(this.currentConfig, { disableCache: true });
     } catch (error) {
@@ -312,11 +329,33 @@ export class LivePreviewEngine {
    */
   private renderConfigInfo(): void {
     const configSource = this.configLoader.getConfigSource() || 'default';
-    const theme = this.currentConfig.theme || 'default';
+    const currentTheme = this.themeManager
+      ? this.themeManager.getCurrentTheme()
+      : this.currentConfig.theme || 'default';
+    const capabilities = this.terminalDetector.detectCapabilities();
+
+    // 检查主题兼容性 | Check theme compatibility
+    let themeStatus = currentTheme;
+    if (this.themeManager) {
+      const compatibility = this.themeManager.checkThemeCompatibility(currentTheme, capabilities);
+      if (!compatibility.compatible) {
+        themeStatus = capabilities.colors
+          ? `\x1b[33m${currentTheme} (兼容性警告)\x1b[0m`
+          : `${currentTheme} (兼容性警告)`;
+      } else if (capabilities.colors) {
+        themeStatus = `\x1b[32m${currentTheme}\x1b[0m`;
+      }
+    }
 
     console.log(`📝 配置源: ${configSource}`);
-    console.log(`🎨 当前主题: ${theme}`);
+    console.log(`🎨 当前主题: ${themeStatus}`);
     console.log(`🔧 组件预设: ${this.currentConfig.preset || 'PMBTS'}`);
+
+    // 显示最近的主题切换消息 | Show recent theme switch message
+    if (this.lastThemeMessage) {
+      console.log(this.lastThemeMessage);
+    }
+
     console.log();
   }
 
@@ -338,9 +377,10 @@ export class LivePreviewEngine {
    * 渲染快捷键帮助
    */
   private renderShortcutsHelp(capabilities: TerminalCapabilities): void {
+    const themeList = this.availableThemes.join(' → ');
     const helpText = capabilities.colors
-      ? '\x1b[90m快捷键: [c] 配置  [t] 主题  [p] 预设  [r] 刷新  [q] 退出\x1b[0m'
-      : '快捷键: [c] 配置  [t] 主题  [p] 预设  [r] 刷新  [q] 退出';
+      ? `\x1b[90m快捷键: [c] 配置  [t] 主题切换(${themeList})  [p] 预设  [r] 刷新  [q] 退出\x1b[0m`
+      : `快捷键: [c] 配置  [t] 主题切换(${themeList})  [p] 预设  [r] 刷新  [q] 退出`;
 
     console.log(this.formatSeparator(capabilities));
     console.log(helpText);
@@ -517,7 +557,8 @@ export class LivePreviewEngine {
             // 打开配置编辑器
             break;
           case 't':
-            // 切换主题
+            // 切换主题 | Switch theme
+            this.switchToNextTheme();
             break;
           case 'p':
             // 切换预设
@@ -547,6 +588,118 @@ export class LivePreviewEngine {
    */
   getAvailableScenarios(): string[] {
     return this.mockGenerator.getAvailableScenarios();
+  }
+
+  /**
+   * 切换到下一个主题 | Switch to next theme
+   * 循环切换：classic -> powerline -> capsule -> classic
+   * Cycle through: classic -> powerline -> capsule -> classic
+   */
+  private async switchToNextTheme(): Promise<void> {
+    if (!this.themeManager) {
+      console.warn('主题管理器未初始化 | Theme manager not initialized');
+      return;
+    }
+
+    // 循环到下一个主题 | Cycle to next theme
+    this.currentThemeIndex = (this.currentThemeIndex + 1) % this.availableThemes.length;
+    const newTheme = this.availableThemes[this.currentThemeIndex];
+
+    // 安全检查：确保主题名称存在 | Safety check: ensure theme name exists
+    if (!newTheme) {
+      console.error('主题切换失败：无效的主题索引 | Theme switch failed: invalid theme index');
+      return;
+    }
+
+    // 检查终端兼容性 | Check terminal compatibility
+    const capabilities = this.terminalDetector.detectCapabilities();
+    const compatibility = this.themeManager.checkThemeCompatibility(newTheme, capabilities);
+
+    try {
+      // 应用主题 | Apply theme
+      const result = this.themeManager.switchTheme(newTheme);
+
+      if (result.success) {
+        // 更新配置和生成器 | Update config and generator
+        this.currentConfig = result.config;
+        this.generator = new StatuslineGenerator(this.currentConfig, { disableCache: true });
+
+        // 生成状态消息 | Generate status message
+        this.lastThemeMessage = this.generateThemeMessage(newTheme, compatibility, capabilities);
+
+        // 立即刷新预览 | Immediately refresh preview
+        if (this.isRunning) {
+          await this.renderLivePreview();
+        }
+      } else {
+        // 切换失败，回退到安全主题 | Switch failed, fallback to safe theme
+        this.handleThemeSwitchFailure(newTheme);
+      }
+    } catch (error) {
+      console.error(`主题切换失败 | Theme switch failed:`, error);
+      this.handleThemeSwitchFailure(newTheme);
+    }
+  }
+
+  /**
+   * 生成主题切换消息 | Generate theme switch message
+   */
+  private generateThemeMessage(
+    themeName: string,
+    compatibility: ThemeCompatibilityResult,
+    capabilities: TerminalCapabilities
+  ): string {
+    const themeFeatures = this.getThemeFeatures(themeName);
+
+    if (!compatibility.compatible) {
+      const warning = capabilities.colors
+        ? `⚠️  \\x1b[33m主题 '${themeName}' 需要额外支持，效果可能受限\\x1b[0m`
+        : `⚠️  主题 '${themeName}' 需要额外支持，效果可能受限`;
+
+      const notes = compatibility.notes.length > 0 ? ` (${compatibility.notes[0]})` : '';
+
+      return `${warning}${notes}`;
+    } else {
+      const success = capabilities.colors
+        ? `✅ \\x1b[32m已切换到 '${themeName}' 主题\\x1b[0m`
+        : `✅ 已切换到 '${themeName}' 主题`;
+
+      return `${success} ${themeFeatures}`;
+    }
+  }
+
+  /**
+   * 获取主题特性说明 | Get theme features description
+   */
+  private getThemeFeatures(themeName: string): string {
+    const features: Record<string, string> = {
+      classic: '(经典样式 | Classic style)',
+      powerline: '(渐变+精细进度条 | Gradient + Fine progress)',
+      capsule: '(胶囊样式+全特效 | Capsule style + All effects)',
+    };
+
+    return features[themeName] || '';
+  }
+
+  /**
+   * 处理主题切换失败 | Handle theme switch failure
+   */
+  private handleThemeSwitchFailure(failedTheme: string): void {
+    // 回退到classic主题 | Fallback to classic theme
+    this.currentThemeIndex = 0;
+    const safeTheme = this.availableThemes[0] || 'classic'; // classic
+
+    try {
+      const result = this.themeManager.switchTheme(safeTheme);
+      if (result.success) {
+        this.currentConfig = result.config;
+        this.generator = new StatuslineGenerator(this.currentConfig, { disableCache: true });
+        this.lastThemeMessage = `❌ 主题 '${failedTheme}' 切换失败，已回退到 '${safeTheme}' | Theme '${failedTheme}' switch failed, fallen back to '${safeTheme}'`;
+      }
+    } catch (error) {
+      console.error('主题回退也失败了 | Theme fallback also failed:', error);
+      this.lastThemeMessage = '❌ 主题系统错误 | Theme system error';
+    }
   }
 }
 

@@ -114,24 +114,24 @@ export class TerminalRenderer {
       model: components?.model?.nerd_icon || '\uf085', // fa-cogs (机器/模型)
       branch: components?.branch?.nerd_icon || '\uf126', // fa-code-branch (git分支)
       token: components?.tokens?.nerd_icon || '\uf080', // fa-bar-chart
-      ready: components?.status?.nerd_icons?.ready || '\uf00c', // fa-check
-      thinking: components?.status?.nerd_icons?.thinking || '\uf110', // fa-spinner
-      tool: components?.status?.nerd_icons?.tool || '\uf0ad', // fa-wrench
-      error: components?.status?.nerd_icons?.error || '\uf00d', // fa-times
-      warning: components?.status?.nerd_icons?.warning || '\uf071', // fa-exclamation-triangle
+      ready: components?.status?.icons?.nerd?.ready || '\uf00c', // fa-check
+      thinking: components?.status?.icons?.nerd?.thinking || '\uf110', // fa-spinner
+      tool: components?.status?.icons?.nerd?.tool || '\uf0ad', // fa-wrench
+      error: components?.status?.icons?.nerd?.error || '\uf00d', // fa-times
+      warning: components?.status?.icons?.nerd?.warning || '\uf071', // fa-exclamation-triangle
     };
 
     // 第二层：Emoji图标 | Second tier: Emoji icons
     const emojiIcons: IconMap = {
-      project: components?.project?.icon || '📁',
-      model: components?.model?.icon || '🤖',
-      branch: components?.branch?.icon || '🌿',
-      token: components?.tokens?.icon || '📊',
-      ready: components?.status?.icons?.ready || '✅',
-      thinking: components?.status?.icons?.thinking || '💭',
-      tool: components?.status?.icons?.tool || '🔧',
-      error: components?.status?.icons?.error || '❌',
-      warning: components?.status?.icons?.warning || '⚠️',
+      project: components?.project?.emoji_icon || '📁',
+      model: components?.model?.emoji_icon || '🤖',
+      branch: components?.branch?.emoji_icon || '🌿',
+      token: components?.tokens?.emoji_icon || '📊',
+      ready: components?.status?.icons?.emoji?.ready || '✅',
+      thinking: components?.status?.icons?.emoji?.thinking || '💭',
+      tool: components?.status?.icons?.emoji?.tool || '🔧',
+      error: components?.status?.icons?.emoji?.error || '❌',
+      warning: components?.status?.icons?.emoji?.warning || '⚠️',
     };
 
     // 第三层：文本图标 | Third tier: Text icons
@@ -140,11 +140,11 @@ export class TerminalRenderer {
       model: components?.model?.text_icon || '[M]',
       branch: components?.branch?.text_icon || '[B]',
       token: components?.tokens?.text_icon || '[T]',
-      ready: components?.status?.text_icons?.ready || '[OK]',
-      thinking: components?.status?.text_icons?.thinking || '[...]',
-      tool: components?.status?.text_icons?.tool || '[TOOL]',
-      error: components?.status?.text_icons?.error || '[ERR]',
-      warning: components?.status?.text_icons?.warning || '[WARN]',
+      ready: components?.status?.icons?.text?.ready || '[OK]',
+      thinking: components?.status?.icons?.text?.thinking || '[...]',
+      tool: components?.status?.icons?.text?.tool || '[TOOL]',
+      error: components?.status?.icons?.text?.error || '[ERR]',
+      warning: components?.status?.icons?.text?.warning || '[WARN]',
     };
 
     // 根据能力选择图标集 | Select icon set based on capabilities
@@ -155,6 +155,29 @@ export class TerminalRenderer {
     } else {
       return textIcons;
     }
+  }
+
+  /**
+   * 获取前景色代码 | Get foreground color code
+   */
+  public getForegroundColor(colorName: string): string {
+    return this.getColor(colorName);
+  }
+
+  /**
+   * 获取背景色代码 | Get background color code
+   */
+  public getBackgroundColor(colorName: string): string {
+    const foregroundColor = this.getColor(colorName);
+    if (!foregroundColor || !this.capabilities.colors) return '';
+
+    // 将前景色转换为背景色 | Convert foreground color to background color
+    // 前景色范围：30-37 (标准), 90-97 (明亮)
+    // 背景色范围：40-47 (标准), 100-107 (明亮)
+    const escapeChar = String.fromCharCode(0x1b);
+    return foregroundColor
+      .replace(new RegExp(`${escapeChar}\\[3([0-7])m`, 'g'), `${escapeChar}[4$1m`) // 30-37 -> 40-47
+      .replace(new RegExp(`${escapeChar}\\[9([0-7])m`, 'g'), `${escapeChar}[10$1m`); // 90-97 -> 100-107
   }
 
   /**

@@ -27,6 +27,38 @@ export { TokensComponent } from './components/tokens.js';
 // 配置系统导出
 export { ConfigLoader } from './config/loader.js';
 
+// 主题系统导出 | Theme system exports
+export {
+  BUILTIN_THEMES,
+  CapsuleRenderer,
+  ClassicRenderer,
+  createThemeEngine,
+  createThemeManager,
+  createThemeRenderer,
+  getBuiltinThemeNames,
+  getThemeCompatibility,
+  getThemeFeatures,
+  isBuiltinTheme,
+  migrateTemplates,
+  PowerlineRenderer,
+  ThemeEngine,
+  ThemeManager,
+  validateThemeConfig,
+} from './themes/index.js';
+
+export type {
+  SeparatorConfig,
+  ThemeApplicationResult,
+  ThemeCompatibilityResult,
+  ThemeConfig,
+  ThemeFeatures,
+  ThemeManagerOptions,
+  ThemeRenderer,
+  ThemesConfig,
+  ThemeType,
+  ValidationResult,
+} from './themes/types.js';
+
 // 类型定义导出
 import type { InputData } from './config/schema.js';
 
@@ -45,7 +77,6 @@ export type {
   RenderContext,
   RenderOptions,
   StyleConfig,
-  ThemeConfig,
 } from './config/schema.js';
 export * from './config/schema.js';
 // 核心功能导出

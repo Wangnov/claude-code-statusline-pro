@@ -339,16 +339,16 @@ export class ConfigEditor {
     });
 
     // 配置图标
-    let icon = component.icon;
+    let icon = component.emoji_icon;
     if (enabled) {
       icon = await input({
         message: `${componentName} 组件图标：`,
-        default: component.icon,
+        default: component.emoji_icon,
       });
     }
 
     // 配置颜色
-    let color = component.color;
+    let color = component.icon_color;
     if (enabled) {
       color = await select({
         message: `${componentName} 组件颜色：`,
@@ -362,7 +362,7 @@ export class ConfigEditor {
           { name: '白色', value: 'white' },
           { name: '灰色', value: 'gray' },
         ],
-        default: component.color || 'cyan',
+        default: component.icon_color || 'cyan',
       });
     }
 
@@ -431,13 +431,13 @@ export class ConfigEditor {
     });
 
     const enableEmoji = await confirm({
-      message: '启用表情符号？',
-      default: style?.enable_emoji === true,
+      message: '强制启用表情符号？',
+      default: this.currentConfig.terminal?.force_emoji === true,
     });
 
     const enableNerdFont = await confirm({
-      message: '启用 Nerd Font 图标？',
-      default: style?.enable_nerd_font === true,
+      message: '强制启用 Nerd Font 图标？',
+      default: this.currentConfig.terminal?.force_nerd_font === true,
     });
 
     const separator = await input({
@@ -449,10 +449,28 @@ export class ConfigEditor {
     this.currentConfig.style = {
       separator,
       enable_colors: enableColors,
-      enable_emoji: enableEmoji,
-      enable_nerd_font: enableNerdFont,
+      enable_emoji: style?.enable_emoji || 'auto',
+      enable_nerd_font: style?.enable_nerd_font || 'auto',
+      separator_color: 'white',
+      separator_before: ' ',
+      separator_after: ' ',
       compact_mode: style?.compact_mode || false,
       max_width: style?.max_width || 0,
+    };
+
+    // 更新terminal配置
+    if (!this.currentConfig.terminal) {
+      this.currentConfig.terminal = {
+        force_nerd_font: false,
+        force_emoji: false,
+        force_text: false,
+      };
+    }
+    this.currentConfig.terminal = {
+      ...this.currentConfig.terminal,
+      force_emoji: enableEmoji,
+      force_nerd_font: enableNerdFont,
+      force_text: false, // 保持默认值
     };
 
     this.hasUnsavedChanges = true;

@@ -92,7 +92,7 @@ npx claude-code-statusline-pro --help
 
 ### TOML配置文件
 
-创建 `statusline.config.toml` 进行详细配置：
+创建 `config.toml` 进行详细配置：
 
 ```toml
 # 默认预设
@@ -174,7 +174,7 @@ echo '{"model":{"id":"claude-sonnet-4"}}' | npx claude-code-statusline-pro MT
 ### 配置文件位置
 
 按优先级查找：
-1. `./statusline.config.toml` (当前目录)
+1. `./config.toml` (当前目录)
 2. `~/.config/claude-statusline/config.toml`
 3. 包安装目录默认配置
 
