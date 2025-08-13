@@ -1,10 +1,18 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import type {
   ComponentConfig,
+  ExtendedRenderContext,
   RenderContext,
   TokensComponentConfig,
   TranscriptEntry,
 } from '../config/schema.js';
+import {
+  type AdvancedProgressOptions,
+  FINE_PROGRESS_CHARS,
+  generateAdvancedProgressBar,
+  getGradientColor,
+  getRainbowGradientColor,
+} from '../utils/index.js';
 import { BaseComponent, type ComponentFactory } from './base.js';
 
 /**
@@ -41,17 +49,18 @@ export class TokensComponent extends BaseComponent {
     if (mockData && typeof (mockData as Record<string, unknown>).tokenUsage === 'number') {
       return this.renderMockTokenData(
         (mockData as Record<string, unknown>).tokenUsage as number,
-        (mockData as Record<string, unknown>).status as string
+        (mockData as Record<string, unknown>).status as string,
+        context
       );
     }
 
     if (!inputData.transcriptPath) {
-      return this.renderNoTranscript();
+      return this.renderNoTranscript(context);
     }
 
     const tokenUsage = this.parseTranscriptFile(inputData.transcriptPath, context);
     if (!tokenUsage) {
-      return this.renderNoTranscript();
+      return this.renderNoTranscript(context);
     }
 
     return this.formatTokenDisplay(tokenUsage);
@@ -60,7 +69,11 @@ export class TokensComponent extends BaseComponent {
   /**
    * 渲染Mock数据 | Render mock token data
    */
-  private renderMockTokenData(tokenUsagePercent: number, _status?: string): string | null {
+  private renderMockTokenData(
+    tokenUsagePercent: number,
+    _status?: string,
+    context?: RenderContext
+  ): string | null {
     const contextWindow = this.getContextWindow();
     const contextUsedTokens = Math.floor((tokenUsagePercent / 100) * contextWindow);
 
@@ -73,8 +86,8 @@ export class TokensComponent extends BaseComponent {
     };
 
     // 生成进度条 | Generate progress bar
-    if (this.tokensConfig.show_progress_bar) {
-      tokenUsage.progressBar = this.generateProgressBar(tokenUsagePercent);
+    if (this.tokensConfig.show_progress_bar && context) {
+      tokenUsage.progressBar = this.generateProgressBar(tokenUsagePercent, context);
     }
 
     return this.formatTokenDisplay(tokenUsage);
@@ -83,7 +96,7 @@ export class TokensComponent extends BaseComponent {
   /**
    * 渲染无transcript文件时的显示 | Render display when no transcript file
    */
-  private renderNoTranscript(): string | null {
+  private renderNoTranscript(context: RenderContext): string | null {
     const contextWindow = this.getContextWindow();
     const tokenUsage: TokenUsageInfo = {
       contextUsedTokens: 0,
@@ -95,7 +108,7 @@ export class TokensComponent extends BaseComponent {
 
     // 生成空进度条 | Generate empty progress bar
     if (this.tokensConfig.show_progress_bar) {
-      tokenUsage.progressBar = this.generateProgressBar(0);
+      tokenUsage.progressBar = this.generateProgressBar(0, context);
     }
 
     return this.formatTokenDisplay(tokenUsage);
@@ -182,7 +195,7 @@ export class TokensComponent extends BaseComponent {
 
       // 生成进度条 | Generate progress bar
       if (this.tokensConfig.show_progress_bar) {
-        result.progressBar = this.generateProgressBar(usagePercentage);
+        result.progressBar = this.generateProgressBar(usagePercentage, context);
       }
 
       // 缓存结果 | Cache result
@@ -202,34 +215,139 @@ export class TokensComponent extends BaseComponent {
    * 获取上下文窗口大小 | Get context window size
    */
   private getContextWindow(): number {
-    return this.tokensConfig.context_window || 200000;
+    // 从 context_windows 映射中获取，支持模型特定配置
+    const contextWindows = this.tokensConfig.context_windows || { default: 200000 };
+    return contextWindows.default || 200000;
   }
 
   /**
    * 生成进度条 | Generate progress bar
+   * 支持渐变颜色和精细进度条 | Support gradient colors and fine progress bars
    */
-  private generateProgressBar(usagePercentage: number): string {
-    const width = this.tokensConfig.progress_bar_width || 10;
-    const filled = Math.round((usagePercentage / 100) * width);
-    const _empty = width - filled;
+  private generateProgressBar(usagePercentage: number, context: RenderContext): string {
+    const width = this.tokensConfig.progress_width || 10;
+
+    // 检查主题配置中的特性启用状态 | Check feature enablement in theme configuration
+    const themeConfig = context.config.themes;
+    const currentTheme = context.config.theme;
+    
+    // 对于powerline和capsule主题，默认启用渐变 | Enable gradient by default for powerline and capsule themes
+    const isThemeWithGradient = currentTheme === 'powerline' || currentTheme === 'capsule';
+    const enableGradient =
+      this.tokensConfig.show_gradient || 
+      themeConfig?.[currentTheme]?.enable_gradient || 
+      isThemeWithGradient; // 新增：主题默认启用
+      
+    const enableFineProgress = themeConfig?.[currentTheme]?.fine_progress || false;
+
+    // 调试信息 | Debug info
+    if (context.config.debug) {
+      console.error('=== 渐变调试信息 ===');
+      console.error('show_gradient:', this.tokensConfig.show_gradient);
+      console.error('currentTheme:', currentTheme);
+      console.error('theme_enable_gradient:', themeConfig?.[currentTheme]?.enable_gradient);
+      console.error('isThemeWithGradient:', isThemeWithGradient);
+      console.error('enableGradient:', enableGradient);
+      console.error('capabilities.colors:', context.capabilities.colors);
+      console.error('=====================');
+    }
 
     // 使用配置的进度条字符 | Use configured progress bar characters
     const filledChar = this.tokensConfig.progress_bar_chars?.filled || '█';
     const emptyChar = this.tokensConfig.progress_bar_chars?.empty || '░';
     const backupChar = this.tokensConfig.progress_bar_chars?.backup || '▓';
 
-    // 85%后使用后备区域字符 | Use backup area character after 85%
-    let bar = '';
-    for (let i = 0; i < width; i++) {
-      const segmentPercentage = (i / width) * 100;
-      if (i < filled) {
-        bar += segmentPercentage >= 85 ? backupChar : filledChar;
-      } else {
-        bar += emptyChar;
-      }
+    // 智能选择渐变模式 | Intelligently select gradient mode
+    const useRainbowGradient = enableGradient;
+    const useFineGradient = enableFineProgress && context.capabilities.nerdFont && enableGradient;
+    
+    // 准备高级进度条选项 | Prepare advanced progress bar options
+    const options: AdvancedProgressOptions = {
+      length: width,
+      fillChar: filledChar,
+      emptyChar: emptyChar,
+      backupChar: backupChar,
+      backupThreshold: 85,
+      enableGradient: useRainbowGradient,
+      enableFineProgress: useFineGradient,
+      fineChars: FINE_PROGRESS_CHARS,
+      colorMapper: getRainbowGradientColor, // 使用新的彩虹渐变算法
+    };
+
+    // 调试信息：渐变模式 | Debug info: gradient mode
+    if (context.config.debug) {
+      console.error('=== 渐变模式调试 ===');
+      console.error('useRainbowGradient:', useRainbowGradient);
+      console.error('useFineGradient:', useFineGradient);  
+      console.error('capabilities.nerdFont:', context.capabilities.nerdFont);
+      console.error('enableFineProgress:', enableFineProgress);
+      console.error('====================');
     }
 
-    return bar;
+    // 生成高级进度条 | Generate advanced progress bar
+    const result = generateAdvancedProgressBar(usagePercentage, options);
+
+    // 如果启用了渐变并且返回了segments，进行彩色渲染
+    // If gradient is enabled and segments are returned, perform colored rendering
+    if (enableGradient && result.segments && context.capabilities.colors) {
+      if (context.config.debug) {
+        console.error('=== 彩色渲染调试 ===');
+        console.error('result.segments 存在:', !!result.segments);
+        console.error('segments数量:', result.segments?.length);
+        console.error('前3个segments:', result.segments?.slice(0, 3));
+        console.error('==================');
+      }
+      return this.renderColoredProgressBar(result.segments, context);
+    }
+
+    if (context.config.debug) {
+      console.error('=== 未渲染彩色原因 ===');
+      console.error('enableGradient:', enableGradient);
+      console.error('result.segments存在:', !!result.segments);
+      console.error('context.capabilities.colors:', context.capabilities.colors);
+      console.error('========================');
+    }
+
+    return result.bar;
+  }
+
+  /**
+   * 渲染彩色进度条 | Render colored progress bar
+   * 将分段数据渲染为彩色进度条，支持ANSI RGB代码
+   */
+  private renderColoredProgressBar(
+    segments: Array<{ char: string; color: string }>,
+    context: RenderContext
+  ): string {
+    // 检查是否为 ExtendedRenderContext 并且有 renderer
+    const extendedContext = context as ExtendedRenderContext;
+    
+    const reset = '\x1b[0m'; // ANSI reset code
+    
+    const result = segments
+      .map((segment) => {
+        // 如果color以\x1b开头，说明是ANSI代码，直接使用
+        if (segment.color.startsWith('\x1b')) {
+          return `${segment.color}${segment.char}${reset}`;
+        }
+        // 否则使用渲染器的colorize方法（颜色名称）
+        if (extendedContext.renderer && context.capabilities.colors) {
+          return extendedContext.renderer!.colorize(segment.char, segment.color);
+        }
+        // 如果都不行，返回原始字符
+        return segment.char;
+      })
+      .join('');
+
+    if (context.config.debug) {
+      console.error('=== 渲染结果调试 ===');
+      console.error('输出长度:', result.length);
+      console.error('包含ANSI代码:', result.includes('\x1b'));
+      console.error('前50个字符:', result.substring(0, 50));
+      console.error('===================');
+    }
+
+    return result;
   }
 
   /**
@@ -242,11 +360,14 @@ export class TokensComponent extends BaseComponent {
     const icon = this.getIcon('token');
 
     // 确定颜色 | Determine color
-    let colorName = this.tokensConfig.color || 'yellow';
-    if (critical) {
-      colorName = 'red';
-    } else if (warning) {
-      colorName = 'yellow';
+    let colorName = 'yellow'; // 默认颜色
+    if (this.tokensConfig.colors?.safe) {
+      colorName = this.tokensConfig.colors.safe;
+    }
+    if (critical && this.tokensConfig.colors?.danger) {
+      colorName = this.tokensConfig.colors.danger;
+    } else if (warning && this.tokensConfig.colors?.warning) {
+      colorName = this.tokensConfig.colors.warning;
     }
 
     // 按原版格式：[进度条] 百分比 (具体数值) | Format like original: [progressbar] percentage (specific numbers)
@@ -273,14 +394,47 @@ export class TokensComponent extends BaseComponent {
 
     displayText += `(${usedDisplay}/${totalDisplay})`;
 
-    // 添加状态指示器 | Add status indicators
-    if (critical) {
-      displayText += ' 🔥';
-    } else if (warning) {
-      displayText += ' ⚡';
+    // 添加状态指示器 - 使用三级图标系统 | Add status indicators - using three-level icon system
+    const statusIcon = this.getStatusIcon(critical ?? false, warning ?? false);
+    if (statusIcon) {
+      displayText += ` ${statusIcon}`;
     }
 
     return this.formatOutput(icon, displayText, colorName);
+  }
+
+  /**
+   * 获取状态图标 - 三级图标选择逻辑 | Get status icon - three-level icon selection logic
+   * 优先级：nerd_icon → emoji_icon → text_icon
+   */
+  private getStatusIcon(critical: boolean, warning: boolean): string {
+    if (!critical && !warning) return '';
+
+    const statusType = critical ? 'critical' : 'backup';
+    const statusIcons = this.tokensConfig.status_icons;
+
+    if (!statusIcons) {
+      // 向后兼容：使用硬编码默认值 | Backward compatibility: use hardcoded defaults
+      return critical ? '🔥' : '⚡';
+    }
+
+    // 1. 优先使用Nerd Font图标（如果支持）| Prefer Nerd Font icons (if supported)
+    if (this.capabilities.nerdFont && statusIcons.nerd?.[statusType]) {
+      return statusIcons.nerd[statusType];
+    }
+
+    // 2. 其次使用Emoji图标（如果支持）| Use Emoji icons (if supported)
+    if (this.capabilities.emoji && statusIcons.emoji?.[statusType]) {
+      return statusIcons.emoji[statusType];
+    }
+
+    // 3. 最后回退到文本图标 | Fall back to text icons
+    if (statusIcons.text?.[statusType]) {
+      return statusIcons.text[statusType];
+    }
+
+    // 最后的回退：硬编码默认值 | Final fallback: hardcoded defaults
+    return critical ? '🔥' : '⚡';
   }
 }
 

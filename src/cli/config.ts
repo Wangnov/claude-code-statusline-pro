@@ -7,6 +7,7 @@
 
 import { Command } from 'commander';
 import { ConfigLoader } from '../config/loader.js';
+import { detect as detectTerminalCapabilities } from '../terminal/detector.js';
 import { ConfigEditor } from './config-editor.js';
 import { formatCliMessage } from './message-icons.js';
 import { LivePreviewEngine } from './preview-engine.js';
@@ -21,22 +22,63 @@ program
 // 初始化配置文件
 program
   .command('init')
-  .description('initialize configuration file')
+  .description('initialize configuration file with intelligent terminal detection')
   .option('-f, --force', 'overwrite existing configuration')
+  .option('-t, --theme <theme>', 'specify theme (classic, powerline, capsule)')
   .action(async (options) => {
     try {
       const configLoader = new ConfigLoader();
       const exists = await configLoader.configExists();
 
       if (exists && !options.force) {
-        console.log('Configuration file already exists. Use --force to overwrite.');
+        console.log(
+          formatCliMessage('info', 'Configuration file already exists. Use --force to overwrite.')
+        );
         return;
       }
 
-      await configLoader.createDefaultConfig();
-      console.log(formatCliMessage('success', 'Configuration file initialized'));
+      // 智能终端检测 | Intelligent terminal detection
+      console.log(formatCliMessage('info', 'Detecting terminal capabilities...'));
+      const capabilities = detectTerminalCapabilities();
+
+      // 根据终端能力选择最佳主题 | Select optimal theme based on terminal capabilities
+      let selectedTheme: string;
+      if (options.theme) {
+        selectedTheme = options.theme;
+        console.log(formatCliMessage('theme', `Using specified theme: ${selectedTheme}`));
+      } else {
+        if (capabilities.nerdFont) {
+          selectedTheme = 'powerline';
+          console.log(
+            formatCliMessage(
+              'success',
+              'Nerd Font detected - using Powerline theme for best experience'
+            )
+          );
+        } else if (capabilities.emoji) {
+          selectedTheme = 'classic';
+          console.log(formatCliMessage('info', 'Emoji support detected - using Classic theme'));
+        } else {
+          selectedTheme = 'classic';
+          console.log(
+            formatCliMessage(
+              'warn',
+              'Limited terminal capabilities - using Classic theme with text fallback'
+            )
+          );
+        }
+      }
+
+      // 创建带有智能配置的默认文件 | Create default file with intelligent configuration
+      await configLoader.createDefaultConfig(undefined, selectedTheme, capabilities);
+
+      console.log(formatCliMessage('success', 'Configuration file initialized successfully'));
+      console.log(formatCliMessage('folder', `Theme: ${selectedTheme}`));
+      console.log(
+        formatCliMessage('info', 'You can customize your configuration by editing config.toml')
+      );
     } catch (error) {
-      console.error('Failed to initialize config:', error);
+      console.error(formatCliMessage('error', 'Failed to initialize config:'), error);
       process.exit(1);
     }
   });

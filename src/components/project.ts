@@ -5,6 +5,8 @@ import { BaseComponent, type ComponentFactory } from './base.js';
 /**
  * 项目组件 | Project component
  * 显示当前项目/目录名称 | Display current project/directory name
+ * 完全适配新配置系统，支持三级图标选择和统一颜色管理
+ * Fully adapted to new config system, supports three-level icon selection and unified color management
  */
 export class ProjectComponent extends BaseComponent {
   private projectConfig: ProjectComponentConfig;
@@ -31,11 +33,9 @@ export class ProjectComponent extends BaseComponent {
       return null;
     }
 
-    // 获取显示配置 | Get display configuration
-    const icon = this.getIcon('project');
-    const colorName = this.projectConfig.color || 'cyan';
-
-    return this.formatOutput(icon, projectName, colorName);
+    // 使用BaseComponent的现代化渲染方法，自动处理三级图标选择和颜色管理
+    // Use BaseComponent's modern rendering methods, automatically handle three-level icon selection and color management
+    return this.formatOutput(projectName);
   }
 }
 

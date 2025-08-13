@@ -44,11 +44,8 @@ export class BranchComponent extends BaseComponent {
       displayBranch = `${displayBranch.substring(0, maxLength - 3)}...`;
     }
 
-    // 获取显示配置 | Get display configuration
-    const icon = this.getIcon('branch');
-    const colorName = this.branchConfig.color || 'green';
-
-    return this.formatOutput(icon, displayBranch, colorName);
+    // 使用BaseComponent的formatOutput自动处理图标和颜色 | Use BaseComponent formatOutput to automatically handle icons and colors
+    return this.formatOutput(displayBranch);
   }
 }
 

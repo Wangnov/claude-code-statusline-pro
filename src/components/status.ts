@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import type {
   ComponentConfig,
+  ExtendedRenderContext,
   RenderContext,
   StatusComponentConfig,
   TranscriptEntry,
@@ -35,7 +36,7 @@ export class StatusComponent extends BaseComponent {
     this.statusConfig = config;
   }
 
-  protected renderContent(context: RenderContext): string | null {
+  protected renderContent(context: RenderContext | ExtendedRenderContext): string | null {
     const { inputData } = context;
 
     // 检查是否有Mock数据 | Check for mock data
@@ -76,15 +77,20 @@ export class StatusComponent extends BaseComponent {
    * 渲染默认状态 | Render default status
    */
   private renderDefaultStatus(): string {
-    const icon = this.getIcon('ready');
-    const colorName = this.statusConfig.colors?.ready || 'green';
-    return this.formatOutput(icon, 'Ready', colorName);
+    // 使用BaseComponent的三级图标系统获取ready图标 | Use BaseComponent three-level icon system for ready icon
+    const statusIcon = this.getStatusIcon('ready');
+    // 使用BaseComponent的颜色系统渲染文本 | Use BaseComponent color system to render text
+    const colorName = this.getStatusColor('ready');
+    return this.formatOutput(statusIcon, 'Ready', colorName);
   }
 
   /**
    * 解析transcript状态 | Parse transcript status
    */
-  private parseTranscriptStatus(transcriptPath: string, context: RenderContext): StatusInfo | null {
+  private parseTranscriptStatus(
+    transcriptPath: string,
+    context: RenderContext | ExtendedRenderContext
+  ): StatusInfo | null {
     // 检查文件存在性 | Check file existence
     let fileExists = false;
     try {
@@ -295,25 +301,82 @@ export class StatusComponent extends BaseComponent {
   private formatStatusDisplay(statusInfo: StatusInfo): string {
     const { type, message } = statusInfo;
 
-    // 获取图标和颜色 | Get icon and color
-    const icon = this.getIcon(type);
-    const colorName = this.statusConfig.colors?.[type] || this.getDefaultColor(type);
+    // 使用BaseComponent的三级图标系统获取状态图标 | Use BaseComponent three-level icon system for status icon
+    const statusIcon = this.getStatusIcon(type);
 
-    return this.formatOutput(icon, message, colorName);
+    // 根据状态类型获取颜色名称 | Get color name based on status type
+    const colorName = this.getStatusColor(type);
+
+    // 使用BaseComponent的标准formatOutput方法 | Use BaseComponent standard formatOutput method
+    return this.formatOutput(statusIcon, message, colorName);
   }
 
   /**
-   * 获取默认颜色 | Get default color
+   * 获取状态图标 | Get status icon
+   * 使用三级图标选择逻辑：nerd → emoji → text | Use three-level icon selection: nerd → emoji → text
+   * 与BaseComponent标准集成 | Integrated with BaseComponent standards
    */
-  private getDefaultColor(type: StatusType): string {
-    const colorMap: Record<StatusType, string> = {
+  private getStatusIcon(type: StatusType): string {
+    const statusIcons = this.statusConfig.icons;
+
+    if (!statusIcons) {
+      // 向后兼容：使用硬编码默认值 | Backward compatibility: use hardcoded defaults
+      const defaultIcons: Record<StatusType, string> = {
+        ready: '✅',
+        thinking: '💭',
+        tool: '🔧',
+        error: '❌',
+        warning: '⚠️',
+      };
+      return defaultIcons[type] || '';
+    }
+
+    // 1. 优先使用Nerd Font图标（如果支持）| Prefer Nerd Font icons (if supported)
+    if (this.capabilities.nerdFont && statusIcons.nerd?.[type]) {
+      return this.renderIcon(statusIcons.nerd[type]);
+    }
+
+    // 2. 其次使用Emoji图标（如果支持）| Use Emoji icons (if supported)
+    if (this.capabilities.emoji && statusIcons.emoji?.[type]) {
+      return this.renderIcon(statusIcons.emoji[type]);
+    }
+
+    // 3. 最后回退到文本图标 | Fall back to text icons
+    if (statusIcons.text?.[type]) {
+      return this.renderIcon(statusIcons.text[type]);
+    }
+
+    // 最后的回退：硬编码默认值 | Final fallback: hardcoded defaults
+    const defaultIcons: Record<StatusType, string> = {
+      ready: '[OK]',
+      thinking: '[...]',
+      tool: '[TOOL]',
+      error: '[ERR]',
+      warning: '[WARN]',
+    };
+    return this.renderIcon(defaultIcons[type] || '');
+  }
+
+  /**
+   * 获取状态颜色 | Get status color
+   */
+  private getStatusColor(type: StatusType): string {
+    const statusColors = this.statusConfig.colors;
+
+    if (statusColors?.[type]) {
+      return statusColors[type];
+    }
+
+    // 回退到默认颜色 | Fall back to default colors
+    const defaultColors: Record<StatusType, string> = {
       ready: 'green',
       thinking: 'yellow',
       tool: 'blue',
       error: 'red',
       warning: 'yellow',
     };
-    return colorMap[type] || 'white';
+
+    return defaultColors[type] || 'white';
   }
 }
 

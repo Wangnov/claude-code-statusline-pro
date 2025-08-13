@@ -1,0 +1,286 @@
+# Claude Code Statusline Pro 默认配置文件 | Default Configuration File
+# 配置文件模板 | config file template
+# 详细配置说明请参考文档 | For detailed configuration, see documentation
+
+# ==================== 基础配置 | Basic Configuration ====================
+
+# 预设配置 - 组件组合快速配置 | Preset - Quick component combination setup
+# P=Project, M=Model, B=Branch, T=Tokens, S=Status
+preset = "PMBTS"
+
+# 主题配置 | Theme configuration  
+# 可选值 | Available options: "classic", "powerline", "capsule"
+theme = "classic"
+
+# 调试模式 | Debug mode
+debug = false
+
+# ==================== 组件配置 | Component Configuration ====================
+
+[components]
+# 组件显示顺序 | Component display order
+order = ["project", "model", "branch", "tokens", "status"]
+
+# -------------------- 项目组件 | Project Component --------------------
+[components.project]
+# 是否启用该组件 | Enable this component
+enabled = true
+
+# 三级图标系统 | Three-level icon system
+# 优先级顺序 | Priority order: nerd_icon > emoji_icon > text_icon
+emoji_icon = "📁"     # 表情符号图标 | Emoji icon (优先级2 | Priority 2)
+nerd_icon = "\uf07b" # Nerd Font图标 | Nerd Font icon (优先级1 | Priority 1)  
+text_icon = "[P]"    # 文本图标 | Text icon (回退方案 | Fallback)
+
+# 颜色配置 | Color configuration
+icon_color = "blue"  # 图标颜色 | Icon color
+text_color = "white" # 文本颜色 | Text color
+
+# 项目组件特有配置 | Project-specific configuration
+show_when_empty = false # 项目名为空时是否显示 | Show when project name is empty
+
+# -------------------- 模型组件 | Model Component --------------------
+[components.model]
+enabled = true
+
+# 三级图标系统 | Three-level icon system
+# 优先级顺序 | Priority order: nerd_icon > emoji_icon > text_icon
+emoji_icon = "🤖"     # 机器人表情符号 | Robot emoji (优先级2 | Priority 2)
+nerd_icon = "\uf16a3" # Nerd Font机器人图标 | Nerd Font robot icon (优先级1 | Priority 1)
+text_icon = "[M]"    # 文本标识 | Text identifier (回退方案 | Fallback)
+
+# 颜色配置 | Color configuration
+icon_color = "cyan"
+text_color = "white"
+
+# 模型组件特有配置 | Model-specific configuration
+show_full_name = false # 是否显示完整模型名称 | Show full model name
+
+# 自定义模型名称映射 | Custom model name mapping
+[components.model.mapping]
+"claude-sonnet-4" = "S4"
+"claude-opus-4.1" = "O4.1"
+"claude-haiku-3.5" = "H3.5"
+
+# -------------------- 分支组件 | Branch Component --------------------
+[components.branch]
+enabled = true
+
+# 三级图标系统 | Three-level icon system
+# 优先级顺序 | Priority order: nerd_icon > emoji_icon > text_icon
+emoji_icon = "🌿"     # 树枝表情符号 | Branch emoji (优先级2 | Priority 2)
+nerd_icon = "\uf1d3" # Nerd Font分支图标 | Nerd Font branch icon (优先级1 | Priority 1)
+text_icon = "[B]"    # 文本标识 | Text identifier (回退方案 | Fallback)
+
+# 颜色配置 | Color configuration
+icon_color = "green"
+text_color = "white"
+
+# 分支组件特有配置 | Branch-specific configuration
+show_when_no_git = false # 非Git仓库时是否显示 | Show when not in Git repository
+max_length = 10          # 分支名最大长度 | Maximum branch name length
+
+# -------------------- Token组件 | Token Component --------------------
+[components.tokens]
+enabled = true
+
+# 三级图标系统 | Three-level icon system
+# 优先级顺序 | Priority order: nerd_icon > emoji_icon > text_icon
+emoji_icon = "📊"     # 图表表情符号 | Chart emoji (优先级2 | Priority 2)
+nerd_icon = "\uf201" # Nerd Font图表图标 | Nerd Font chart icon (优先级1 | Priority 1)
+text_icon = "[T]"    # 文本标识 | Text identifier (回退方案 | Fallback)
+
+# 颜色配置 | Color configuration
+icon_color = "yellow"
+text_color = "white"
+
+# Token组件特有配置 | Token-specific configuration
+show_gradient = false    # 是否显示渐变进度条 | Show gradient progress bar
+show_progress_bar = true # 是否显示进度条 | Show progress bar
+show_percentage = true   # 是否显示百分比 | Show percentage
+show_raw_numbers = false # 是否显示原始数字 | Show raw numbers
+progress_width = 15      # 进度条宽度 | Progress bar width
+
+# Token阈值配置 | Token threshold configuration
+[components.tokens.thresholds]
+warning = 60  # 警告阈值 (%) | Warning threshold
+danger = 85   # 危险阈值 (%) | Danger threshold  
+backup = 85   # 后备区域阈值 (%) | Backup area threshold
+critical = 95 # 临界阈值 (%) | Critical threshold
+
+# Token颜色配置 | Token color configuration
+[components.tokens.colors]
+safe = "green"     # 安全状态颜色 | Safe state color
+warning = "yellow" # 警告状态颜色 | Warning state color
+danger = "red"     # 危险状态颜色 | Danger state color
+
+# Token进度条字符配置 | Token progress bar characters
+[components.tokens.progress_bar_chars]
+filled = "█" # 已填充字符 | Filled character
+empty = "░"  # 空白字符 | Empty character
+backup = "▓" # 后备区域字符 | Backup area character
+
+# Token状态图标三级嵌套配置 | Token status icons nested configuration
+[components.tokens.status_icons]
+
+# Emoji状态图标 | Emoji status icons
+[components.tokens.status_icons.emoji]
+backup = "⚡"   # 后备区域警告 | Backup area warning
+critical = "🔥" # 临界状态 | Critical status
+
+# Nerd Font状态图标 | Nerd Font status icons
+[components.tokens.status_icons.nerd]
+backup = "\uf0e7"   # Nerd Font闪电 | Nerd Font lightning
+critical = "\uf06d" # Nerd Font火焰 | Nerd Font fire
+
+# 文本状态图标 | Text status icons
+[components.tokens.status_icons.text]
+backup = "[!]"   # 文本警告 | Text warning
+critical = "[X]" # 文本临界 | Text critical
+
+# 上下文窗口大小映射 | Context window size mapping
+[components.tokens.context_windows]
+default = 200000
+"claude-sonnet-4" = 200000
+"claude-opus-4.1" = 200000
+"claude-haiku-3.5" = 200000
+
+# -------------------- 状态组件 | Status Component --------------------
+[components.status]
+enabled = true
+
+# 三级图标系统 | Three-level icon system
+# 优先级顺序 | Priority order: nerd_icon > emoji_icon > text_icon
+emoji_icon = "✨"     # 星光表情符号 | Sparkle emoji (优先级2 | Priority 2)
+nerd_icon = "\uf00c" # Nerd Font检查图标 | Nerd Font check icon (优先级1 | Priority 1)
+text_icon = "[S]"    # 文本标识 | Text identifier (回退方案 | Fallback)
+
+# 颜色配置 | Color configuration
+icon_color = "magenta"
+text_color = "white"
+
+# 状态组件特有配置 | Status-specific configuration
+show_recent_errors = true # 是否显示最近错误 | Show recent errors
+
+# 状态图标三级嵌套配置 | Status icons nested configuration
+[components.status.icons]
+
+# Emoji状态图标 | Emoji status icons
+[components.status.icons.emoji]
+ready = "✅"    # 就绪状态 | Ready status
+thinking = "💭" # 思考状态 | Thinking status
+tool = "🔧"     # 工具使用状态 | Tool use status
+error = "❌"    # 错误状态 | Error status
+warning = "⚠️" # 警告状态 | Warning status
+
+# Nerd Font状态图标 | Nerd Font status icons
+[components.status.icons.nerd]
+ready = "\uf00c"    # Nerd Font检查 | Nerd Font check
+thinking = "\uf0ad" # Nerd Font思考 | Nerd Font thinking
+tool = "\uf0ad"     # Nerd Font工具 | Nerd Font tool
+error = "\uf00d"    # Nerd Font错误 | Nerd Font error
+warning = "\uf071"  # Nerd Font警告 | Nerd Font warning
+
+# 文本状态图标 | Text status icons
+[components.status.icons.text]
+ready = "[OK]"     # 就绪文本 | Ready text
+thinking = "[...]" # 思考文本 | Thinking text
+tool = "[TOOL]"    # 工具文本 | Tool text
+error = "[ERR]"    # 错误文本 | Error text
+warning = "[WARN]" # 警告文本 | Warning text
+
+# 状态颜色配置 | Status color configuration
+[components.status.colors]
+ready = "green"
+thinking = "yellow"
+tool = "blue"
+error = "red"
+warning = "yellow"
+
+# ==================== 样式配置 | Style Configuration ====================
+
+[style]
+# 组件分隔符 | Component separator
+separator = "|"
+
+# 终端能力自动检测 | Terminal capability auto-detection
+enable_colors = "auto"    # 颜色支持 | Color support: true/false/"auto"
+enable_emoji = "auto"     # 表情符号支持 | Emoji support: true/false/"auto"
+enable_nerd_font = "auto" # Nerd Font支持 | Nerd Font support: true/false/"auto"
+
+# 分隔符样式配置 | Separator style configuration
+separator_color = "white" # 分隔符颜色 | Separator color
+separator_before = " "    # 分隔符前空格 | Space before separator
+separator_after = " "     # 分隔符后空格 | Space after separator
+
+# 显示控制 | Display control
+compact_mode = false # 紧凑模式 | Compact mode
+max_width = 120      # 最大宽度限制 | Maximum width limit
+
+# ==================== 终端强制配置 | Terminal Force Configuration ====================
+
+[terminal]
+# 强制终端显示能力配置，覆盖自动检测结果 | Force terminal display capabilities, overriding auto-detection
+# 用于解决终端检测不准确的问题 | Use to solve terminal detection inaccuracy issues
+
+force_nerd_font = false # 强制启用Nerd Font | Force enable Nerd Font icons
+force_emoji = false     # 强制启用表情符号 | Force enable emoji icons
+force_text = false      # 强制启用文本模式 | Force enable text mode
+
+# 使用建议 | Usage recommendations:
+# 1. 如果您有Nerd Font但显示emoji，设置 force_nerd_font = true
+# 2. 如果显示乱码，设置 force_text = true 
+# 3. 或者通过环境变量: export NERD_FONT=1 或 export TERMINAL_FONT="您的字体名"
+
+# ==================== 主题配置 | Theme Configuration ====================
+
+# 主题特性配置 | Theme feature configuration
+[themes.classic]
+enable_gradient = false  # 启用渐变效果 | Enable gradient effects
+ignore_separator = false # 忽略分隔符 | Ignore separators
+fine_progress = false    # 精细进度条 | Fine-grained progress
+capsule_style = false    # 胶囊样式 | Capsule style
+
+[themes.powerline]
+enable_gradient = true   # Powerline主题启用渐变 | Powerline theme with gradient
+ignore_separator = false
+fine_progress = true     # 启用精细进度条 | Enable fine progress
+capsule_style = false
+
+[themes.capsule]
+enable_gradient = true  # 胶囊主题启用渐变 | Capsule theme with gradient
+ignore_separator = true # 忽略传统分隔符 | Ignore traditional separators
+fine_progress = true
+capsule_style = true    # 启用胶囊样式 | Enable capsule style
+
+# ==================== 预设映射配置 | Preset Mapping Configuration ====================
+
+[preset_mapping]
+P = "project" # P -> 项目组件 | P -> Project component
+M = "model"   # M -> 模型组件 | M -> Model component  
+B = "branch"  # B -> 分支组件 | B -> Branch component
+T = "tokens"  # T -> Token组件 | T -> Token component
+S = "status"  # S -> 状态组件 | S -> Status component
+
+# ==================== 高级配置 | Advanced Configuration ====================
+
+[advanced]
+# 缓存配置 | Cache configuration
+cache_enabled = true # 启用缓存 | Enable cache
+
+# 错误处理配置 | Error handling configuration  
+recent_error_count = 5 # 最近错误条数 | Recent error count
+
+# 性能配置 | Performance configuration
+git_timeout = 1000 # Git命令超时时间(ms) | Git command timeout (ms)
+
+# 自定义颜色代码 | Custom color codes
+[advanced.custom_color_codes]
+# 示例：添加自定义ANSI颜色代码 | Example: Add custom ANSI color codes
+# custom_blue = "\x1b[38;5;39m"
+
+# ==================== 实验性配置 | Experimental Configuration ====================
+
+[experimental]
+# 实验性功能开关 | Experimental feature toggles
+enable_experimental = false # 启用实验性功能 | Enable experimental features

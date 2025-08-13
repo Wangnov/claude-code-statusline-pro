@@ -14,6 +14,7 @@ import { Command } from 'commander';
 import { ConfigLoader } from '../config/loader.js';
 import type { InputData } from '../config/schema.js';
 import { StatuslineGenerator } from '../core/generator.js';
+import { detect as detectTerminalCapabilities } from '../terminal/detector.js';
 import { ConfigEditor } from './config-editor.js';
 import { formatCliMessage } from './message-icons.js';
 import { MockDataGenerator } from './mock-data.js';
@@ -63,9 +64,27 @@ program
           enable_emoji: options.emoji === false ? false : config.style?.enable_emoji || 'auto',
           enable_nerd_font:
             options.icons === false ? false : config.style?.enable_nerd_font || 'auto',
+          separator_color: config.style?.separator_color || 'white',
+          separator_before: config.style?.separator_before || ' ',
+          separator_after: config.style?.separator_after || ' ',
           compact_mode: config.style?.compact_mode || false,
           max_width: config.style?.max_width || 0,
         };
+
+        // 更新terminal配置
+        if (!config.terminal) {
+          config.terminal = {
+            force_nerd_font: false,
+            force_emoji: false,
+            force_text: false,
+          };
+        }
+        if (options.emoji === false) {
+          config.terminal.force_emoji = false;
+        }
+        if (options.icons === false) {
+          config.terminal.force_nerd_font = false;
+        }
       }
 
       const generator = new StatuslineGenerator(config);
@@ -108,8 +127,72 @@ program
   .description('interactive configuration with live preview')
   .option('-f, --file <path>', 'config file path')
   .option('-r, --reset', 'reset to default configuration')
+  .option('-i, --init', 'initialize new configuration with intelligent terminal detection')
+  .option('-t, --theme <theme>', 'specify theme for initialization (classic, powerline, capsule)')
   .action(async (options) => {
     try {
+      const configLoader = new ConfigLoader();
+
+      if (options.init) {
+        // 初始化配置文件 | Initialize configuration file
+        const exists = await configLoader.configExists(options.file);
+
+        if (exists) {
+          console.log(formatCliMessage('info', 'Configuration file already exists.'));
+          const overwrite = await confirm({
+            message: 'Do you want to overwrite the existing configuration?',
+            default: false,
+          });
+
+          if (!overwrite) {
+            console.log(formatCliMessage('info', 'Configuration initialization cancelled.'));
+            return;
+          }
+        }
+
+        // 智能终端检测 | Intelligent terminal detection
+        console.log(formatCliMessage('info', 'Detecting terminal capabilities...'));
+        const capabilities = detectTerminalCapabilities();
+
+        // 根据终端能力选择最佳主题 | Select optimal theme based on terminal capabilities
+        let selectedTheme: string;
+        if (options.theme) {
+          selectedTheme = options.theme;
+          console.log(formatCliMessage('theme', `Using specified theme: ${selectedTheme}`));
+        } else {
+          if (capabilities.nerdFont) {
+            selectedTheme = 'powerline';
+            console.log(
+              formatCliMessage(
+                'success',
+                'Nerd Font detected - using Powerline theme for best experience'
+              )
+            );
+          } else if (capabilities.emoji) {
+            selectedTheme = 'classic';
+            console.log(formatCliMessage('info', 'Emoji support detected - using Classic theme'));
+          } else {
+            selectedTheme = 'classic';
+            console.log(
+              formatCliMessage(
+                'warn',
+                'Limited terminal capabilities - using Classic theme with text fallback'
+              )
+            );
+          }
+        }
+
+        // 创建带有智能配置的默认文件 | Create default file with intelligent configuration
+        await configLoader.createDefaultConfig(options.file, selectedTheme, capabilities);
+
+        console.log(formatCliMessage('success', 'Configuration file initialized successfully'));
+        console.log(formatCliMessage('folder', `Theme: ${selectedTheme}`));
+        console.log(
+          formatCliMessage('info', 'You can customize your configuration by editing config.toml')
+        );
+        return;
+      }
+
       if (options.reset) {
         await resetConfiguration(options.file);
         return;
@@ -120,7 +203,10 @@ program
       });
       await configEditor.startInteractiveMode();
     } catch (error) {
-      console.error('Configuration error:', error instanceof Error ? error.message : String(error));
+      console.error(
+        formatCliMessage('error', 'Configuration error:'),
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
