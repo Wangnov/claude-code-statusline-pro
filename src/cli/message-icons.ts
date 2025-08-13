@@ -1,13 +1,13 @@
 /**
  * CLI消息图标管理器 | CLI message icon manager
  * 复用终端检测机制，为CLI消息提供三层回退图标系统
- * 
+ *
  * @author wangnov
  * @date 2025-08-12T20:30:20+08:00
  */
 
-import { detect } from '../terminal/detector.js';
 import type { TerminalCapabilities } from '../terminal/detector.js';
+import { detect } from '../terminal/detector.js';
 
 /**
  * CLI消息图标映射接口 | CLI message icon mapping interface
@@ -58,38 +58,38 @@ export class CliMessageIconManager {
     // 第一层：Nerd Font图标 (Font Awesome系列) | First tier: Nerd Font icons
     const nerdFontIcons: CliIconMap = {
       // 状态图标 | Status icons
-      success: '\uf00c',      // fa-check
-      error: '\uf00d',        // fa-times  
-      warning: '\uf071',      // fa-exclamation-triangle
-      info: '\uf05a',         // fa-info-circle
-      
+      success: '\uf00c', // fa-check
+      error: '\uf00d', // fa-times
+      warning: '\uf071', // fa-exclamation-triangle
+      info: '\uf05a', // fa-info-circle
+
       // 功能图标 | Function icons
-      config: '\uf013',       // fa-cog
-      file: '\uf15b',         // fa-file-o
-      folder: '\uf07b',       // fa-folder
-      theme: '\uf0c7',        // fa-floppy-o
-      edit: '\uf044',         // fa-edit
-      validate: '\uf058',     // fa-check-circle
-      reset: '\uf0e2',        // fa-undo
-      
-      // 诊断图标 | Diagnostic icons  
-      doctor: '\uf0f8',       // fa-stethoscope
-      platform: '\uf109',     // fa-desktop
-      terminal: '\uf120',     // fa-terminal
-      
+      config: '\uf013', // fa-cog
+      file: '\uf15b', // fa-file-o
+      folder: '\uf07b', // fa-folder
+      theme: '\uf0c7', // fa-floppy-o
+      edit: '\uf044', // fa-edit
+      validate: '\uf058', // fa-check-circle
+      reset: '\uf0e2', // fa-undo
+
+      // 诊断图标 | Diagnostic icons
+      doctor: '\uf0f8', // fa-stethoscope
+      platform: '\uf109', // fa-desktop
+      terminal: '\uf120', // fa-terminal
+
       // 交互图标 | Interactive icons
-      goodbye: '\uf164',      // fa-thumbs-up
-      prompt: '\uf059',       // fa-question-circle
+      goodbye: '\uf164', // fa-thumbs-up
+      prompt: '\uf059', // fa-question-circle
     };
 
     // 第二层：Emoji图标 | Second tier: Emoji icons
     const emojiIcons: CliIconMap = {
       // 状态图标 | Status icons
       success: '✅',
-      error: '❌', 
+      error: '❌',
       warning: '⚠️',
       info: 'ℹ️',
-      
+
       // 功能图标 | Function icons
       config: '⚙️',
       file: '📄',
@@ -98,12 +98,12 @@ export class CliMessageIconManager {
       edit: '✏️',
       validate: '🔍',
       reset: '🔄',
-      
+
       // 诊断图标 | Diagnostic icons
       doctor: '🔍',
       platform: '💻',
       terminal: '📟',
-      
+
       // 交互图标 | Interactive icons
       goodbye: '👋',
       prompt: '❓',
@@ -116,7 +116,7 @@ export class CliMessageIconManager {
       error: '[ERR]',
       warning: '[WARN]',
       info: '[INFO]',
-      
+
       // 功能图标 | Function icons
       config: '[CFG]',
       file: '[FILE]',
@@ -125,13 +125,13 @@ export class CliMessageIconManager {
       edit: '[EDIT]',
       validate: '[CHECK]',
       reset: '[RESET]',
-      
+
       // 诊断图标 | Diagnostic icons
       doctor: '[DIAG]',
       platform: '[PLAT]',
       terminal: '[TERM]',
-      
-      // 交互图标 | Interactive icons  
+
+      // 交互图标 | Interactive icons
       goodbye: '[BYE]',
       prompt: '[?]',
     };

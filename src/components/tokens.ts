@@ -37,9 +37,12 @@ export class TokensComponent extends BaseComponent {
     const { inputData } = context;
 
     // 检查是否有Mock数据 | Check for mock data
-    const mockData = (inputData as Record<string, unknown>)['__mock__'];
-    if (mockData && typeof (mockData as Record<string, unknown>)['tokenUsage'] === 'number') {
-      return this.renderMockTokenData((mockData as Record<string, unknown>)['tokenUsage'] as number, (mockData as Record<string, unknown>)['status'] as string);
+    const mockData = (inputData as Record<string, unknown>).__mock__;
+    if (mockData && typeof (mockData as Record<string, unknown>).tokenUsage === 'number') {
+      return this.renderMockTokenData(
+        (mockData as Record<string, unknown>).tokenUsage as number,
+        (mockData as Record<string, unknown>).status as string
+      );
     }
 
     if (!inputData.transcriptPath) {

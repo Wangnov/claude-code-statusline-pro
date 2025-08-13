@@ -92,7 +92,7 @@ export class StatuslineGenerator {
 
       for (const componentName of componentOrder) {
         const componentConfig = this.getComponentConfig(componentName);
-        if (!componentConfig || !componentConfig['enabled']) {
+        if (!componentConfig || !componentConfig.enabled) {
           continue;
         }
 

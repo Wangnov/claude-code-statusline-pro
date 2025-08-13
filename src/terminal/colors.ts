@@ -47,7 +47,7 @@ export class TerminalRenderer {
    * 获取重置颜色代码 | Get reset color code
    */
   public getReset(): string {
-    return this.colors['reset'] || '';
+    return this.colors.reset || '';
   }
 
   /**

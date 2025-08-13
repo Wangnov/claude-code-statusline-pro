@@ -236,18 +236,18 @@ function detectColors(enableColors) {
   if (typeof enableColors === "boolean") {
     return enableColors;
   }
-  return !!(process.env["COLORTERM"] === "truecolor" || process.env["TERM"]?.includes("256") || process.env["TERM_PROGRAM"] === "vscode" || process.env["TERM_PROGRAM"] === "iTerm.app" || process.env["TERM_PROGRAM"] === "Hyper" || process.env["WT_SESSION"] || // Windows Terminal
-  process.env["ConEmuPID"]);
+  return !!(process.env.COLORTERM === "truecolor" || process.env.TERM?.includes("256") || process.env.TERM_PROGRAM === "vscode" || process.env.TERM_PROGRAM === "iTerm.app" || process.env.TERM_PROGRAM === "Hyper" || process.env.WT_SESSION || // Windows Terminal
+  process.env.ConEmuPID);
 }
 function detectEmoji(enableEmoji) {
   if (typeof enableEmoji === "boolean") {
     return enableEmoji;
   }
-  return !!(process.platform !== "win32" || process.env["WT_SESSION"] || process.env["TERM_PROGRAM"] === "vscode" || process.env["ConEmuPID"] || process.env["TERM_PROGRAM"] === "Hyper");
+  return !!(process.platform !== "win32" || process.env.WT_SESSION || process.env.TERM_PROGRAM === "vscode" || process.env.ConEmuPID || process.env.TERM_PROGRAM === "Hyper");
 }
 function isNerdFontCompatibleTerminal() {
-  const termProgram = process.env["TERM_PROGRAM"];
-  const term = process.env["TERM"];
+  const termProgram = process.env.TERM_PROGRAM;
+  const term = process.env.TERM;
   const supportedTerminals = ["iTerm.app", "WezTerm", "Alacritty", "kitty", "Hyper"];
   if (termProgram && supportedTerminals.includes(termProgram)) {
     return true;
@@ -274,7 +274,7 @@ function isNerdFontName(fontName) {
   return nerdFontIndicators.some((indicator) => lowerFontName.includes(indicator));
 }
 function detectNerdFontByName() {
-  const fontVars = [process.env["FONT"], process.env["TERMINAL_FONT"], process.env["NERD_FONT_NAME"]];
+  const fontVars = [process.env.FONT, process.env.TERMINAL_FONT, process.env.NERD_FONT_NAME];
   for (const fontVar of fontVars) {
     if (fontVar && isNerdFontName(fontVar)) {
       return true;
@@ -283,10 +283,10 @@ function detectNerdFontByName() {
   return false;
 }
 function conservativeNerdFontDetection() {
-  if (process.env["TERM_PROGRAM"] === "vscode") {
+  if (process.env.TERM_PROGRAM === "vscode") {
     return false;
   }
-  if (process.env["WT_SESSION"]) {
+  if (process.env.WT_SESSION) {
     return true;
   }
   return false;
@@ -298,7 +298,7 @@ function detectNerdFont(enableNerdFont, forceNerdFont) {
   if (typeof enableNerdFont === "boolean") {
     return enableNerdFont;
   }
-  if (process.env["NERD_FONT"] === "1" || process.env["NERD_FONT"] === "true") {
+  if (process.env.NERD_FONT === "1" || process.env.NERD_FONT === "true") {
     return true;
   }
   if (isNerdFontCompatibleTerminal()) {
@@ -320,14 +320,14 @@ function getCapabilityInfo() {
   return {
     platform: process.platform,
     env: {
-      COLORTERM: process.env["COLORTERM"],
-      TERM: process.env["TERM"],
-      TERM_PROGRAM: process.env["TERM_PROGRAM"],
-      TERM_PROGRAM_VERSION: process.env["TERM_PROGRAM_VERSION"],
-      WT_SESSION: process.env["WT_SESSION"],
-      ConEmuPID: process.env["ConEmuPID"],
-      NERD_FONT: process.env["NERD_FONT"],
-      FONT: process.env["FONT"]
+      COLORTERM: process.env.COLORTERM,
+      TERM: process.env.TERM,
+      TERM_PROGRAM: process.env.TERM_PROGRAM,
+      TERM_PROGRAM_VERSION: process.env.TERM_PROGRAM_VERSION,
+      WT_SESSION: process.env.WT_SESSION,
+      ConEmuPID: process.env.ConEmuPID,
+      NERD_FONT: process.env.NERD_FONT,
+      FONT: process.env.FONT
     },
     detected: detect()
   };
@@ -519,11 +519,11 @@ function getDebugInfo(data) {
     workspace: data.workspace,
     gitBranch: data.gitBranch,
     env: {
-      PWD: process.env["PWD"],
-      HOME: process.env["HOME"],
-      USER: process.env["USER"],
-      TERM: process.env["TERM"],
-      TERM_PROGRAM: process.env["TERM_PROGRAM"]
+      PWD: process.env.PWD,
+      HOME: process.env.HOME,
+      USER: process.env.USER,
+      TERM: process.env.TERM,
+      TERM_PROGRAM: process.env.TERM_PROGRAM
     }
   };
 }
@@ -574,12 +574,12 @@ var ConfigLoader = class {
       path.join(process.cwd(), ".statusline.toml"),
       // 用户主目录 | User home directory
       path.join(
-        process.env["HOME"] || process.env["USERPROFILE"] || "",
+        process.env.HOME || process.env.USERPROFILE || "",
         ".config",
         "claude-statusline",
         "config.toml"
       ),
-      path.join(process.env["HOME"] || process.env["USERPROFILE"] || "", ".statusline.toml"),
+      path.join(process.env.HOME || process.env.USERPROFILE || "", ".statusline.toml"),
       // 包目录 | Package directory (fallback)
       path.join(getCurrentDir(), "../../statusline.config.toml")
     ];
@@ -599,7 +599,10 @@ var ConfigLoader = class {
       const sourceValue = source[key];
       const targetValue = result[key];
       if (sourceValue && typeof sourceValue === "object" && !Array.isArray(sourceValue)) {
-        result[key] = this.deepMerge(targetValue || {}, sourceValue);
+        result[key] = this.deepMerge(
+          targetValue || {},
+          sourceValue
+        );
       } else if (sourceValue !== void 0) {
         result[key] = sourceValue;
       }
@@ -660,11 +663,57 @@ var ConfigLoader = class {
       if (updatedConfig.components) {
         const component = updatedConfig.components[componentName];
         if (component && typeof component === "object" && "enabled" in component) {
-          component["enabled"] = newOrder.includes(componentName);
+          component.enabled = newOrder.includes(componentName);
         }
       }
     }
     return updatedConfig;
+  }
+  /**
+   * 应用主题配置覆盖 | Apply theme config overrides
+   */
+  async applyThemeConfig(config) {
+    if (!config.theme) return config;
+    const templateConfig = config.templates?.[config.theme];
+    if (templateConfig) {
+      return this.applyTemplateConfig(config, templateConfig);
+    }
+    console.warn(`Theme "${config.theme}" not found in templates`);
+    return config;
+  }
+  /**
+   * 应用模板配置 | Apply template config
+   */
+  applyTemplateConfig(config, templateConfig) {
+    const mergedConfig = { ...config };
+    if (templateConfig.style) {
+      mergedConfig.style = {
+        ...mergedConfig.style,
+        ...templateConfig.style
+      };
+    }
+    if (templateConfig.components) {
+      if (!mergedConfig.components) {
+        mergedConfig.components = {};
+      }
+      const knownComponents = ["project", "model", "branch", "tokens", "status"];
+      for (const componentName of knownComponents) {
+        const templateComponentConfig = templateConfig.components[componentName];
+        if (templateComponentConfig) {
+          if (!mergedConfig.components[componentName]) {
+            mergedConfig.components[componentName] = {};
+          }
+          mergedConfig.components[componentName] = {
+            ...mergedConfig.components[componentName],
+            ...templateComponentConfig
+          };
+        }
+      }
+      if (templateConfig.components.order) {
+        mergedConfig.components.order = templateConfig.components.order;
+      }
+    }
+    return mergedConfig;
   }
   /**
    * 加载配置 | Load configuration
@@ -688,17 +737,20 @@ var ConfigLoader = class {
       if (options.overridePreset) {
         userConfig.preset = options.overridePreset;
       }
-      if (process.env["DEBUG"]) {
+      if (process.env.DEBUG) {
         console.error(
           "Before ConfigSchema.parse, userConfig:",
           JSON.stringify(userConfig, null, 2)
         );
       }
       const config = ConfigSchema.parse(userConfig);
-      if (process.env["DEBUG"]) {
+      if (process.env.DEBUG) {
         console.error("After ConfigSchema.parse, config keys:", Object.keys(config));
       }
-      const finalConfig = this.applyPreset(config);
+      let finalConfig = this.applyPreset(config);
+      if (finalConfig.theme) {
+        finalConfig = await this.applyThemeConfig(finalConfig);
+      }
       this.cachedConfig = finalConfig;
       return finalConfig;
     } catch (error) {
@@ -874,7 +926,7 @@ var BaseComponent = class {
    */
   getResetColor() {
     if (!this.renderContext?.colors) return "";
-    return this.renderContext.colors["reset"] || "";
+    return this.renderContext.colors.reset || "";
   }
   /**
    * 获取图标 | Get icon
@@ -1088,9 +1140,9 @@ var StatusComponent = class extends BaseComponent {
   }
   renderContent(context) {
     const { inputData } = context;
-    const mockData = inputData["__mock__"];
+    const mockData = inputData.__mock__;
     if (mockData && typeof mockData === "object" && "status" in mockData) {
-      return this.renderMockStatus(mockData["status"]);
+      return this.renderMockStatus(mockData.status);
     }
     if (!inputData.transcriptPath) {
       return this.renderDefaultStatus();
@@ -1157,7 +1209,7 @@ var StatusComponent = class extends BaseComponent {
         try {
           const entry = JSON.parse(line);
           if (!lastEntryType) {
-            lastEntryType = entry["type"];
+            lastEntryType = entry.type;
           }
           if (entry.type === "assistant" && entry.message && "usage" in entry.message) {
             lastStopReason = entry.message?.stop_reason || null;
@@ -1179,7 +1231,7 @@ var StatusComponent = class extends BaseComponent {
           const entry = JSON.parse(line);
           if ("message" in entry && entry.message?.content && Array.isArray(entry.message.content)) {
             const toolUse = entry.message.content.find(
-              (item) => typeof item === "object" && item !== null && "type" in item && item["type"] === "tool_use"
+              (item) => typeof item === "object" && item !== null && "type" in item && item.type === "tool_use"
             );
             if (toolUse && typeof toolUse === "object" && "name" in toolUse) {
               lastToolCall = toolUse.name;
@@ -1223,22 +1275,22 @@ var StatusComponent = class extends BaseComponent {
    * 检测条目是否包含真正的错误 | Detect if entry contains real errors
    */
   isErrorEntry(entry) {
-    if (entry["toolUseResult"]) {
-      const toolUseResult = entry["toolUseResult"];
-      const errorMsg = toolUseResult["error"] || toolUseResult;
+    if (entry.toolUseResult) {
+      const toolUseResult = entry.toolUseResult;
+      const errorMsg = toolUseResult.error || toolUseResult;
       if (typeof errorMsg === "string" && (errorMsg.includes("was blocked") || errorMsg.includes("For security"))) {
         return false;
       }
-      if (toolUseResult["error"] || toolUseResult["type"] === "error") {
+      if (toolUseResult.error || toolUseResult.type === "error") {
         return true;
       }
     }
-    const message = entry["message"];
-    if (message?.["stop_reason"] === "stop_sequence") {
-      if (message?.["content"] && Array.isArray(message["content"])) {
-        for (const item of message["content"]) {
-          if (item["type"] === "text" && item["text"]) {
-            const text = item["text"];
+    const message = entry.message;
+    if (message?.stop_reason === "stop_sequence") {
+      if (message?.content && Array.isArray(message.content)) {
+        for (const item of message.content) {
+          if (item.type === "text" && item.text) {
+            const text = item.text;
             if (text.startsWith("API Error: 403") && text.includes("user quota is not enough")) {
               return true;
             }
@@ -1255,12 +1307,12 @@ var StatusComponent = class extends BaseComponent {
    * 获取错误详细信息 | Get error details
    */
   getErrorDetails(entry) {
-    const message = entry["message"];
-    if (message?.["stop_reason"] === "stop_sequence") {
-      if (message?.["content"] && Array.isArray(message["content"])) {
-        for (const item of message["content"]) {
-          if (item["type"] === "text" && item["text"]) {
-            const text = item["text"];
+    const message = entry.message;
+    if (message?.stop_reason === "stop_sequence") {
+      if (message?.content && Array.isArray(message.content)) {
+        for (const item of message.content) {
+          if (item.type === "text" && item.text) {
+            const text = item.text;
             if (text.startsWith("API Error: 403") && text.includes("user quota is not enough")) {
               return "403\u914D\u989D\u4E0D\u8DB3";
             }
@@ -1317,9 +1369,12 @@ var TokensComponent = class extends BaseComponent {
   }
   renderContent(context) {
     const { inputData } = context;
-    const mockData = inputData["__mock__"];
-    if (mockData && typeof mockData["tokenUsage"] === "number") {
-      return this.renderMockTokenData(mockData["tokenUsage"], mockData["status"]);
+    const mockData = inputData.__mock__;
+    if (mockData && typeof mockData.tokenUsage === "number") {
+      return this.renderMockTokenData(
+        mockData.tokenUsage,
+        mockData.status
+      );
     }
     if (!inputData.transcriptPath) {
       return this.renderNoTranscript();
@@ -1527,7 +1582,7 @@ var TerminalRenderer = class {
    * 获取重置颜色代码 | Get reset color code
    */
   getReset() {
-    return this.colors["reset"] || "";
+    return this.colors.reset || "";
   }
   /**
    * 应用颜色 | Apply color
@@ -1712,7 +1767,7 @@ var StatuslineGenerator = class {
       const componentResults = [];
       for (const componentName of componentOrder) {
         const componentConfig = this.getComponentConfig(componentName);
-        if (!componentConfig || !componentConfig["enabled"]) {
+        if (!componentConfig || !componentConfig.enabled) {
           continue;
         }
         const component = this.componentRegistry.create(
@@ -2017,7 +2072,7 @@ var MockDataGenerator = class {
       );
     }
     const mockData = JSON.parse(JSON.stringify(scenario.inputData));
-    mockData["__mock__"] = {
+    mockData.__mock__ = {
       tokenUsage: scenario.tokenUsage || 0,
       status: scenario.expectedStatus || "ready",
       scenarioId: scenario.id,
@@ -2327,7 +2382,7 @@ var LivePreviewEngine = class {
    * 获取终端宽度
    */
   getTerminalWidth() {
-    return process.stdout.columns || parseInt(process.env["COLUMNS"] || "80") || 80;
+    return process.stdout.columns || parseInt(process.env.COLUMNS || "80") || 80;
   }
   /**
    * 格式化场景输出
@@ -2931,8 +2986,13 @@ init_detector();
 var CliMessageIconManager = class {
   capabilities;
   icons;
-  constructor() {
-    this.capabilities = detect();
+  constructor(options = {}) {
+    this.capabilities = detect(
+      options.enableColors,
+      options.enableEmoji,
+      options.enableNerdFont,
+      options.forceNerdFont || false
+    );
     this.icons = this.setupCliIcons();
   }
   /**
@@ -2950,7 +3010,7 @@ var CliMessageIconManager = class {
       success: "\uF00C",
       // fa-check
       error: "\uF00D",
-      // fa-times  
+      // fa-times
       warning: "\uF071",
       // fa-exclamation-triangle
       info: "\uF05A",
@@ -2970,7 +3030,7 @@ var CliMessageIconManager = class {
       // fa-check-circle
       reset: "\uF0E2",
       // fa-undo
-      // 诊断图标 | Diagnostic icons  
+      // 诊断图标 | Diagnostic icons
       doctor: "\uF0F8",
       // fa-stethoscope
       platform: "\uF109",
@@ -3023,7 +3083,7 @@ var CliMessageIconManager = class {
       doctor: "[DIAG]",
       platform: "[PLAT]",
       terminal: "[TERM]",
-      // 交互图标 | Interactive icons  
+      // 交互图标 | Interactive icons
       goodbye: "[BYE]",
       prompt: "[?]"
     };
@@ -3051,8 +3111,13 @@ var CliMessageIconManager = class {
   /**
    * 强制刷新终端检测 | Force refresh terminal detection
    */
-  refresh() {
-    this.capabilities = detect();
+  refresh(options = {}) {
+    this.capabilities = detect(
+      options.enableColors,
+      options.enableEmoji,
+      options.enableNerdFont,
+      options.forceNerdFont || false
+    );
     this.icons = this.setupCliIcons();
   }
 };
@@ -3164,20 +3229,32 @@ program.command("doctor").description("diagnose environment and configuration").
     console.log("========================");
     console.log(formatCliMessage("platform", `Platform: ${process.platform}`));
     console.log(`Node.js: ${process.version}`);
-    console.log(formatCliMessage("terminal", `Terminal: ${process.env["TERM"] || "unknown"}`));
-    console.log(`Colors: ${capabilities.colors ? formatCliMessage("success", "") : formatCliMessage("error", "")}`);
-    console.log(`Emoji: ${capabilities.emoji ? formatCliMessage("success", "") : formatCliMessage("error", "")}`);
-    console.log(`Nerd Font: ${capabilities.nerdFont ? formatCliMessage("success", "") : formatCliMessage("error", "")}`);
-    console.log(`Interactive TTY: ${process.stdin.isTTY ? formatCliMessage("success", "") : formatCliMessage("error", "")}`);
+    console.log(formatCliMessage("terminal", `Terminal: ${process.env.TERM || "unknown"}`));
+    console.log(
+      `Colors: ${capabilities.colors ? formatCliMessage("success", "") : formatCliMessage("error", "")}`
+    );
+    console.log(
+      `Emoji: ${capabilities.emoji ? formatCliMessage("success", "") : formatCliMessage("error", "")}`
+    );
+    console.log(
+      `Nerd Font: ${capabilities.nerdFont ? formatCliMessage("success", "") : formatCliMessage("error", "")}`
+    );
+    console.log(
+      `Interactive TTY: ${process.stdin.isTTY ? formatCliMessage("success", "") : formatCliMessage("error", "")}`
+    );
     const configLoader2 = new ConfigLoader();
     try {
       const _config = await configLoader2.load();
-      console.log(`
-${formatCliMessage("config", "Configuration:")} ${formatCliMessage("success", "Valid")}`);
+      console.log(
+        `
+${formatCliMessage("config", "Configuration:")} ${formatCliMessage("success", "Valid")}`
+      );
       console.log(formatCliMessage("folder", `Config source: ${configLoader2.getConfigSource()}`));
     } catch (error) {
-      console.log(`
-${formatCliMessage("config", "Configuration:")} ${formatCliMessage("error", "Invalid")}`);
+      console.log(
+        `
+${formatCliMessage("config", "Configuration:")} ${formatCliMessage("error", "Invalid")}`
+      );
       console.log(`Error: ${error instanceof Error ? error.message : String(error)}`);
     }
   } catch (error) {

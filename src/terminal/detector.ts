@@ -27,13 +27,13 @@ function detectColors(enableColors: AutoDetectOption): boolean {
 
   // 自动检测颜色支持 | Auto-detect color support
   return !!(
-    process.env['COLORTERM'] === 'truecolor' ||
-    process.env['TERM']?.includes('256') ||
-    process.env['TERM_PROGRAM'] === 'vscode' ||
-    process.env['TERM_PROGRAM'] === 'iTerm.app' ||
-    process.env['TERM_PROGRAM'] === 'Hyper' ||
-    process.env['WT_SESSION'] || // Windows Terminal
-    process.env['ConEmuPID']
+    process.env.COLORTERM === 'truecolor' ||
+    process.env.TERM?.includes('256') ||
+    process.env.TERM_PROGRAM === 'vscode' ||
+    process.env.TERM_PROGRAM === 'iTerm.app' ||
+    process.env.TERM_PROGRAM === 'Hyper' ||
+    process.env.WT_SESSION || // Windows Terminal
+    process.env.ConEmuPID
   );
 }
 
@@ -49,10 +49,10 @@ function detectEmoji(enableEmoji: AutoDetectOption): boolean {
   // Windows平台通常需要特殊处理 | Windows platform usually needs special handling
   return !!(
     process.platform !== 'win32' ||
-    process.env['WT_SESSION'] ||
-    process.env['TERM_PROGRAM'] === 'vscode' ||
-    process.env['ConEmuPID'] ||
-    process.env['TERM_PROGRAM'] === 'Hyper'
+    process.env.WT_SESSION ||
+    process.env.TERM_PROGRAM === 'vscode' ||
+    process.env.ConEmuPID ||
+    process.env.TERM_PROGRAM === 'Hyper'
   );
 }
 
@@ -60,8 +60,8 @@ function detectEmoji(enableEmoji: AutoDetectOption): boolean {
  * 检查是否为已知支持Nerd Font的终端 | Check if it's a known Nerd Font compatible terminal
  */
 function isNerdFontCompatibleTerminal(): boolean {
-  const termProgram = process.env['TERM_PROGRAM'];
-  const term = process.env['TERM'];
+  const termProgram = process.env.TERM_PROGRAM;
+  const term = process.env.TERM;
 
   // 已知支持Nerd Font的终端程序 | Terminal programs known to support Nerd Font
   const supportedTerminals = ['iTerm.app', 'WezTerm', 'Alacritty', 'kitty', 'Hyper'];
@@ -104,7 +104,7 @@ function isNerdFontName(fontName: string): boolean {
  */
 function detectNerdFontByName(): boolean {
   // 检查常见的Nerd Font环境变量 | Check common Nerd Font environment variables
-  const fontVars = [process.env['FONT'], process.env['TERMINAL_FONT'], process.env['NERD_FONT_NAME']];
+  const fontVars = [process.env.FONT, process.env.TERMINAL_FONT, process.env.NERD_FONT_NAME];
 
   for (const fontVar of fontVars) {
     if (fontVar && isNerdFontName(fontVar)) {
@@ -120,14 +120,14 @@ function detectNerdFontByName(): boolean {
  */
 function conservativeNerdFontDetection(): boolean {
   // 对于VS Code，检查更多细节 | For VS Code, check more details
-  if (process.env['TERM_PROGRAM'] === 'vscode') {
+  if (process.env.TERM_PROGRAM === 'vscode') {
     // VS Code终端通常支持Nerd Font，但需要用户配置 | VS Code terminal usually supports Nerd Font, but requires user configuration
     // 保守起见，除非明确配置，否则返回false | Conservatively, return false unless explicitly configured
     return false;
   }
 
   // Windows Terminal 通常支持 | Windows Terminal usually supports
-  if (process.env['WT_SESSION']) {
+  if (process.env.WT_SESSION) {
     return true;
   }
 
@@ -148,7 +148,7 @@ function detectNerdFont(enableNerdFont: AutoDetectOption, forceNerdFont: boolean
   }
 
   // 1. 优先检查环境变量 - 最可靠的方法 | Priority: check environment variables - most reliable
-  if (process.env['NERD_FONT'] === '1' || process.env['NERD_FONT'] === 'true') {
+  if (process.env.NERD_FONT === '1' || process.env.NERD_FONT === 'true') {
     return true;
   }
 
@@ -189,14 +189,14 @@ export function getCapabilityInfo(): Record<string, unknown> {
   return {
     platform: process.platform,
     env: {
-      COLORTERM: process.env['COLORTERM'],
-      TERM: process.env['TERM'],
-      TERM_PROGRAM: process.env['TERM_PROGRAM'],
-      TERM_PROGRAM_VERSION: process.env['TERM_PROGRAM_VERSION'],
-      WT_SESSION: process.env['WT_SESSION'],
-      ConEmuPID: process.env['ConEmuPID'],
-      NERD_FONT: process.env['NERD_FONT'],
-      FONT: process.env['FONT'],
+      COLORTERM: process.env.COLORTERM,
+      TERM: process.env.TERM,
+      TERM_PROGRAM: process.env.TERM_PROGRAM,
+      TERM_PROGRAM_VERSION: process.env.TERM_PROGRAM_VERSION,
+      WT_SESSION: process.env.WT_SESSION,
+      ConEmuPID: process.env.ConEmuPID,
+      NERD_FONT: process.env.NERD_FONT,
+      FONT: process.env.FONT,
     },
     detected: detect(),
   };

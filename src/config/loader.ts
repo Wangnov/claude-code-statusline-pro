@@ -53,12 +53,12 @@ export class ConfigLoader {
 
       // 用户主目录 | User home directory
       path.join(
-        process.env['HOME'] || process.env['USERPROFILE'] || '',
+        process.env.HOME || process.env.USERPROFILE || '',
         '.config',
         'claude-statusline',
         'config.toml'
       ),
-      path.join(process.env['HOME'] || process.env['USERPROFILE'] || '', '.statusline.toml'),
+      path.join(process.env.HOME || process.env.USERPROFILE || '', '.statusline.toml'),
 
       // 包目录 | Package directory (fallback)
       path.join(getCurrentDir(), '../../statusline.config.toml'),
@@ -84,7 +84,10 @@ export class ConfigLoader {
       const targetValue = result[key];
 
       if (sourceValue && typeof sourceValue === 'object' && !Array.isArray(sourceValue)) {
-        result[key] = this.deepMerge(targetValue || ({} as Record<string, unknown>), sourceValue) as T[Extract<keyof T, string>];
+        result[key] = this.deepMerge(
+          targetValue || ({} as Record<string, unknown>),
+          sourceValue
+        ) as T[Extract<keyof T, string>];
       } else if (sourceValue !== undefined) {
         result[key] = sourceValue as T[Extract<keyof T, string>];
       }
@@ -165,12 +168,73 @@ export class ConfigLoader {
         const component =
           updatedConfig.components[componentName as keyof typeof updatedConfig.components];
         if (component && typeof component === 'object' && 'enabled' in component) {
-          (component as Record<string, unknown>)['enabled'] = newOrder.includes(componentName);
+          (component as Record<string, unknown>).enabled = newOrder.includes(componentName);
         }
       }
     }
 
     return updatedConfig;
+  }
+
+  /**
+   * 应用主题配置覆盖 | Apply theme config overrides
+   */
+  private async applyThemeConfig(config: Config): Promise<Config> {
+    if (!config.theme) return config;
+
+    // 首先尝试从模板中加载主题 | First try loading theme from templates
+    const templateConfig = config.templates?.[config.theme];
+    if (templateConfig) {
+      // 使用TOML中定义的模板配置 | Use template config from TOML
+      return this.applyTemplateConfig(config, templateConfig);
+    }
+
+    console.warn(`Theme "${config.theme}" not found in templates`);
+    return config;
+  }
+
+  /**
+   * 应用模板配置 | Apply template config
+   */
+  private applyTemplateConfig(config: Config, templateConfig: any): Config {
+    const mergedConfig = { ...config };
+
+    // 应用模板的样式配置 | Apply template style config
+    if (templateConfig.style) {
+      mergedConfig.style = {
+        ...mergedConfig.style,
+        ...templateConfig.style,
+      };
+    }
+
+    // 应用模板的组件配置 | Apply template components config
+    if (templateConfig.components) {
+      if (!mergedConfig.components) {
+        mergedConfig.components = {} as any;
+      }
+
+      // 对于每个组件，深度合并配置 | Deep merge config for each component
+      const knownComponents = ['project', 'model', 'branch', 'tokens', 'status'] as const;
+      for (const componentName of knownComponents) {
+        const templateComponentConfig = templateConfig.components[componentName];
+        if (templateComponentConfig) {
+          if (!mergedConfig.components[componentName]) {
+            mergedConfig.components[componentName] = {} as any;
+          }
+          mergedConfig.components[componentName] = {
+            ...mergedConfig.components[componentName],
+            ...templateComponentConfig,
+          };
+        }
+      }
+
+      // 应用组件顺序 | Apply component order
+      if (templateConfig.components.order) {
+        mergedConfig.components.order = templateConfig.components.order;
+      }
+    }
+
+    return mergedConfig;
   }
 
   /**
@@ -205,19 +269,24 @@ export class ConfigLoader {
       }
 
       // 使用 Zod 解析和验证配置 | Parse and validate with Zod
-      if (process.env['DEBUG']) {
+      if (process.env.DEBUG) {
         console.error(
           'Before ConfigSchema.parse, userConfig:',
           JSON.stringify(userConfig, null, 2)
         );
       }
       const config = ConfigSchema.parse(userConfig);
-      if (process.env['DEBUG']) {
+      if (process.env.DEBUG) {
         console.error('After ConfigSchema.parse, config keys:', Object.keys(config));
       }
 
       // 应用预设 | Apply preset
-      const finalConfig = this.applyPreset(config);
+      let finalConfig = this.applyPreset(config);
+
+      // 应用主题配置 | Apply theme config
+      if (finalConfig.theme) {
+        finalConfig = await this.applyThemeConfig(finalConfig);
+      }
 
       // 缓存配置 | Cache config
       this.cachedConfig = finalConfig;
@@ -321,7 +390,7 @@ export class ConfigLoader {
     const defaultConfig = ConfigSchema.parse({});
     const targetPath = configPath || path.join(process.cwd(), 'statusline.config.toml');
 
-    const tomlContent = TOML.stringify(defaultConfig as any);
+    const tomlContent = TOML.stringify(defaultConfig as TOML.JsonMap);
     await fs.promises.writeFile(targetPath, tomlContent, 'utf8');
 
     this.configPath = targetPath;
@@ -334,7 +403,7 @@ export class ConfigLoader {
   async save(config: Config, configPath?: string): Promise<void> {
     const targetPath =
       configPath || this.configPath || path.join(process.cwd(), 'statusline.config.toml');
-    const tomlContent = TOML.stringify(config as any);
+    const tomlContent = TOML.stringify(config as TOML.JsonMap);
     await fs.promises.writeFile(targetPath, tomlContent, 'utf8');
     this.cachedConfig = config;
     this.configPath = targetPath;
