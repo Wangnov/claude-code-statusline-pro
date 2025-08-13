@@ -221,7 +221,7 @@ export class MockDataGenerator {
     const mockData = JSON.parse(JSON.stringify(scenario.inputData)) as InputData;
 
     // 添加Mock元数据，供组件使用 | Add mock metadata for components
-    (mockData as Record<string, unknown>)['__mock__'] = {
+    (mockData as Record<string, unknown>).__mock__ = {
       tokenUsage: scenario.tokenUsage || 0,
       status: scenario.expectedStatus || 'ready',
       scenarioId: scenario.id,

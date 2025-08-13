@@ -8,7 +8,6 @@
  */
 
 export { ConfigEditor, createConfigEditor } from './cli/config-editor.js';
-export { MockDataGenerator, mockDataGenerator } from './cli/mock-data.js';
 // CLI 工具导出 (供高级用户使用)
 export {
   CliMessageIconManager,
@@ -16,6 +15,7 @@ export {
   getCliIcon,
   getCliIconManager,
 } from './cli/message-icons.js';
+export { MockDataGenerator, mockDataGenerator } from './cli/mock-data.js';
 export { createLivePreviewEngine, LivePreviewEngine } from './cli/preview-engine.js';
 // 组件系统导出
 export { Component, ComponentFactory, ComponentRegistry } from './components/base.js';
@@ -105,7 +105,7 @@ export function isValidInputData(data: unknown): data is InputData {
     data !== null &&
     typeof data === 'object' &&
     'model' in data &&
-    typeof (data as Record<string, unknown>)['model'] === 'object'
+    typeof (data as Record<string, unknown>).model === 'object'
   );
 }
 

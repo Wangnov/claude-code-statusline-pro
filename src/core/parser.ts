@@ -224,11 +224,11 @@ export function getDebugInfo(data: InputData): Record<string, unknown> {
     workspace: data.workspace,
     gitBranch: data.gitBranch,
     env: {
-      PWD: process.env['PWD'],
-      HOME: process.env['HOME'],
-      USER: process.env['USER'],
-      TERM: process.env['TERM'],
-      TERM_PROGRAM: process.env['TERM_PROGRAM'],
+      PWD: process.env.PWD,
+      HOME: process.env.HOME,
+      USER: process.env.USER,
+      TERM: process.env.TERM,
+      TERM_PROGRAM: process.env.TERM_PROGRAM,
     },
   };
 }

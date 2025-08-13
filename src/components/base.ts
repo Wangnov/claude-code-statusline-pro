@@ -96,7 +96,7 @@ export abstract class BaseComponent implements Component {
    */
   protected getResetColor(): string {
     if (!this.renderContext?.colors) return '';
-    return this.renderContext.colors['reset'] || '';
+    return this.renderContext.colors.reset || '';
   }
 
   /**

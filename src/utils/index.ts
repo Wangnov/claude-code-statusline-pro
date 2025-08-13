@@ -110,7 +110,7 @@ export function deepMerge<T extends Record<string, unknown>>(target: T, source: 
         !Array.isArray(result[key])
       ) {
         result[key] = deepMerge(
-          result[key] as Record<string, unknown>, 
+          result[key] as Record<string, unknown>,
           source[key] as Record<string, unknown>
         ) as T[Extract<keyof T, string>];
       } else {

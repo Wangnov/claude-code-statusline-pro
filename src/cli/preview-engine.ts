@@ -367,7 +367,7 @@ export class LivePreviewEngine {
    * 获取终端宽度
    */
   private getTerminalWidth(): number {
-    return process.stdout.columns || parseInt(process.env['COLUMNS'] || '80') || 80;
+    return process.stdout.columns || parseInt(process.env.COLUMNS || '80') || 80;
   }
 
   /**

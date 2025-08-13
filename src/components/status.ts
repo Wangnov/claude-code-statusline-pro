@@ -39,9 +39,9 @@ export class StatusComponent extends BaseComponent {
     const { inputData } = context;
 
     // 检查是否有Mock数据 | Check for mock data
-    const mockData = (inputData as Record<string, unknown>)['__mock__'];
+    const mockData = (inputData as Record<string, unknown>).__mock__;
     if (mockData && typeof mockData === 'object' && 'status' in mockData) {
-      return this.renderMockStatus((mockData as Record<string, unknown>)['status'] as string);
+      return this.renderMockStatus((mockData as Record<string, unknown>).status as string);
     }
 
     if (!inputData.transcriptPath) {
@@ -126,7 +126,7 @@ export class StatusComponent extends BaseComponent {
           const entry = JSON.parse(line) as TranscriptEntry;
 
           if (!lastEntryType) {
-            lastEntryType = entry['type'];
+            lastEntryType = entry.type;
           }
 
           // 查找assistant消息的usage和stop_reason | Find assistant message usage and stop_reason
@@ -164,7 +164,7 @@ export class StatusComponent extends BaseComponent {
                 typeof item === 'object' &&
                 item !== null &&
                 'type' in item &&
-                (item as Record<string, unknown>)['type'] === 'tool_use'
+                (item as Record<string, unknown>).type === 'tool_use'
             );
             if (toolUse && typeof toolUse === 'object' && 'name' in toolUse) {
               lastToolCall = toolUse.name as string;
@@ -219,27 +219,32 @@ export class StatusComponent extends BaseComponent {
    */
   private isErrorEntry(entry: Record<string, unknown>): boolean {
     // 检查工具使用结果中的错误，但排除权限相关的阻止 | Check for errors in tool use results, excluding permission-related blocks
-    if ((entry as Record<string, unknown>)['toolUseResult']) {
-      const toolUseResult = (entry as Record<string, unknown>)['toolUseResult'] as Record<string, unknown>;
-      const errorMsg = toolUseResult['error'] || toolUseResult;
+    if ((entry as Record<string, unknown>).toolUseResult) {
+      const toolUseResult = (entry as Record<string, unknown>).toolUseResult as Record<
+        string,
+        unknown
+      >;
+      const errorMsg = toolUseResult.error || toolUseResult;
       if (
         typeof errorMsg === 'string' &&
         (errorMsg.includes('was blocked') || errorMsg.includes('For security'))
       ) {
         return false;
       }
-      if (toolUseResult['error'] || toolUseResult['type'] === 'error') {
+      if (toolUseResult.error || toolUseResult.type === 'error') {
         return true;
       }
     }
 
     // 检查stop_reason为stop_sequence的API错误 | Check for API errors with stop_reason as stop_sequence
-    const message = (entry as Record<string, unknown>)['message'] as Record<string, unknown> | undefined;
-    if (message?.['stop_reason'] === 'stop_sequence') {
-      if (message?.['content'] && Array.isArray(message['content'])) {
-        for (const item of message['content'] as Array<Record<string, unknown>>) {
-          if (item['type'] === 'text' && item['text']) {
-            const text = item['text'] as string;
+    const message = (entry as Record<string, unknown>).message as
+      | Record<string, unknown>
+      | undefined;
+    if (message?.stop_reason === 'stop_sequence') {
+      if (message?.content && Array.isArray(message.content)) {
+        for (const item of message.content as Array<Record<string, unknown>>) {
+          if (item.type === 'text' && item.text) {
+            const text = item.text as string;
             // API Error 403 配额不足 | API Error 403 insufficient quota
             if (text.startsWith('API Error: 403') && text.includes('user quota is not enough')) {
               return true;
@@ -261,12 +266,14 @@ export class StatusComponent extends BaseComponent {
    */
   private getErrorDetails(entry: Record<string, unknown>): string {
     // 检查stop_reason为stop_sequence的API错误 | Check for API errors with stop_reason as stop_sequence
-    const message = (entry as Record<string, unknown>)['message'] as Record<string, unknown> | undefined;
-    if (message?.['stop_reason'] === 'stop_sequence') {
-      if (message?.['content'] && Array.isArray(message['content'])) {
-        for (const item of message['content'] as Array<Record<string, unknown>>) {
-          if (item['type'] === 'text' && item['text']) {
-            const text = item['text'] as string;
+    const message = (entry as Record<string, unknown>).message as
+      | Record<string, unknown>
+      | undefined;
+    if (message?.stop_reason === 'stop_sequence') {
+      if (message?.content && Array.isArray(message.content)) {
+        for (const item of message.content as Array<Record<string, unknown>>) {
+          if (item.type === 'text' && item.text) {
+            const text = item.text as string;
             // API Error 403 配额不足 | API Error 403 insufficient quota
             if (text.startsWith('API Error: 403') && text.includes('user quota is not enough')) {
               return '403配额不足';

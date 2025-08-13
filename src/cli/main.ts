@@ -181,20 +181,32 @@ program
       console.log('========================');
       console.log(formatCliMessage('platform', `Platform: ${process.platform}`));
       console.log(`Node.js: ${process.version}`);
-      console.log(formatCliMessage('terminal', `Terminal: ${process.env['TERM'] || 'unknown'}`));
-      console.log(`Colors: ${capabilities.colors ? formatCliMessage('success', '') : formatCliMessage('error', '')}`);
-      console.log(`Emoji: ${capabilities.emoji ? formatCliMessage('success', '') : formatCliMessage('error', '')}`);
-      console.log(`Nerd Font: ${capabilities.nerdFont ? formatCliMessage('success', '') : formatCliMessage('error', '')}`);
-      console.log(`Interactive TTY: ${process.stdin.isTTY ? formatCliMessage('success', '') : formatCliMessage('error', '')}`);
+      console.log(formatCliMessage('terminal', `Terminal: ${process.env.TERM || 'unknown'}`));
+      console.log(
+        `Colors: ${capabilities.colors ? formatCliMessage('success', '') : formatCliMessage('error', '')}`
+      );
+      console.log(
+        `Emoji: ${capabilities.emoji ? formatCliMessage('success', '') : formatCliMessage('error', '')}`
+      );
+      console.log(
+        `Nerd Font: ${capabilities.nerdFont ? formatCliMessage('success', '') : formatCliMessage('error', '')}`
+      );
+      console.log(
+        `Interactive TTY: ${process.stdin.isTTY ? formatCliMessage('success', '') : formatCliMessage('error', '')}`
+      );
 
       // 配置诊断
       const configLoader = new ConfigLoader();
       try {
         const _config = await configLoader.load();
-        console.log(`\n${formatCliMessage('config', 'Configuration:')} ${formatCliMessage('success', 'Valid')}`);
+        console.log(
+          `\n${formatCliMessage('config', 'Configuration:')} ${formatCliMessage('success', 'Valid')}`
+        );
         console.log(formatCliMessage('folder', `Config source: ${configLoader.getConfigSource()}`));
       } catch (error) {
-        console.log(`\n${formatCliMessage('config', 'Configuration:')} ${formatCliMessage('error', 'Invalid')}`);
+        console.log(
+          `\n${formatCliMessage('config', 'Configuration:')} ${formatCliMessage('error', 'Invalid')}`
+        );
         console.log(`Error: ${error instanceof Error ? error.message : String(error)}`);
       }
     } catch (error) {

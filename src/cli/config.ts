@@ -54,7 +54,9 @@ program
       console.log(formatCliMessage('config', 'Current Configuration:'));
       console.log('========================');
       console.log(JSON.stringify(config, null, 2));
-      console.log(`\n${formatCliMessage('folder', `Config source: ${configLoader.getConfigSource()}`)}`);;
+      console.log(
+        `\n${formatCliMessage('folder', `Config source: ${configLoader.getConfigSource()}`)}`
+      );
     } catch (error) {
       console.error('Failed to show config:', error);
       process.exit(1);
@@ -122,7 +124,7 @@ program
         .filter(([key]) => key !== 'order')
         .map(([name, component]: [string, unknown]) => {
           const comp = component as Record<string, unknown> | null;
-          const statusIcon = comp?.['enabled'] ? 'success' : 'error';
+          const statusIcon = comp?.enabled ? 'success' : 'error';
           return `${formatCliMessage(statusIcon, '').trim()} ${name}`;
         });
 
