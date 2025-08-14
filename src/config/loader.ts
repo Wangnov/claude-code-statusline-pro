@@ -43,7 +43,6 @@ export class ConfigLoader {
   private cachedConfig: Config | null = null;
   private configPath: string | null = null;
 
-
   /**
    * 查找配置文件 | Find config file
    * 只支持新格式 config.toml | Only support new format config.toml
@@ -184,7 +183,7 @@ export class ConfigLoader {
     if (!config.theme) return config;
 
     // 优先使用新格式的themes配置 | Prefer new format themes configuration
-    if (config.themes && config.themes[config.theme]) {
+    if (config.themes?.[config.theme]) {
       // 新格式：直接使用themes配置，主题引擎会处理特性应用
       // New format: use themes config directly, theme engine will handle feature application
       return config;
@@ -242,7 +241,7 @@ export class ConfigLoader {
       const templateComponents = templateConfig.components as Record<string, unknown>;
 
       // 对于每个组件，深度合并配置 | Deep merge config for each component
-      const knownComponents = ['project', 'model', 'branch', 'tokens', 'status'] as const;
+      const knownComponents = ['project', 'model', 'branch', 'tokens', 'usage', 'status'] as const;
       for (const componentName of knownComponents) {
         const templateComponentConfig = templateComponents[componentName];
         if (templateComponentConfig && typeof templateComponentConfig === 'object') {
@@ -266,7 +265,6 @@ export class ConfigLoader {
 
     return mergedConfig;
   }
-
 
   /**
    * 加载配置 | Load configuration
@@ -545,7 +543,6 @@ export class ConfigLoader {
   getDefaultConfig(): Config {
     return ConfigSchema.parse({});
   }
-
 }
 
 // 导出单例实例 | Export singleton instance

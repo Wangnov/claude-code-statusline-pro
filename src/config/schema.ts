@@ -297,6 +297,32 @@ export const StatusComponentSchema = BaseComponentSchema.extend({
   colors: StatusColorsSchema.optional(),
 });
 
+// ==================== Usage组件配置 ====================
+
+/**
+ * Usage显示模式枚举 | Usage display mode enum
+ * 定义使用量的不同显示格式 | Defines different display formats for usage
+ */
+export const UsageDisplayMode = z.enum([
+  'cost',       // "$0.05" - 仅显示成本
+  'tokens',     // "1.2K tokens" - 仅显示token数量
+  'combined',   // "$0.05 (1.2K)" - 组合显示成本和token
+  'breakdown'   // "1.2Kin+0.8Kout+0.3Kcache" - 详细分解显示
+]);
+
+/**
+ * Usage组件配置 | Usage component config
+ * 显示模型使用量信息，支持成本和token统计 | Display model usage info with cost and token statistics
+ */
+export const UsageComponentSchema = BaseComponentSchema.extend({
+  /** 显示模式 | Display mode */
+  display_mode: UsageDisplayMode.default('combined'),
+  /** 显示模型名称 | Show model name */
+  show_model: z.boolean().default(false),
+  /** 数值精度 | Decimal precision */
+  precision: z.number().min(0).max(4).default(2),
+});
+
 // ==================== 组件配置集合 ====================
 
 /**
@@ -304,7 +330,7 @@ export const StatusComponentSchema = BaseComponentSchema.extend({
  */
 const ComponentsSchema = z.object({
   /** 组件显示顺序 | Component display order */
-  order: z.array(z.string()).default(['project', 'model', 'branch', 'tokens', 'status']),
+  order: z.array(z.string()).default(['project', 'model', 'branch', 'tokens', 'usage', 'status']),
   /** 项目组件配置 | Project component config */
   project: ProjectComponentSchema.optional(),
   /** 模型组件配置 | Model component config */
@@ -313,6 +339,8 @@ const ComponentsSchema = z.object({
   branch: BranchComponentSchema.optional(),
   /** Token组件配置 | Token component config */
   tokens: TokenComponentSchema.optional(),
+  /** Usage组件配置 | Usage component config */
+  usage: UsageComponentSchema.optional(),
   /** 状态组件配置 | Status component config */
   status: StatusComponentSchema.optional(),
 });
@@ -385,6 +413,7 @@ const PresetMappingSchema = z
     M: z.literal('model'),
     B: z.literal('branch'),
     T: z.literal('tokens'),
+    U: z.literal('usage'),
     S: z.literal('status'),
   })
   .default({
@@ -392,6 +421,7 @@ const PresetMappingSchema = z
     M: 'model',
     B: 'branch',
     T: 'tokens',
+    U: 'usage',
     S: 'status',
   });
 
@@ -403,7 +433,7 @@ const PresetMappingSchema = z
 export const ConfigSchema = z
   .object({
     /** 预设配置 | Preset configuration */
-    preset: z.string().default('PMBTS'),
+    preset: z.string().default('PMBTUS'),
     /** 主题名称 | Theme name */
     theme: z.enum(['classic', 'powerline', 'capsule']).default('classic'),
     /** 调试模式 | Debug mode (移动自advanced) */
@@ -689,3 +719,8 @@ export type TokensComponentConfig = z.infer<typeof TokenComponentSchema>;
  * 状态组件配置类型 | Status component config type
  */
 export type StatusComponentConfig = z.infer<typeof StatusComponentSchema>;
+
+/**
+ * Usage组件配置类型 | Usage component config type
+ */
+export type UsageComponentConfig = z.infer<typeof UsageComponentSchema>;
