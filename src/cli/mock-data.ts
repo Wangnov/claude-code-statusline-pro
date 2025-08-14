@@ -2,6 +2,21 @@
  * Mock数据生成器 - 实时预览系统核心
  * 生成各种状态和使用场景的模拟数据，支持多场景预览和测试
  * 支持新的配置格式：terminal, style, components, themes 等新字段
+ * 
+ * v2.0.0 新功能：
+ * - CLI场景映射：dev → basic, critical → high-token, error → error, thinking → tool-active, complete → full-featured
+ * - Usage组件Mock支持：根据token使用率生成真实的成本和使用量数据
+ * - 四级成本场景：$0.02 (low), $0.15 (medium), $0.85 (high), $2.30 (extreme)
+ * - 智能成本映射：基于token使用率自动选择对应的成本级别
+ * 
+ * 使用示例：
+ * ```bash
+ * npm run dev -- --mock dev      # 低成本开发场景 ($0.02)
+ * npm run dev -- --mock critical # 高token使用场景 ($0.91)
+ * npm run dev -- --mock thinking # 工具执行中场景 ($0.45)
+ * npm run dev -- --mock complete # 任务完成场景 ($0.45)
+ * npm run dev -- --mock error    # 错误状态场景 ($0.15)
+ * ```
  */
 
 import type { Config, InputData } from '../config/schema.js';
@@ -232,13 +247,25 @@ export class MockDataGenerator {
   }
 
   /**
-   * 根据场景ID生成Mock数据 - 支持配置覆盖
+   * 根据场景ID生成Mock数据 - 支持配置覆盖和场景映射
    */
   generate(scenarioId: string): InputData {
-    const scenario = this.scenarios.get(scenarioId.toLowerCase());
+    // CLI场景映射到内部场景ID | CLI scenario mapping to internal scenario IDs
+    const scenarioMapping: Record<string, string> = {
+      'dev': 'basic',           // 开发场景 → 基础项目
+      'critical': 'high-token', // 临界场景 → 高Token使用
+      'error': 'error',         // 错误场景 → 错误状态
+      'thinking': 'tool-active', // 思考场景 → 工具执行中
+      'complete': 'full-featured', // 完成场景 → 完整功能展示
+    };
+
+    const normalizedId = scenarioId.toLowerCase();
+    const targetScenarioId = scenarioMapping[normalizedId] || normalizedId;
+    
+    const scenario = this.scenarios.get(targetScenarioId);
     if (!scenario) {
       throw new Error(
-        `Unknown mock scenario: ${scenarioId}. Available: ${this.getAvailableScenarios().join(', ')}`
+        `Unknown mock scenario: ${scenarioId}. Available: ${this.getAvailableScenarios().join(', ')}, CLI shortcuts: ${Object.keys(scenarioMapping).join(', ')}`
       );
     }
 
@@ -253,6 +280,8 @@ export class MockDataGenerator {
       scenarioName: scenario.name,
       suggestedTheme: scenario.suggestedTheme || 'classic',
       configOverrides: scenario.configOverrides || {},
+      // Usage组件专用mock数据 | Usage component specific mock data
+      usageData: this.generateUsageData(scenario.tokenUsage || 0, mockData.model?.id || 'claude-sonnet-4'),
     };
 
     return mockData;
@@ -552,7 +581,7 @@ export class MockDataGenerator {
           force_text: false,
         },
         components: {
-          order: ['project', 'model', 'branch', 'tokens', 'status'],
+          order: ['project', 'model', 'branch', 'tokens', 'usage', 'status'],
           tokens: {
             enabled: true,
             icon_color: 'bright_yellow',
@@ -584,6 +613,102 @@ export class MockDataGenerator {
     for (const id of customIds) {
       this.scenarios.delete(id);
     }
+  }
+
+  /**
+   * 生成Usage组件的Mock数据 | Generate mock data for Usage component
+   * 基于token使用率和模型信息生成对应的使用量和成本数据
+   * 支持不同成本范围的测试数据，便于开发测试
+   */
+  private generateUsageData(tokenUsagePercent: number, modelId: string): any {
+    // 根据token使用率确定成本级别 | Determine cost level based on token usage
+    let costScenario: 'low_cost' | 'medium_cost' | 'high_cost' | 'extreme_cost';
+    
+    if (tokenUsagePercent <= 20) {
+      costScenario = 'low_cost';    // $0.02, 少量token使用（适合dev场景）
+    } else if (tokenUsagePercent <= 50) {
+      costScenario = 'medium_cost'; // $0.15, 中等使用（适合critical场景）
+    } else if (tokenUsagePercent <= 80) {
+      costScenario = 'high_cost';   // $0.85, 高成本场景（适合error场景）
+    } else {
+      costScenario = 'extreme_cost'; // $2.30, 极高成本（适合thinking场景）
+    }
+
+    // 预设成本场景数据 | Pre-defined cost scenario data
+    const costScenarios = {
+      low_cost: {
+        input_tokens: 1500,
+        output_tokens: 800,
+        cache_creation_tokens: 2000,
+        cache_read_tokens: 8000,
+        target_cost: 0.02,
+      },
+      medium_cost: {
+        input_tokens: 8000,
+        output_tokens: 4000,
+        cache_creation_tokens: 15000,
+        cache_read_tokens: 25000,
+        target_cost: 0.15,
+      },
+      high_cost: {
+        input_tokens: 25000,
+        output_tokens: 15000,
+        cache_creation_tokens: 35000,
+        cache_read_tokens: 45000,
+        target_cost: 0.85,
+      },
+      extreme_cost: {
+        input_tokens: 45000,
+        output_tokens: 35000,
+        cache_creation_tokens: 60000,
+        cache_read_tokens: 80000,
+        target_cost: 2.30,
+      },
+    };
+
+    const selectedScenario = costScenarios[costScenario];
+    
+    // Claude Sonnet 4标准定价 | Claude Sonnet 4 standard pricing
+    const pricing = {
+      input: 3,        // $3/M tokens
+      output: 15,      // $15/M tokens
+      cache_creation: 3.75, // $3.75/M tokens
+      cache_read: 0.3,     // $0.30/M tokens
+    };
+    
+    // 基于预设数据计算实际成本 | Calculate actual cost based on preset data
+    const inputCost = (selectedScenario.input_tokens / 1_000_000) * pricing.input;
+    const outputCost = (selectedScenario.output_tokens / 1_000_000) * pricing.output;
+    const cacheCreationCost = (selectedScenario.cache_creation_tokens / 1_000_000) * pricing.cache_creation;
+    const cacheReadCost = (selectedScenario.cache_read_tokens / 1_000_000) * pricing.cache_read;
+    const totalCost = inputCost + outputCost + cacheCreationCost + cacheReadCost;
+    
+    // 计算总token数量 | Calculate total token count
+    const totalTokens = selectedScenario.input_tokens + 
+                       selectedScenario.output_tokens + 
+                       selectedScenario.cache_creation_tokens + 
+                       selectedScenario.cache_read_tokens;
+    
+    return {
+      input_tokens: selectedScenario.input_tokens,
+      output_tokens: selectedScenario.output_tokens,
+      cache_creation_tokens: selectedScenario.cache_creation_tokens,
+      cache_read_tokens: selectedScenario.cache_read_tokens,
+      total_tokens: totalTokens,
+      input_cost: Math.round(inputCost * 1000) / 1000, // 保留3位小数
+      output_cost: Math.round(outputCost * 1000) / 1000,
+      cache_creation_cost: Math.round(cacheCreationCost * 1000) / 1000,
+      cache_read_cost: Math.round(cacheReadCost * 1000) / 1000,
+      cache_cost: Math.round((cacheCreationCost + cacheReadCost) * 1000) / 1000, // 兼容性字段
+      total_cost: Math.round(totalCost * 1000) / 1000,
+      model: modelId,
+      session_id: `mock-session-${costScenario}`,
+      cost_scenario: costScenario, // 便于调试的场景标识
+      // Usage组件可能需要的额外字段 | Additional fields Usage component might need
+      pricing_model: 'claude-sonnet-4-20250514',
+      billing_period: 'current_session',
+      usage_timestamp: new Date().toISOString(),
+    };
   }
 
   /**
@@ -659,6 +784,35 @@ export function generateThemeComparisonData(): Record<string, InputData> {
 }
 
 /**
+ * 工厂函数：生成特定成本级别的Usage测试数据 | Generate Usage test data for specific cost levels
+ */
+export function generateUsageMockData(costLevel: 'low' | 'medium' | 'high' | 'extreme', modelId = 'claude-sonnet-4'): any {
+  const generator = new MockDataGenerator();
+  const tokenUsageMap = {
+    low: 15,     // 对应 low_cost ($0.02)
+    medium: 35,  // 对应 medium_cost ($0.15)
+    high: 70,    // 对应 high_cost ($0.85)
+    extreme: 95, // 对应 extreme_cost ($2.30)
+  };
+  
+  // 使用私有方法生成usage数据（通过反射访问）
+  const usageData = (generator as any).generateUsageData(tokenUsageMap[costLevel], modelId);
+  return usageData;
+}
+
+/**
+ * 获取所有成本级别的Usage测试数据集合 | Get Usage test data for all cost levels
+ */
+export function generateAllUsageMockData(modelId = 'claude-sonnet-4'): Record<string, any> {
+  return {
+    low_cost: generateUsageMockData('low', modelId),
+    medium_cost: generateUsageMockData('medium', modelId),
+    high_cost: generateUsageMockData('high', modelId),
+    extreme_cost: generateUsageMockData('extreme', modelId),
+  };
+}
+
+/**
  * 默认导出Mock数据生成器实例 - 扩展功能
  */
 export const mockDataGenerator = new MockDataGenerator();
@@ -667,12 +821,29 @@ export const mockDataGenerator = new MockDataGenerator();
  * 预设场景ID常量 - 便于引用
  */
 export const MOCK_SCENARIO_IDS = {
+  // 内部场景ID | Internal scenario IDs
   BASIC: 'basic',
   HIGH_TOKEN: 'high-token',
   GIT_BRANCH: 'git-branch',
   TOOL_ACTIVE: 'tool-active',
   ERROR: 'error',
   FULL_FEATURED: 'full-featured',
+  
+  // CLI场景快捷方式 | CLI scenario shortcuts
+  DEV: 'dev',           // → basic
+  CRITICAL: 'critical', // → high-token
+  THINKING: 'thinking', // → tool-active
+  COMPLETE: 'complete', // → full-featured
+} as const;
+
+/**
+ * 成本级别常量 - Usage组件测试 | Cost level constants for Usage component testing
+ */
+export const USAGE_COST_LEVELS = {
+  LOW: 'low_cost',      // $0.02 - 适合dev场景
+  MEDIUM: 'medium_cost', // $0.15 - 适合critical场景
+  HIGH: 'high_cost',    // $0.85 - 适合error场景
+  EXTREME: 'extreme_cost', // $2.30 - 适合thinking场景
 } as const;
 
 /**
