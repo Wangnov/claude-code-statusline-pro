@@ -89,7 +89,7 @@ export {
   parseJson,
   validate,
 } from './core/parser.js';
-export { ColorSystem, IconSystem } from './terminal/colors.js';
+export { ColorSystem, IconSystem, TerminalRenderer } from './terminal/colors.js';
 // 终端系统导出
 export { TerminalDetector } from './terminal/detector.js';
 
