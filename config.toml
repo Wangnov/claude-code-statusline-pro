@@ -6,11 +6,11 @@
 
 # 预设配置 - 组件组合快速配置 | Preset - Quick component combination setup
 # P=Project, M=Model, B=Branch, T=Tokens, S=Status
-preset = "PMBTS"
+preset = "PMBTUS"
 
 # 主题配置 | Theme configuration  
 # 可选值 | Available options: "classic", "powerline", "capsule"
-theme = "powerline"
+theme = "classic"
 
 # 调试模式 | Debug mode
 debug = false
@@ -19,7 +19,7 @@ debug = false
 
 [components]
 # 组件显示顺序 | Component display order
-order = ["project", "model", "branch", "tokens", "status"]
+order = ["project", "model", "branch", "tokens", "usage", "status"]
 
 # -------------------- 项目组件 | Project Component --------------------
 [components.project]
@@ -145,6 +145,31 @@ default = 200000
 "claude-opus-4.1" = 200000
 "claude-haiku-3.5" = 200000
 
+# -------------------- 使用量组件 | Usage Component --------------------
+[components.usage]
+enabled = false # 默认禁用，用户手动启用 | Disabled by default, user enable manually
+
+# 三级图标系统 | Three-level icon system
+# 优先级顺序 | Priority order: nerd_icon > emoji_icon > text_icon
+emoji_icon = "💰"  # 金钱表情符号 | Money emoji (优先级2 | Priority 2)
+nerd_icon = ""    # Nerd Font图标 | Nerd Font icon (留空使用默认 | Empty for default)
+text_icon = "[$]" # 文本回退图标 | Text fallback icon (回退方案 | Fallback)
+
+# 颜色配置 | Color configuration
+icon_color = "cyan"  # 图标颜色 | Icon color
+text_color = "white" # 文本颜色 | Text color
+
+# 显示模式配置 | Display mode configuration
+display_mode = "cost" # 显示模式 | Display mode: cost|tokens|combined|breakdown
+show_model = false    # 是否显示模型信息 | Show model information
+precision = 2         # 成本小数位数 | Cost decimal precision
+
+# 使用量组件特有配置 | Usage-specific configuration
+show_input_cost = true  # 显示输入成本 | Show input cost
+show_output_cost = true # 显示输出成本 | Show output cost
+show_cache_cost = false # 显示缓存成本 | Show cache cost
+currency_symbol = "$"   # 货币符号 | Currency symbol
+
 # -------------------- 状态组件 | Status Component --------------------
 [components.status]
 enabled = true
@@ -260,6 +285,7 @@ P = "project" # P -> 项目组件 | P -> Project component
 M = "model"   # M -> 模型组件 | M -> Model component  
 B = "branch"  # B -> 分支组件 | B -> Branch component
 T = "tokens"  # T -> Token组件 | T -> Token component
+U = "usage"   # U -> 使用量组件 | U -> Usage component
 S = "status"  # S -> 状态组件 | S -> Status component
 
 # ==================== 高级配置 | Advanced Configuration ====================
