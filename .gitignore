@@ -46,3 +46,4 @@ coverage/
 .env.production.local
 
 .tgz
+/dist
