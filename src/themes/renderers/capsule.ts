@@ -11,7 +11,7 @@ import type { ThemeRenderer } from '../types.js';
  * 去除ANSI颜色代码，提取纯文本 | Remove ANSI color codes, extract plain text
  */
 function stripAnsiCodes(str: string): string {
-  // eslint-disable-next-line no-control-regex
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI色彩码需要控制字符匹配
   return str.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
@@ -24,7 +24,7 @@ export class CapsuleRenderer implements ThemeRenderer {
   // 胶囊字符定义 | Capsule character definitions
   private readonly CAPSULE_CHARS = {
     // Nerd Font半圆字符 | Nerd Font semicircle characters
-    leftSemicircle: '\uE0B6',  // 左半圆 | Left semicircle
+    leftSemicircle: '\uE0B6', // 左半圆 | Left semicircle
     rightSemicircle: '\uE0B4', // 右半圆 | Right semicircle
 
     // 圆角字符 | Rounded characters
@@ -63,15 +63,33 @@ export class CapsuleRenderer implements ThemeRenderer {
 
     // 渲染所有胶囊 | Render all capsules
     const capsules: string[] = [];
+    let isFirstRealComponent = true; // 跟踪第一个真实（非fake）组件
 
     for (let i = 0; i < validData.length; i++) {
       const item = validData[i];
       if (!item) continue;
 
-      const { content, color } = item;
-      const isFirst = i === 0;
-      const capsule = this.renderCapsuleSegment(content, color, capsuleStyle, enableGradient, isFirst);
+      const { content, color, isFake } = item;
+
+      // 如果是fake组件，保持原有逻辑（解决Nerd Font第一个图标变暗问题）
+      if (isFake) {
+        // fake组件：输出原始内容，解决终端渲染问题
+        capsules.push(content);
+        continue;
+      }
+
+      // 对于真实组件，使用isFirstRealComponent来判断是否是第一个
+      const capsule = this.renderCapsuleSegment(
+        content,
+        color,
+        capsuleStyle,
+        enableGradient,
+        isFirstRealComponent
+      );
       capsules.push(capsule);
+
+      // 标记第一个真实组件已处理
+      isFirstRealComponent = false;
     }
 
     // 使用空格分隔胶囊 | Separate capsules with spaces
@@ -84,26 +102,47 @@ export class CapsuleRenderer implements ThemeRenderer {
   private prepareComponentData(
     components: string[],
     colors: string[]
-  ): Array<{ content: string; color: string }> {
-    const validData: Array<{ content: string; color: string }> = [];
+  ): Array<{ content: string; color: string; isFake: boolean }> {
+    const validData: Array<{ content: string; color: string; isFake: boolean }> = [];
+    let colorIndex = 0; // 独立的颜色索引，跳过fake组件
 
     for (let i = 0; i < components.length; i++) {
       const rawContent = components[i];
-      const color = colors[i] || 'bright_blue'; // Capsule主题默认使用亮色 | Capsule theme defaults to bright colors
 
       if (rawContent?.trim()) {
+        // 检测fake组件 - 包含单独的powerline字符且被黑色包围
+        const isFakeComponent = this.isFakeComponent(rawContent.trim());
+
+        if (isFakeComponent) {
+          // fake组件：直接输出原始内容，不参与主题渲染，不占用颜色
+          validData.push({ content: rawContent.trim(), color: 'transparent', isFake: true });
+          continue;
+        }
+
+        // 正常组件：使用颜色索引
+        const color = colors[colorIndex] || 'bright_blue'; // Capsule主题默认使用亮色 | Capsule theme defaults to bright colors
+        colorIndex++; // 递增颜色索引
+
         // 检查是否是有内部颜色的组件 | Check if component has internal colors
         const content = this.shouldPreserveInternalColors(rawContent.trim())
-          ? rawContent.trim()  // 保留原始内容和颜色 | Preserve original content with colors
+          ? rawContent.trim() // 保留原始内容和颜色 | Preserve original content with colors
           : stripAnsiCodes(rawContent.trim()); // 去除ANSI代码用于重新着色 | Strip ANSI for re-coloring
 
         if (content) {
-          validData.push({ content, color });
+          validData.push({ content, color, isFake: false });
         }
       }
     }
 
     return validData;
+  }
+
+  /**
+   * 检测是否是fake组件 | Detect if it's a fake component
+   */
+  private isFakeComponent(content: string): boolean {
+    // 检测包含私有Unicode字符且被黑色ANSI代码包围的fake组件
+    return content.includes('\uEC03') && content.includes('\x1b[30m');
   }
 
   /**
@@ -117,7 +156,7 @@ export class CapsuleRenderer implements ThemeRenderer {
 
     // Status组件：检查是否包含常见状态词 | Status component: check for common status words
     const statusWords = ['Ready', 'Thinking', 'Error', 'Tool', 'Complete'];
-    if (statusWords.some(word => content.includes(word))) {
+    if (statusWords.some((word) => content.includes(word))) {
       return true;
     }
 
@@ -165,9 +204,14 @@ export class CapsuleRenderer implements ThemeRenderer {
     content: string,
     color: string,
     style: { useNerdFont: boolean; useRounded: boolean; useBorder: boolean },
-    enableGradient: boolean = true,
+    _enableGradient: boolean = true,
     isFirst: boolean = false
   ): string {
+    // 特殊处理fake组件 - 直接返回原始内容，不添加胶囊装饰
+    if (color === 'transparent') {
+      return content; // 直接返回原始fake组件内容
+    }
+
     if (!this.terminalRenderer) {
       // 没有终端渲染器时的简单渲染 | Simple rendering without terminal renderer
       return this.renderSimpleCapsule(content, style);
@@ -175,19 +219,20 @@ export class CapsuleRenderer implements ThemeRenderer {
 
     // 获取胶囊字符 | Get capsule characters
     const { leftChar, rightChar } = this.selectCapsuleChars(style);
-    
+
     // 获取颜色代码 | Get color codes
     const reset = this.terminalRenderer.getReset();
     const contentFg = this.terminalRenderer.getForegroundColor('white');
     const contentBg = this.terminalRenderer.getBackgroundColor(color);
-    
+
     // 处理有内部颜色的内容 | Handle content with internal colors
     let processedContent = content;
     if (this.shouldPreserveInternalColors(content)) {
       // 对于有内部颜色的组件，需要在每个reset后重新应用背景色
       // For components with internal colors, need to reapply background after each reset
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI reset序列需要控制字符匹配
       processedContent = content.replace(/\x1b\[0m/g, `${reset}${contentBg}`);
-      
+
       // 确保内容开始和结束都有正确的背景色 | Ensure content starts and ends with correct background
       if (!processedContent.startsWith(`${contentBg}`)) {
         processedContent = `${contentBg}${processedContent}`;
@@ -202,22 +247,14 @@ export class CapsuleRenderer implements ThemeRenderer {
     const leftSemicircleFg = this.terminalRenderer.getForegroundColor(color);
 
     // 右半圆使用组件本身的前景色
-    // Right semicircle uses component's own foreground color  
+    // Right semicircle uses component's own foreground color
     const rightSemicircleFg = this.terminalRenderer.getForegroundColor(color);
 
     // 只有第一个胶囊需要前缀来避免终端渲染问题
     // Only the first capsule needs a prefix to avoid terminal rendering issues
     const invisiblePrefix = isFirst ? '\u00A0' : ''; // 硬编码不换行空格 | Hard-coded non-breaking space
-    
-    return `${invisiblePrefix}${leftSemicircleFg}${leftChar}${reset}${contentBg}${contentFg} ${processedContent} ${reset}${rightSemicircleFg}${rightChar}${reset}`;
-  }
 
-  /**
-   * 检查字符串是否包含ANSI颜色代码 | Check if string contains ANSI color codes
-   */
-  private hasAnsiCodes(str: string): boolean {
-    // eslint-disable-next-line no-control-regex
-    return /\x1b\[[0-9;]*m/.test(str);
+    return `${invisiblePrefix}${leftSemicircleFg}${leftChar}${reset}${contentBg}${contentFg} ${processedContent} ${reset}${rightSemicircleFg}${rightChar}${reset}`;
   }
 
   /**
