@@ -307,6 +307,7 @@ export class ConfigEditor {
         { name: '🤖 AI模型 - AI模型信息', value: 'model' },
         { name: '🌿 Git分支 - Git分支显示', value: 'branch' },
         { name: '📊 Token使用 - Token使用率和进度', value: 'tokens' },
+        { name: '💰 使用量统计 - 成本和使用量信息', value: 'usage' },
         { name: '⚡ 会话状态 - 会话状态指示器', value: 'status' },
         { name: '← 返回主菜单', value: 'back' },
       ],
@@ -314,7 +315,12 @@ export class ConfigEditor {
 
     if (componentName === 'back') return;
 
-    await this.configureIndividualComponent(componentName);
+    // Usage组件需要特殊配置处理 | Usage component requires special config handling
+    if (componentName === 'usage') {
+      await this.configureUsageComponent();
+    } else {
+      await this.configureIndividualComponent(componentName);
+    }
   }
 
   /**
@@ -380,6 +386,7 @@ export class ConfigEditor {
         'model',
         'branch',
         'tokens',
+        'usage',
         'status',
       ],
       ...this.currentConfig.components,
@@ -389,6 +396,118 @@ export class ConfigEditor {
     this.hasUnsavedChanges = true;
 
     console.log(`✅ ${componentName} 组件配置已更新！`);
+    await this.waitForKeyPress();
+  }
+
+  /**
+   * 配置Usage组件的专用设置 | Configure Usage component specific settings
+   */
+  private async configureUsageComponent(): Promise<void> {
+    const component = this.currentConfig.components?.usage;
+    
+    if (!component) {
+      console.log('Usage组件配置未找到，将创建默认配置');
+    }
+
+    console.log('\n💰 配置Usage组件:');
+
+    // 启用/禁用组件
+    const enabled = await confirm({
+      message: '启用Usage组件？',
+      default: component?.enabled ?? false,
+    });
+
+    let displayMode = component?.display_mode || 'combined';
+    let showModel = component?.show_model ?? false;
+    let precision = component?.precision ?? 2;
+    let icon = component?.emoji_icon || '💰';
+    let color = component?.icon_color || 'cyan';
+
+    if (enabled) {
+      // 配置显示模式
+      displayMode = await select({
+        message: '选择显示模式：',
+        choices: [
+          { name: 'cost - 仅显示成本 ($0.05)', value: 'cost' },
+          { name: 'tokens - 仅显示Token数量 (1.2K tokens)', value: 'tokens' },
+          { name: 'combined - 成本+Token ($0.05 (1.2K))', value: 'combined' },
+          { name: 'breakdown - 详细分解 (1.2Kin+0.8Kout+0.3Kcache)', value: 'breakdown' },
+        ],
+        default: component?.display_mode || 'combined',
+      });
+
+      // 配置是否显示模型名称
+      showModel = await confirm({
+        message: '显示模型名称？',
+        default: component?.show_model ?? false,
+      });
+
+      // 配置精度（仅在成本相关模式下显示）
+      if (displayMode === 'cost' || displayMode === 'combined') {
+        precision = await select({
+          message: '选择成本显示精度：',
+          choices: [
+            { name: '0位小数 ($1)', value: 0 },
+            { name: '1位小数 ($1.2)', value: 1 },
+            { name: '2位小数 ($1.23)', value: 2 },
+            { name: '3位小数 ($1.234)', value: 3 },
+            { name: '4位小数 ($1.2345)', value: 4 },
+          ],
+          default: component?.precision ?? 2,
+        });
+      }
+
+      // 配置图标
+      icon = await input({
+        message: 'Usage组件图标：',
+        default: component?.emoji_icon || '💰',
+      });
+
+      // 配置颜色
+      color = await select({
+        message: 'Usage组件颜色：',
+        choices: [
+          { name: '青色 (默认)', value: 'cyan' },
+          { name: '绿色', value: 'green' },
+          { name: '黄色', value: 'yellow' },
+          { name: '蓝色', value: 'blue' },
+          { name: '紫红色', value: 'magenta' },
+          { name: '红色', value: 'red' },
+          { name: '白色', value: 'white' },
+          { name: '灰色', value: 'gray' },
+        ],
+        default: component?.icon_color || 'cyan',
+      });
+    }
+
+    // 更新配置
+    const updatedComponent = {
+      enabled,
+      emoji_icon: icon,
+      nerd_icon: component?.nerd_icon || '󰊠',
+      text_icon: component?.text_icon || '$',
+      icon_color: color,
+      text_color: component?.text_color || 'white',
+      display_mode: displayMode as 'cost' | 'tokens' | 'combined' | 'breakdown',
+      show_model: showModel,
+      precision,
+    };
+
+    // 确保components配置存在
+    if (!this.currentConfig.components) {
+      this.currentConfig.components = {
+        order: ['project', 'model', 'branch', 'tokens', 'usage', 'status'],
+      };
+    }
+
+    this.currentConfig.components = {
+      ...this.currentConfig.components,
+      usage: updatedComponent,
+    };
+
+    this.hasUnsavedChanges = true;
+
+    console.log('✅ Usage组件配置已更新！');
     await this.waitForKeyPress();
   }
 
@@ -506,6 +625,7 @@ export class ConfigEditor {
           { name: 'AI模型', value: 'model' },
           { name: 'Git分支', value: 'branch' },
           { name: 'Token使用', value: 'tokens' },
+          { name: '使用量统计', value: 'usage' },
           { name: '会话状态', value: 'status' },
         ],
       });
