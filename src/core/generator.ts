@@ -1,9 +1,11 @@
 import { ComponentRegistry } from '../components/base.js';
 import { BranchComponentFactory } from '../components/branch.js';
+import { FakeComponentFactory } from '../components/fake.js';
 import { ModelComponentFactory } from '../components/model.js';
 import { ProjectComponentFactory } from '../components/project.js';
 import { StatusComponentFactory } from '../components/status.js';
 import { TokensComponentFactory } from '../components/tokens.js';
+import { UsageComponentFactory } from '../components/usage.js';
 import type { ComponentConfig, Config, InputData, RenderContext } from '../config/schema.js';
 import { TerminalRenderer } from '../terminal/colors.js';
 import { detect, getCapabilityInfo } from '../terminal/detector.js';
@@ -48,11 +50,14 @@ export class StatuslineGenerator {
    */
   private initializeComponents(): void {
     // 注册所有组件工厂 | Register all component factories
+    this.componentRegistry.register('fake', new FakeComponentFactory());
     this.componentRegistry.register('project', new ProjectComponentFactory());
     this.componentRegistry.register('model', new ModelComponentFactory());
     this.componentRegistry.register('branch', new BranchComponentFactory());
     this.componentRegistry.register('tokens', new TokensComponentFactory());
+    this.componentRegistry.register('usage', new UsageComponentFactory());
     this.componentRegistry.register('status', new StatusComponentFactory());
+    
   }
 
   /**
@@ -146,6 +151,11 @@ export class StatuslineGenerator {
     // 获取主题名称 | Get theme name
     const themeName = this.config.theme || 'classic';
 
+    // 对于classic主题，特殊处理fake组件
+    if (themeName === 'classic') {
+      return this.combineClassicTheme(componentResults);
+    }
+
     try {
       // 创建主题渲染器 | Create theme renderer
       const themeRenderer = createThemeRenderer(themeName, this.renderer);
@@ -170,16 +180,72 @@ export class StatuslineGenerator {
   }
 
   /**
+   * Classic主题的特殊组件合并逻辑 | Special component combination logic for Classic theme
+   */
+  private combineClassicTheme(componentResults: string[]): string {
+    if (componentResults.length === 0) {
+      return '';
+    }
+
+    const separator = this.config.style?.separator || ' ';
+    const separatorBefore = this.config.style?.separator_before || ' ';
+    const separatorAfter = this.config.style?.separator_after || ' ';
+
+    // 检查第一个组件是否是fake组件（通过检测是否包含私有Unicode字符）
+    const firstComponent = componentResults[0];
+    const isFakeFirst = firstComponent?.includes('\uEC03');
+
+    if (isFakeFirst) {
+      // 如果第一个是fake组件，将它与其余组件分别处理
+      const fakeComponent = firstComponent;
+      const realComponents = componentResults.slice(1);
+
+      if (realComponents.length === 0) {
+        return fakeComponent || '';
+      }
+
+      // fake组件直接连接，不加任何分隔符，真实组件之间正常使用分隔符
+      const realComponentsJoined = realComponents.join(
+        `${separatorBefore}${separator}${separatorAfter}`
+      );
+      return fakeComponent + realComponentsJoined; // 不在fake组件和第一个真实组件之间添加分隔符
+    }
+
+    // 常规组合逻辑
+    return componentResults.join(`${separatorBefore}${separator}${separatorAfter}`);
+  }
+
+  /**
    * 提取组件颜色 | Extract component colors
    */
   private extractComponentColors(): string[] {
     const colors: string[] = [];
     const componentOrder = this.getComponentOrder();
 
+    // PowerLine主题的推荐背景色方案 | PowerLine theme recommended background colors
+    const powerlineColors: Record<string, string> = {
+      project: 'blue',
+      model: 'cyan',
+      branch: 'green',
+      tokens: 'yellow',
+      status: 'magenta',
+    };
+
     for (const componentName of componentOrder) {
+      // 跳过fake组件，它不需要颜色配置
+      if (componentName === 'fake') {
+        continue;
+      }
+
       const componentConfig = this.getComponentConfig(componentName) as ComponentConfig;
       if (componentConfig?.enabled) {
-        colors.push(componentConfig.icon_color || 'blue');
+        // 对于powerline主题，使用专门的背景色方案；其他主题使用图标颜色
+        // For powerline theme, use dedicated background colors; other themes use icon colors
+        if (this.config.theme === 'powerline') {
+          colors.push(powerlineColors[componentName] || 'blue');
+        } else {
+          colors.push(componentConfig.icon_color || 'blue');
+        }
       }
     }
 
@@ -191,15 +257,43 @@ export class StatuslineGenerator {
    */
   private getComponentOrder(): string[] {
     const components = this.config.components;
+    let componentOrder: string[] = [];
+
 
     // 如果配置了组件顺序，使用配置的顺序 | If component order is configured, use configured order
     if (components?.order && Array.isArray(components.order)) {
-      return components.order;
+      componentOrder = [...components.order];
+    } else {
+      // 使用预设系统解析组件顺序 | Use preset system to parse component order
+      const preset = this.config.preset || 'PMBTS';
+      componentOrder = this.parsePreset(preset);
     }
 
-    // 使用预设系统解析组件顺序 | Use preset system to parse component order
-    const preset = this.config.preset || 'PMBTS';
-    return this.parsePreset(preset);
+    // 检查是否需要在开头添加fake组件 | Check if fake component needs to be added at the beginning
+    const needsFakeComponent = this.shouldAddFakeComponent(componentOrder);
+    if (needsFakeComponent) {
+      // 确保fake组件在最前面，如果已经存在则移除重复的 | Ensure fake component is first, remove duplicates if exists
+      componentOrder = componentOrder.filter((name) => name !== 'fake');
+      componentOrder.unshift('fake');
+    }
+
+    return componentOrder;
+  }
+
+  /**
+   * 检查是否需要添加fake组件 | Check if fake component should be added
+   */
+  private shouldAddFakeComponent(componentOrder: string[]): boolean {
+    // 检查终端能力：只有支持Nerd Font的终端才需要fake组件
+    const capabilities = detect(
+      this.config.style?.enable_colors,
+      this.config.terminal?.force_emoji,
+      this.config.terminal?.force_nerd_font,
+      this.config.terminal?.force_text
+    );
+
+    // 只有在支持Nerd Font且有其他组件的情况下才添加fake组件
+    return capabilities.nerdFont && componentOrder.length > 0;
   }
 
   /**
@@ -211,6 +305,7 @@ export class StatuslineGenerator {
       M: 'model',
       B: 'branch',
       T: 'tokens',
+      U: 'usage',
       S: 'status',
     };
 
@@ -225,6 +320,19 @@ export class StatuslineGenerator {
    */
   private getComponentConfig(componentName: string): Record<string, unknown> | null {
     const components = this.config.components;
+
+    // 为fake组件提供默认配置 | Provide default configuration for fake component
+    if (componentName === 'fake') {
+      return {
+        enabled: true,
+        icon_color: 'bg_default',
+        text_color: 'bg_default',
+        nerd_icon: '\uE0B0', // Powerline arrow
+        emoji_icon: '',
+        text_icon: ' ',
+      };
+    }
+
     if (!components) return null;
 
     return (components as Record<string, unknown>)[componentName] as Record<string, unknown> | null;

@@ -39,7 +39,7 @@ program
   .option('--no-icons', 'disable Nerd Font icons')
   .option('-c, --config <path>', 'custom config file path')
   .option('-d, --debug', 'debug mode with verbose output')
-  .option('-m, --mock <scenario>', 'use mock data scenario (dev, critical, error)')
+  .option('-m, --mock <scenario>', 'use mock data scenario (dev, critical, error, thinking, complete)')
   .action(async (preset, options) => {
     try {
       // 加载配置，内联参数具有最高优先级
