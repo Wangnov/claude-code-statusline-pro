@@ -10,7 +10,6 @@ import {
   type AdvancedProgressOptions,
   FINE_PROGRESS_CHARS,
   generateAdvancedProgressBar,
-  getGradientColor,
   getRainbowGradientColor,
 } from '../utils/index.js';
 import { BaseComponent, type ComponentFactory } from './base.js';
@@ -230,14 +229,14 @@ export class TokensComponent extends BaseComponent {
     // 检查主题配置中的特性启用状态 | Check feature enablement in theme configuration
     const themeConfig = context.config.themes;
     const currentTheme = context.config.theme;
-    
+
     // 对于powerline和capsule主题，默认启用渐变 | Enable gradient by default for powerline and capsule themes
     const isThemeWithGradient = currentTheme === 'powerline' || currentTheme === 'capsule';
     const enableGradient =
-      this.tokensConfig.show_gradient || 
-      themeConfig?.[currentTheme]?.enable_gradient || 
+      this.tokensConfig.show_gradient ||
+      themeConfig?.[currentTheme]?.enable_gradient ||
       isThemeWithGradient; // 新增：主题默认启用
-      
+
     const enableFineProgress = themeConfig?.[currentTheme]?.fine_progress || false;
 
     // 调试信息 | Debug info
@@ -260,7 +259,7 @@ export class TokensComponent extends BaseComponent {
     // 智能选择渐变模式 | Intelligently select gradient mode
     const useRainbowGradient = enableGradient;
     const useFineGradient = enableFineProgress && context.capabilities.nerdFont && enableGradient;
-    
+
     // 准备高级进度条选项 | Prepare advanced progress bar options
     const options: AdvancedProgressOptions = {
       length: width,
@@ -278,7 +277,7 @@ export class TokensComponent extends BaseComponent {
     if (context.config.debug) {
       console.error('=== 渐变模式调试 ===');
       console.error('useRainbowGradient:', useRainbowGradient);
-      console.error('useFineGradient:', useFineGradient);  
+      console.error('useFineGradient:', useFineGradient);
       console.error('capabilities.nerdFont:', context.capabilities.nerdFont);
       console.error('enableFineProgress:', enableFineProgress);
       console.error('====================');
@@ -321,9 +320,9 @@ export class TokensComponent extends BaseComponent {
   ): string {
     // 检查是否为 ExtendedRenderContext 并且有 renderer
     const extendedContext = context as ExtendedRenderContext;
-    
+
     const reset = '\x1b[0m'; // ANSI reset code
-    
+
     const result = segments
       .map((segment) => {
         // 如果color以\x1b开头，说明是ANSI代码，直接使用
