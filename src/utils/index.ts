@@ -160,13 +160,13 @@ function rgbTo256Color(r: number, g: number, b: number): number {
     if (r > 248) return 231;
     return Math.round(((r - 8) / 247) * 24) + 232;
   }
-  
+
   // 6x6x6颜色立方体
   const rLevel = Math.round((r / 255) * 5);
   const gLevel = Math.round((g / 255) * 5);
   const bLevel = Math.round((b / 255) * 5);
-  
-  return 16 + (36 * rLevel) + (6 * gLevel) + bLevel;
+
+  return 16 + 36 * rLevel + 6 * gLevel + bLevel;
 }
 
 /**
@@ -175,24 +175,21 @@ function rgbTo256Color(r: number, g: number, b: number): number {
 function supportsTrueColor(): boolean {
   const colorterm = process.env.COLORTERM;
   const term = process.env.TERM;
-  
+
   // 检查明确支持TrueColor的环境变量
   if (colorterm === 'truecolor' || colorterm === '24bit') {
     return true;
   }
-  
+
   // 检查常见支持TrueColor的终端
-  if (term && (
-    term.includes('256color') && (
-      term.includes('xterm') ||
-      term.includes('screen') ||
-      term.includes('tmux')
-    )
-  )) {
+  if (
+    term?.includes('256color') &&
+    (term.includes('xterm') || term.includes('screen') || term.includes('tmux'))
+  ) {
     // 对于256color终端，假设不支持TrueColor
     return false;
   }
-  
+
   return colorterm === 'truecolor';
 }
 
@@ -208,11 +205,11 @@ export function getRainbowGradientColor(percentage: number): string {
   // 定义低对比度彩虹色彩点 | Define low-contrast rainbow color points
   // 通过降低饱和度和增加基础亮度来减少对比度
   const colors = {
-    softGreen: { r: 80, g: 200, b: 80 },     // 0% - 柔和绿色（加入基础红蓝值）
+    softGreen: { r: 80, g: 200, b: 80 }, // 0% - 柔和绿色（加入基础红蓝值）
     softYellowGreen: { r: 150, g: 200, b: 60 }, // 25% - 柔和黄绿色
-    softYellow: { r: 200, g: 200, b: 80 },   // 50% - 柔和黄色（不是纯黄）
-    softOrange: { r: 220, g: 160, b: 60 },   // 75% - 柔和橙色
-    softRed: { r: 200, g: 100, b: 80 },      // 100% - 柔和红色（不是纯红）
+    softYellow: { r: 200, g: 200, b: 80 }, // 50% - 柔和黄色（不是纯黄）
+    softOrange: { r: 220, g: 160, b: 60 }, // 75% - 柔和橙色
+    softRed: { r: 200, g: 100, b: 80 }, // 100% - 柔和红色（不是纯红）
   };
 
   let targetColor: RGBColor;
@@ -345,7 +342,7 @@ export function generateGradientProgressBar(
       // Calculate gradient color based on actual usage percentage, not position in bar
       const segmentPosition = (i + 0.5) / filled; // 0-1 position within filled area
       const gradientPercentage = segmentPosition * percentage; // 映射到实际使用率
-      
+
       const isBackupArea = gradientPercentage >= backupThreshold;
       const char = isBackupArea ? backupChar : fillChar;
       const color = colorMapper(gradientPercentage);
@@ -368,16 +365,12 @@ export function generateFineGradientProgressBar(
   percentage: number,
   options: AdvancedProgressOptions = {}
 ): { bar: string; segments: Array<{ char: string; color: string }> } {
-  const {
-    length = 15,
-    backupThreshold = 85,
-    colorMapper = getRainbowGradientColor,
-  } = options;
+  const { length = 15, backupThreshold = 85, colorMapper = getRainbowGradientColor } = options;
 
   // 计算总精度单位（每个字符位置有8个精度级别）
   const totalUnits = length * 8;
   const filledUnits = Math.round((percentage / 100) * totalUnits);
-  
+
   const segments: Array<{ char: string; color: string }> = [];
 
   for (let i = 0; i < length; i++) {
@@ -386,26 +379,26 @@ export function generateFineGradientProgressBar(
 
     if (filledUnits <= unitStart) {
       // 完全空白区域 - 使用中性灰色，降低对比度
-      segments.push({ 
-        char: '░', 
-        color: '\x1b[38;2;120;120;120m' // 中性灰色，与背景对比度适中
+      segments.push({
+        char: '░',
+        color: '\x1b[38;2;120;120;120m', // 中性灰色，与背景对比度适中
       });
     } else if (filledUnits >= unitEnd) {
       // 完全填充的位置
       const positionPercentage = ((i + 0.5) / length) * percentage;
       const isBackupArea = positionPercentage >= backupThreshold;
-      
+
       if (isBackupArea) {
         // 后备区域：使用柔和的橙红色█
-        segments.push({ 
-          char: '█', 
-          color: '\x1b[38;2;180;80;60m' // 柔和橙红色，降低对比度
+        segments.push({
+          char: '█',
+          color: '\x1b[38;2;180;80;60m', // 柔和橙红色，降低对比度
         });
       } else {
         // 正常区域：使用彩虹渐变█
-        segments.push({ 
-          char: '█', 
-          color: colorMapper(positionPercentage)
+        segments.push({
+          char: '█',
+          color: colorMapper(positionPercentage),
         });
       }
     } else {
@@ -413,38 +406,38 @@ export function generateFineGradientProgressBar(
       const unitsInThisPosition = filledUnits - unitStart;
       const charIndex = Math.min(8, Math.max(0, unitsInThisPosition));
       const char = EIGHTH_PRECISION_CHARS[charIndex];
-      
-      const positionPercentage = ((i + (charIndex / 8)) / length) * percentage;
+
+      const positionPercentage = ((i + charIndex / 8) / length) * percentage;
       const isBackupArea = positionPercentage >= backupThreshold;
-      
+
       if (isBackupArea && char && char !== '') {
         // 后备区域的部分字符：柔和橙红色
-        segments.push({ 
-          char, 
-          color: '\x1b[38;2;180;80;60m' // 柔和橙红色，降低对比度
+        segments.push({
+          char,
+          color: '\x1b[38;2;180;80;60m', // 柔和橙红色，降低对比度
         });
       } else if (char && char !== '') {
         // 正常区域的部分字符：彩虹渐变
-        segments.push({ 
-          char, 
-          color: colorMapper(positionPercentage)
+        segments.push({
+          char,
+          color: colorMapper(positionPercentage),
         });
       } else {
         // 空字符：中性灰色背景
-        segments.push({ 
-          char: '▏', 
-          color: '\x1b[38;2;100;100;100m' // 中性灰色，适中的对比度
+        segments.push({
+          char: '▏',
+          color: '\x1b[38;2;100;100;100m', // 中性灰色，适中的对比度
         });
       }
     }
   }
 
-  const bar = segments.map(s => s.char).join('');
+  const bar = segments.map((s) => s.char).join('');
   return { bar, segments };
 }
 
 /**
- * 生成标准渐变进度条 | Generate standard gradient progress bar  
+ * 生成标准渐变进度条 | Generate standard gradient progress bar
  * 使用█块 + RGB彩虹渐变，适用于不支持精细字符的终端
  */
 export function generateStandardGradientProgressBar(
@@ -468,33 +461,33 @@ export function generateStandardGradientProgressBar(
       // 计算每个字符位置的颜色（基于在已填充部分中的相对位置）
       const relativePosition = i / (filled - 1 || 1); // 避免除以0
       const gradientPercentage = relativePosition * percentage;
-      
+
       const isBackupArea = gradientPercentage >= backupThreshold;
       const char = isBackupArea ? backupChar : fillChar;
-      
+
       if (isBackupArea) {
         // 后备区域：柔和橙红色
-        segments.push({ 
-          char, 
-          color: '\x1b[38;2;180;80;60m' // 柔和橙红色，降低对比度
+        segments.push({
+          char,
+          color: '\x1b[38;2;180;80;60m', // 柔和橙红色，降低对比度
         });
       } else {
         // 正常区域：彩虹渐变
-        segments.push({ 
-          char, 
-          color: colorMapper(gradientPercentage)
+        segments.push({
+          char,
+          color: colorMapper(gradientPercentage),
         });
       }
     } else {
       // 空白部分：中性灰色，适中对比度
-      segments.push({ 
-        char: emptyChar, 
-        color: '\x1b[38;2;140;140;140m' // 中性灰色，与背景对比适中
+      segments.push({
+        char: emptyChar,
+        color: '\x1b[38;2;140;140;140m', // 中性灰色，与背景对比适中
       });
     }
   }
 
-  const bar = segments.map(s => s.char).join('');
+  const bar = segments.map((s) => s.char).join('');
   return { bar, segments };
 }
 
@@ -513,6 +506,7 @@ export function generateAdvancedProgressBar(
   const {
     enableGradient = false,
     enableFineProgress = false,
+    // biome-ignore lint/correctness/noUnusedVariables: colorMapper 用于传递给子函数
     colorMapper = getRainbowGradientColor,
   } = options;
 
