@@ -128,26 +128,11 @@ export { TerminalDetector } from './terminal/detector.js';
 export * from './utils/index.js';
 
 /**
- * 版本信息
+ * 版本信息 - 构建时注入
  */
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+declare const __PACKAGE_VERSION__: string;
 
-// 动态读取 package.json 中的版本号
-function getVersion(): string {
-  try {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    const packagePath = join(__dirname, '..', 'package.json');
-    const packageJson = JSON.parse(readFileSync(packagePath, 'utf-8'));
-    return packageJson.version;
-  } catch {
-    return '2.0.0'; // fallback version
-  }
-}
-
-export const VERSION = getVersion();
+export const VERSION = __PACKAGE_VERSION__;
 
 /**
  * 默认导出 - 主要的StatuslineGenerator类
