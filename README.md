@@ -26,10 +26,7 @@ Claude Code增强版可配置状态栏，支持预设系统快速配置组件排
 
 ```bash
 # 推荐：使用npx无需安装
-npx claude-code-statusline-pro
-
-# 或全局安装
-npm install -g claude-code-statusline-pro
+npx claude-code-statusline-pro@latest
 ```
 
 ### Claude Code配置
@@ -40,7 +37,7 @@ npm install -g claude-code-statusline-pro
 {
   "statusLine": {
     "type": "command",
-    "command": "npx claude-code-statusline-pro"
+    "command": "npx claude-code-statusline-pro@latest"
   }
 }
 ```
@@ -60,7 +57,7 @@ npm install -g claude-code-statusline-pro
 
 ```bash
 # 默认所有组件
-npx claude-code-statusline-pro -preset PMBTUS
+npx claude-code-statusline-pro@latest -preset PMBTUS
 ```
 
 ### 输出示例
@@ -91,7 +88,7 @@ npx claude-code-statusline-pro -preset PMBTUS
 npm run config
 
 # 或直接使用
-npx claude-code-statusline-pro config
+npx claude-code-statusline-pro@latest config
 ```
 
 **功能特性**：
@@ -206,10 +203,10 @@ npm run config export
 
 ```bash
 # 测试命令
-echo '{"model":{"id":"claude-sonnet-4"}}' | npx claude-code-statusline-pro
+echo '{"model":{"id":"claude-sonnet-4"}}' | npx claude-code-statusline-pro@latest
 
 # 测试特定预设
-echo '{"model":{"id":"claude-sonnet-4"}}' | npx claude-code-statusline-pro MT
+echo '{"model":{"id":"claude-sonnet-4"}}' | npx claude-code-statusline-pro@latest MT
 ```
 
 ### 配置文件位置

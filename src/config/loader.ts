@@ -35,6 +35,217 @@ function getCurrentDir(): string {
   return process.cwd();
 }
 
+// 内联默认配置模板，避免文件依赖
+const DEFAULT_CONFIG_TEMPLATE = `preset = "PMBTUS"
+theme = "classic"
+language = "zh"
+debug = false
+
+[terminal]
+force_nerd_font = false
+force_emoji = false
+force_text = false
+
+[style]
+separator = "|"
+enable_colors = true
+enable_emoji = true
+enable_nerd_font = true
+separator_color = "white"
+separator_before = " "
+separator_after = " "
+compact_mode = false
+max_width = 120
+
+[themes.classic]
+enable_gradient = true
+ignore_separator = false
+fine_progress = false
+capsule_style = false
+
+[themes.powerline]
+enable_gradient = true
+ignore_separator = false
+fine_progress = true
+capsule_style = false
+
+[themes.capsule]
+enable_gradient = true
+ignore_separator = true
+fine_progress = true
+capsule_style = true
+
+[components]
+order = ["project", "model", "branch", "tokens", "usage", "status"]
+
+[components.project]
+enabled = true
+icon_color = "blue"
+text_color = "white"
+emoji_icon = "📁"
+nerd_icon = ""
+text_icon = "[P]"
+show_when_empty = false
+
+[components.model]
+enabled = true
+icon_color = "cyan"
+text_color = "white"
+emoji_icon = "🤖"
+nerd_icon = ""
+text_icon = "[M]"
+show_full_name = false
+
+[components.model.mapping]
+claude-sonnet-4 = "S4"
+"claude-opus-4.1" = "O4.1"
+"claude-haiku-3.5" = "H3.5"
+
+[components.branch]
+enabled = true
+icon_color = "green"
+text_color = "white"
+emoji_icon = "🌿"
+nerd_icon = ""
+text_icon = "[B]"
+show_when_no_git = false
+max_length = 15
+
+[components.branch.status]
+show_dirty = true
+show_ahead_behind = true
+show_stash_count = true
+show_staged_count = false
+show_unstaged_count = false
+show_untracked_count = false
+
+[components.branch.operations]
+show_merge = true
+show_rebase = true
+show_cherry_pick = false
+show_bisect = false
+
+[components.branch.performance]
+enable_cache = true
+cache_ttl = 5_000
+git_timeout = 1_000
+parallel_commands = true
+lazy_load_status = true
+skip_on_large_repo = true
+large_repo_threshold = 10_000
+
+[components.tokens]
+enabled = true
+icon_color = "yellow"
+text_color = "white"
+emoji_icon = "📊"
+nerd_icon = ""
+text_icon = "[T]"
+show_gradient = true
+show_progress_bar = true
+show_percentage = true
+show_raw_numbers = false
+progress_width = 15
+
+[components.tokens.progress_bar_chars]
+filled = "█"
+empty = "░"
+backup = "▓"
+
+[components.tokens.colors]
+safe = "green"
+warning = "yellow"
+danger = "red"
+
+[components.tokens.thresholds]
+warning = 60
+danger = 85
+backup = 85
+critical = 95
+
+[components.tokens.status_icons.emoji]
+backup = "⚡"
+critical = "🔥"
+
+[components.tokens.status_icons.nerd]
+backup = ""
+critical = ""
+
+[components.tokens.status_icons.text]
+backup = "[!]"
+critical = "[X]"
+
+[components.tokens.context_windows]
+default = 200_000
+claude-sonnet-4 = 200_000
+"claude-opus-4.1" = 200_000
+"claude-haiku-3.5" = 200_000
+
+[components.usage]
+enabled = true
+icon_color = "cyan"
+text_color = "white"
+emoji_icon = "💰"
+nerd_icon = ""
+text_icon = "[$]"
+display_mode = "cost"
+show_model = false
+precision = 2
+
+[components.status]
+enabled = true
+icon_color = "magenta"
+text_color = "white"
+emoji_icon = "✨"
+nerd_icon = ""
+text_icon = "[S]"
+show_recent_errors = true
+
+[components.status.icons.emoji]
+ready = "✅"
+thinking = "💭"
+tool = "🔧"
+error = "❌"
+warning = "⚠️"
+
+[components.status.icons.nerd]
+ready = ""
+thinking = ""
+tool = ""
+error = ""
+warning = ""
+
+[components.status.icons.text]
+ready = "[OK]"
+thinking = "[...]"
+tool = "[TOOL]"
+error = "[ERR]"
+warning = "[WARN]"
+
+[components.status.colors]
+ready = "green"
+thinking = "yellow"
+tool = "blue"
+error = "red"
+warning = "yellow"
+
+[preset_mapping]
+P = "project"
+M = "model"
+B = "branch"
+T = "tokens"
+U = "usage"
+S = "status"
+
+[advanced]
+cache_enabled = true
+recent_error_count = 5
+git_timeout = 1_000
+custom_color_codes = {}
+
+[experimental]
+enable_experimental = false`;
+
 export interface ConfigLoadOptions {
   customPath?: string | undefined;
   overridePreset?: string | undefined;
@@ -72,9 +283,6 @@ export class ConfigLoader {
         'claude-statusline',
         'config.toml'
       ),
-
-      // 包目录 | Package directory
-      path.join(getCurrentDir(), '../../configs/config.template.toml'),
     ];
 
     for (const configPath of possiblePaths) {
@@ -83,6 +291,8 @@ export class ConfigLoader {
       }
     }
 
+    // 如果没找到配置文件，检查是否需要创建默认配置
+    // 但不返回模板路径，而是返回null让系统使用内联默认配置
     return null;
   }
 
@@ -605,60 +815,44 @@ export class ConfigLoader {
     capabilities?: TerminalCapabilities
   ): Promise<void> {
     try {
-      // 读取默认配置模板 | Read default config template
-      const templatePath = path.join(getCurrentDir(), '../../configs/config.template.toml');
-      let configContent: string;
+      // 使用内联默认配置模板 | Use inline default config template
+      let configContent: string = DEFAULT_CONFIG_TEMPLATE;
 
-      if (fs.existsSync(templatePath)) {
-        // 使用完整的配置模板 | Use complete config template
-        configContent = await fs.promises.readFile(templatePath, 'utf8');
+      // 解析TOML并应用自定义选项 | Parse TOML and apply custom options
+      const parsedConfig = TOML.parse(configContent);
 
-        // 解析TOML并应用自定义选项 | Parse TOML and apply custom options
-        const parsedConfig = TOML.parse(configContent);
-
-        // 应用主题设置 | Apply theme setting
-        if (theme) {
-          (parsedConfig as Record<string, unknown>).theme = theme;
-        }
-
-        // 智能语言检测 | Intelligent language detection
-        if (!(parsedConfig as Record<string, unknown>).language) {
-          const detectedLanguage = detectSystemLanguage();
-          (parsedConfig as Record<string, unknown>).language = detectedLanguage;
-        }
-
-        // 根据终端能力调整配置 | Adjust config based on terminal capabilities
-        if (capabilities) {
-          const styleSection =
-            ((parsedConfig as Record<string, unknown>).style as Record<string, unknown>) || {};
-
-          // 根据终端能力设置显示选项 | Set display options based on terminal capabilities
-          if (typeof capabilities.colors === 'boolean') {
-            styleSection.enable_colors = capabilities.colors;
-          }
-          if (typeof capabilities.emoji === 'boolean') {
-            styleSection.enable_emoji = capabilities.emoji;
-          }
-          if (typeof capabilities.nerdFont === 'boolean') {
-            styleSection.enable_nerd_font = capabilities.nerdFont;
-          }
-
-          (parsedConfig as Record<string, unknown>).style = styleSection;
-        }
-
-        // 重新生成TOML内容 | Regenerate TOML content
-        configContent = TOML.stringify(parsedConfig as TOML.JsonMap);
-      } else {
-        // 回退到基础配置 | Fallback to basic config
-        console.warn('Default config template not found, using basic configuration');
-        const detectedLanguage = detectSystemLanguage();
-        const defaultConfig = ConfigSchema.parse({
-          preset: 'PMBTS',
-          theme: theme || 'classic',
-          language: detectedLanguage,
-        });
-        configContent = TOML.stringify(defaultConfig as TOML.JsonMap);
+      // 应用主题设置 | Apply theme setting
+      if (theme) {
+        (parsedConfig as Record<string, unknown>).theme = theme;
       }
+
+      // 智能语言检测 | Intelligent language detection
+      if (!(parsedConfig as Record<string, unknown>).language) {
+        const detectedLanguage = detectSystemLanguage();
+        (parsedConfig as Record<string, unknown>).language = detectedLanguage;
+      }
+
+      // 根据终端能力调整配置 | Adjust config based on terminal capabilities
+      if (capabilities) {
+        const styleSection =
+          ((parsedConfig as Record<string, unknown>).style as Record<string, unknown>) || {};
+
+        // 根据终端能力设置显示选项 | Set display options based on terminal capabilities
+        if (typeof capabilities.colors === 'boolean') {
+          styleSection.enable_colors = capabilities.colors;
+        }
+        if (typeof capabilities.emoji === 'boolean') {
+          styleSection.enable_emoji = capabilities.emoji;
+        }
+        if (typeof capabilities.nerdFont === 'boolean') {
+          styleSection.enable_nerd_font = capabilities.nerdFont;
+        }
+
+        (parsedConfig as Record<string, unknown>).style = styleSection;
+      }
+
+      // 重新生成TOML内容 | Regenerate TOML content
+      configContent = TOML.stringify(parsedConfig as TOML.JsonMap);
 
       // 写入配置文件 | Write config file
       const targetPath = configPath || path.join(process.cwd(), 'config.toml');
@@ -731,10 +925,17 @@ export class ConfigLoader {
    * 包含智能语言检测 | Includes intelligent language detection
    */
   getDefaultConfig(): Config {
+    // 解析内联的完整默认配置
+    const parsedConfig = TOML.parse(DEFAULT_CONFIG_TEMPLATE);
+    
+    // 清理Symbol属性
+    const cleanedConfig = this.cleanSymbols(parsedConfig);
+    
+    // 智能语言检测
     const detectedLanguage = detectSystemLanguage();
-    return ConfigSchema.parse({
-      language: detectedLanguage,
-    });
+    (cleanedConfig as any).language = detectedLanguage;
+    
+    return ConfigSchema.parse(cleanedConfig);
   }
 }
 
