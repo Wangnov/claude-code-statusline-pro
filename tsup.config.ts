@@ -50,5 +50,8 @@ export default defineConfig([
     banner: {
       js: '#!/usr/bin/env node',
     },
+    define: {
+      '__PACKAGE_VERSION__': JSON.stringify(packageJson.version),
+    },
   },
 ]);
