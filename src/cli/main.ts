@@ -11,9 +11,6 @@
 
 import { confirm, select } from '@inquirer/prompts';
 import { Command } from 'commander';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { ConfigLoader } from '../config/loader.js';
 import type { InputData } from '../config/schema.js';
 import { StatuslineGenerator } from '../core/generator.js';
@@ -23,18 +20,9 @@ import { initializeI18n, t } from './i18n.js';
 import { formatCliMessage } from './message-icons.js';
 import { MockDataGenerator } from './mock-data.js';
 
-// 动态获取版本号
-function getVersion(): string {
-  try {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    const packagePath = join(__dirname, '..', '..', 'package.json');
-    const packageJson = JSON.parse(readFileSync(packagePath, 'utf-8'));
-    return packageJson.version;
-  } catch {
-    return '2.0.0'; // fallback version
-  }
-}
+// 版本号 - 构建时注入
+declare const __PACKAGE_VERSION__: string;
+const getVersion = () => __PACKAGE_VERSION__;
 
 const program = new Command();
 
