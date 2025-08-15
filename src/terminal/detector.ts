@@ -751,14 +751,8 @@ export function getCapabilityInfo(): Record<string, unknown> {
 }
 
 /**
- * @deprecated Legacy class - use individual functions instead
- * 向后兼容性的遗留类 - 请使用独立函数
- */
-// Note: This class has been removed to improve code quality.
-// Use the exported functions directly instead.
-
-/**
  * 别名和便捷包装类: 为向后兼容和简化使用
+ * @deprecated Legacy class - use individual functions instead
  */
 export class TerminalDetector {
   detectCapabilities(debug = false): TerminalCapabilities | DetailedCapabilities {

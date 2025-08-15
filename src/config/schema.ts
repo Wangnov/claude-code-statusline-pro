@@ -146,14 +146,161 @@ export const ModelComponentSchema = BaseComponentSchema.extend({
   mapping: z.record(z.string(), z.string()).default({}),
 });
 
+// ==================== 分支组件配置扩展 ====================
+
+/**
+ * 分支状态配置 | Branch status config
+ * 控制Git工作区状态的显示选项 | Controls Git workspace status display options
+ */
+const BranchStatusSchema = z.object({
+  /** 显示脏工作区状态 | Show dirty workspace status */
+  show_dirty: z.boolean().default(false),
+  /** 显示ahead/behind计数 | Show ahead/behind count */
+  show_ahead_behind: z.boolean().default(false),
+  /** 显示stash数量 | Show stash count */
+  show_stash_count: z.boolean().default(false),
+  /** 显示暂存文件数 | Show staged file count */
+  show_staged_count: z.boolean().default(false),
+  /** 显示未暂存文件数 | Show unstaged file count */
+  show_unstaged_count: z.boolean().default(false),
+  /** 显示未跟踪文件数 | Show untracked file count */
+  show_untracked_count: z.boolean().default(false),
+});
+
+/**
+ * 分支操作状态配置 | Branch operations config
+ * 控制Git操作状态的显示选项 | Controls Git operation status display options
+ */
+const BranchOperationsSchema = z.object({
+  /** 显示合并状态 | Show merge status */
+  show_merge: z.boolean().default(false),
+  /** 显示变基状态 | Show rebase status */
+  show_rebase: z.boolean().default(false),
+  /** 显示cherry-pick状态 | Show cherry-pick status */
+  show_cherry_pick: z.boolean().default(false),
+  /** 显示bisect状态 | Show bisect status */
+  show_bisect: z.boolean().default(false),
+});
+
+/**
+ * 分支版本信息配置 | Branch version info config
+ * 控制Git版本信息的显示选项 | Controls Git version information display options
+ */
+const BranchVersionSchema = z.object({
+  /** 显示提交SHA（短） | Show commit hash (short) */
+  show_commit_hash: z.boolean().default(false),
+  /** 显示最近标签 | Show latest tag */
+  show_tag: z.boolean().default(false),
+  /** 显示最后提交时间 | Show last commit time */
+  show_commit_time: z.boolean().default(false),
+  /** SHA显示长度 | Hash display length */
+  hash_length: z.number().min(4).max(40).default(7),
+});
+
+/**
+ * 分支状态图标配置 | Branch status icons config
+ * 定义各种Git状态的图标 | Defines icons for various Git statuses
+ */
+const BranchStatusIconsSchema = z.object({
+  /** 脏工作区图标 | Dirty workspace icon */
+  dirty_emoji: z.string().default('⚡'),
+  /** 清洁工作区图标 | Clean workspace icon */
+  clean_emoji: z.string().default('✨'),
+  /** ahead提交图标 | Ahead commits icon */
+  ahead_emoji: z.string().default('↑'),
+  /** behind提交图标 | Behind commits icon */
+  behind_emoji: z.string().default('↓'),
+  /** stash存储图标 | Stash storage icon */
+  stash_emoji: z.string().default('📦'),
+  /** 合并中图标 | Merge in progress icon */
+  merge_emoji: z.string().default('🔀'),
+  /** 变基中图标 | Rebase in progress icon */
+  rebase_emoji: z.string().default('🔄'),
+  /** cherry-pick中图标 | Cherry-pick in progress icon */
+  cherry_pick_emoji: z.string().default('🍒'),
+  /** bisect中图标 | Bisect in progress icon */
+  bisect_emoji: z.string().default('🔍'),
+  /** Nerd Font图标配置 | Nerd Font icons config */
+  dirty_nerd: z.string().default(''),
+  clean_nerd: z.string().default(''),
+  ahead_nerd: z.string().default(''),
+  behind_nerd: z.string().default(''),
+  stash_nerd: z.string().default(''),
+  merge_nerd: z.string().default(''),
+  rebase_nerd: z.string().default(''),
+  cherry_pick_nerd: z.string().default(''),
+  bisect_nerd: z.string().default(''),
+  /** 文本图标配置 | Text icons config */
+  dirty_text: z.string().default('[*]'),
+  clean_text: z.string().default('[✓]'),
+  ahead_text: z.string().default('[↑]'),
+  behind_text: z.string().default('[↓]'),
+  stash_text: z.string().default('[S]'),
+  merge_text: z.string().default('[M]'),
+  rebase_text: z.string().default('[R]'),
+  cherry_pick_text: z.string().default('[C]'),
+  bisect_text: z.string().default('[B]'),
+});
+
+/**
+ * 分支状态颜色配置 | Branch status colors config
+ * 定义各种Git状态的颜色 | Defines colors for various Git statuses
+ */
+const BranchStatusColorsSchema = z.object({
+  /** 清洁状态颜色 | Clean status color */
+  clean: ColorSchema.default('green'),
+  /** 脏状态颜色 | Dirty status color */
+  dirty: ColorSchema.default('yellow'),
+  /** ahead状态颜色 | Ahead status color */
+  ahead: ColorSchema.default('cyan'),
+  /** behind状态颜色 | Behind status color */
+  behind: ColorSchema.default('magenta'),
+  /** 操作进行中颜色 | Operation in progress color */
+  operation: ColorSchema.default('red'),
+});
+
+/**
+ * 分支性能配置 | Branch performance config
+ * 控制Git命令执行和缓存的性能选项 | Controls performance options for Git command execution and caching
+ */
+const BranchPerformanceSchema = z.object({
+  /** 启用缓存 | Enable cache */
+  enable_cache: z.boolean().default(true),
+  /** 缓存TTL(毫秒) | Cache TTL (milliseconds) */
+  cache_ttl: z.number().min(1000).max(60000).default(5000),
+  /** Git命令超时 | Git command timeout */
+  git_timeout: z.number().min(100).max(10000).default(1000),
+  /** 并行执行Git命令 | Execute Git commands in parallel */
+  parallel_commands: z.boolean().default(true),
+  /** 懒加载状态信息 | Lazy load status information */
+  lazy_load_status: z.boolean().default(true),
+  /** 大仓库时跳过重操作 | Skip heavy operations on large repositories */
+  skip_on_large_repo: z.boolean().default(true),
+  /** 大仓库文件数阈值 | Large repository file count threshold */
+  large_repo_threshold: z.number().min(1000).max(100000).default(10000),
+});
+
 /**
  * 分支组件配置 | Branch component config
+ * 支持增强的Git功能配置 | Supports enhanced Git functionality configuration
  */
 export const BranchComponentSchema = BaseComponentSchema.extend({
   /** 无Git仓库时是否显示 | Show when not in Git repository */
   show_when_no_git: z.boolean().default(false),
   /** 分支名最大长度 | Maximum length of branch name */
   max_length: z.number().min(1).default(20),
+  /** 工作区状态配置 | Workspace status config */
+  status: BranchStatusSchema.optional(),
+  /** 操作状态配置 | Operation status config */
+  operations: BranchOperationsSchema.optional(),
+  /** 版本信息配置 | Version information config */
+  version: BranchVersionSchema.optional(),
+  /** 状态图标配置 | Status icons config */
+  status_icons: BranchStatusIconsSchema.optional(),
+  /** 状态颜色配置 | Status colors config */
+  status_colors: BranchStatusColorsSchema.optional(),
+  /** 性能配置 | Performance config */
+  performance: BranchPerformanceSchema.optional(),
 });
 
 // ==================== Token阈值和颜色配置 ====================
@@ -304,10 +451,10 @@ export const StatusComponentSchema = BaseComponentSchema.extend({
  * 定义使用量的不同显示格式 | Defines different display formats for usage
  */
 export const UsageDisplayMode = z.enum([
-  'cost',       // "$0.05" - 仅显示成本
-  'tokens',     // "1.2K tokens" - 仅显示token数量
-  'combined',   // "$0.05 (1.2K)" - 组合显示成本和token
-  'breakdown'   // "1.2Kin+0.8Kout+0.3Kcache" - 详细分解显示
+  'cost', // "$0.05" - 仅显示成本
+  'tokens', // "1.2K tokens" - 仅显示token数量
+  'combined', // "$0.05 (1.2K)" - 组合显示成本和token
+  'breakdown', // "1.2Kin+0.8Kout+0.3Kcache" - 详细分解显示
 ]);
 
 /**
@@ -428,6 +575,11 @@ const PresetMappingSchema = z
 // ==================== 主配置Schema ====================
 
 /**
+ * 语言配置Schema | Language config schema
+ */
+const LanguageSchema = z.enum(['zh', 'en']).default('en');
+
+/**
  * 主配置Schema | Main config schema
  */
 export const ConfigSchema = z
@@ -436,6 +588,8 @@ export const ConfigSchema = z
     preset: z.string().default('PMBTUS'),
     /** 主题名称 | Theme name */
     theme: z.enum(['classic', 'powerline', 'capsule']).default('classic'),
+    /** 界面语言 | Interface language (新增国际化支持) */
+    language: LanguageSchema.optional(),
     /** 调试模式 | Debug mode (移动自advanced) */
     debug: z.boolean().default(false),
     /** 终端能力配置 | Terminal capabilities config (新增) */
@@ -709,6 +863,36 @@ export type ModelComponentConfig = z.infer<typeof ModelComponentSchema>;
  * 分支组件配置类型 | Branch component config type
  */
 export type BranchComponentConfig = z.infer<typeof BranchComponentSchema>;
+
+/**
+ * 分支状态配置类型 | Branch status config type
+ */
+export type BranchStatusConfig = z.infer<typeof BranchStatusSchema>;
+
+/**
+ * 分支操作状态配置类型 | Branch operations config type
+ */
+export type BranchOperationsConfig = z.infer<typeof BranchOperationsSchema>;
+
+/**
+ * 分支版本信息配置类型 | Branch version info config type
+ */
+export type BranchVersionConfig = z.infer<typeof BranchVersionSchema>;
+
+/**
+ * 分支状态图标配置类型 | Branch status icons config type
+ */
+export type BranchStatusIconsConfig = z.infer<typeof BranchStatusIconsSchema>;
+
+/**
+ * 分支状态颜色配置类型 | Branch status colors config type
+ */
+export type BranchStatusColorsConfig = z.infer<typeof BranchStatusColorsSchema>;
+
+/**
+ * 分支性能配置类型 | Branch performance config type
+ */
+export type BranchPerformanceConfig = z.infer<typeof BranchPerformanceSchema>;
 
 /**
  * Token组件配置类型 | Token component config type

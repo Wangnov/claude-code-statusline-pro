@@ -18,13 +18,13 @@ interface SessionUsageInfo {
   cache_creation_tokens: number;
   cache_read_tokens: number;
   total_tokens: number;
-  
-  // 成本数据 | Cost data  
+
+  // 成本数据 | Cost data
   input_cost: number;
   output_cost: number;
   cache_cost: number;
   total_cost: number;
-  
+
   // 元数据 | Metadata
   model: string;
   session_id: string;
@@ -34,49 +34,67 @@ interface SessionUsageInfo {
  * 模型定价配置接口 | Model pricing configuration interface
  */
 interface ModelPricing {
-  input: number;           // 输入token价格 ($/M tokens) | Input token price ($/M tokens)
-  output: number;          // 输出token价格 ($/M tokens) | Output token price ($/M tokens) 
-  cache_creation: number;  // 缓存创建价格 ($/M tokens) | Cache creation price ($/M tokens)
-  cache_read: number;      // 缓存读取价格 ($/M tokens) | Cache read price ($/M tokens)
+  input: number; // 输入token价格 ($/M tokens) | Input token price ($/M tokens)
+  output: number; // 输出token价格 ($/M tokens) | Output token price ($/M tokens)
+  cache_creation: number; // 缓存创建价格 ($/M tokens) | Cache creation price ($/M tokens)
+  cache_read: number; // 缓存读取价格 ($/M tokens) | Cache read price ($/M tokens)
 }
 
 /**
- * 官方模型定价映射 | Official model pricing mapping  
+ * 官方模型定价映射 | Official model pricing mapping
  * 基于Claude官方定价文档 | Based on Claude official pricing documentation
  */
 const MODEL_PRICING = {
   // Claude Sonnet 4 (新版本) | Claude Sonnet 4 (New version)
   'claude-sonnet-4-20250514': {
-    input: 3,              // $3/M tokens
-    output: 15,            // $15/M tokens  
-    cache_creation: 3.75,  // 1.25x input price
-    cache_read: 0.3,       // 0.1x input price
+    input: 3, // $3/M tokens
+    output: 15, // $15/M tokens
+    cache_creation: 3.75, // $3.75/M tokens (5min cache writes)
+    cache_read: 0.3, // $0.30/M tokens (cache hits)
   },
-  
-  // Claude Sonnet 3.5 (旧版本兼容) | Claude Sonnet 3.5 (Legacy compatibility)
+
+  // Claude Sonnet 3.5 (各种版本兼容) | Claude Sonnet 3.5 (Various version compatibility)
   'claude-3-5-sonnet-20241022': {
     input: 3,
     output: 15,
     cache_creation: 3.75,
     cache_read: 0.3,
   },
-  
+  'claude-3-5-sonnet': {
+    input: 3,
+    output: 15,
+    cache_creation: 3.75,
+    cache_read: 0.3,
+  },
+  'claude-sonnet': {
+    input: 3,
+    output: 15,
+    cache_creation: 3.75,
+    cache_read: 0.3,
+  },
+
   // Claude Haiku 3.5 (经济版) | Claude Haiku 3.5 (Economy version)
   'claude-3-5-haiku-20241022': {
-    input: 1,
-    output: 5,
-    cache_creation: 1.25,
-    cache_read: 0.1,
+    input: 0.8, // $0.80/M tokens (官方定价)
+    output: 4, // $4/M tokens (官方定价)
+    cache_creation: 1.0, // $1/M tokens (5min cache writes)
+    cache_read: 0.08, // $0.08/M tokens (cache hits)
   },
-  
-  // Claude Opus 3 (高级版) | Claude Opus 3 (Premium version) 
+  'claude-3-5-haiku': {
+    input: 0.8,
+    output: 4,
+    cache_creation: 1.0,
+    cache_read: 0.08,
+  },
+
+  // Claude Opus 3 (高级版) | Claude Opus 3 (Premium version)
   'claude-3-opus-20240229': {
     input: 15,
     output: 75,
     cache_creation: 18.75,
     cache_read: 1.5,
   },
-  
+
   // 默认回退价格 | Default fallback pricing
   default: {
     input: 3,
@@ -88,8 +106,25 @@ const MODEL_PRICING = {
 
 // 类型安全的定价访问器 | Type-safe pricing accessor
 const getModelPricing = (modelId: string): ModelPricing => {
-  const key = modelId as keyof typeof MODEL_PRICING;
-  return (MODEL_PRICING as any)[key] || (MODEL_PRICING as any)['default'];
+  const pricing = MODEL_PRICING as Record<string, ModelPricing>;
+  const modelPricing = pricing[modelId];
+  if (modelPricing) {
+    return modelPricing;
+  }
+
+  // 确保default始终存在
+  const defaultPricing = pricing.default;
+  if (defaultPricing) {
+    return defaultPricing;
+  }
+
+  // 最后的回退值
+  return {
+    input: 3,
+    output: 15,
+    cache_creation: 3.75,
+    cache_read: 0.3,
+  };
 };
 
 /**
@@ -113,7 +148,7 @@ export class UsageComponent extends BaseComponent {
     const mockData = (inputData as Record<string, unknown>).__mock__;
     if (mockData && typeof (mockData as Record<string, unknown>).usageData === 'object') {
       return this.renderMockUsageData(
-        (mockData as Record<string, unknown>).usageData as any,
+        (mockData as Record<string, unknown>).usageData as Partial<SessionUsageInfo>,
         context
       );
     }
@@ -164,12 +199,12 @@ export class UsageComponent extends BaseComponent {
   /**
    * 渲染无数据状态 | Render no data state
    */
-  private renderNoData(context: RenderContext): string | null {
+  private renderNoData(_context: RenderContext): string | null {
     const icon = this.getIcon('usage');
-    
+
     // 显示简单的无数据提示 | Display simple no data message
     const displayText = this.usageConfig.display_mode === 'cost' ? '$0.00' : '0 tokens';
-    
+
     return this.formatOutput(icon, displayText, 'gray');
   }
 
@@ -198,7 +233,7 @@ export class UsageComponent extends BaseComponent {
     try {
       const stat = statSync(transcriptPath);
       const currentMtime = stat.mtime.getTime();
-      
+
       // 复合缓存key：transcriptPath + sessionId + mtime | Composite cache key
       const cacheKey = `${transcriptPath}:${sessionId}:${currentMtime}`;
 
@@ -211,11 +246,15 @@ export class UsageComponent extends BaseComponent {
       const transcript = readFileSync(transcriptPath, 'utf8');
       const lines = transcript.trim().split('\n');
 
-      // 累计所有usage数据 | Accumulate all usage data
+      // 按模型分别累计usage数据 | Accumulate usage data by model
       let totalInputTokens = 0;
       let totalOutputTokens = 0;
       let totalCacheCreationTokens = 0;
       let totalCacheReadTokens = 0;
+      let totalCost = 0;
+
+      // 记录已处理的消息ID，避免重复计算 | Track processed message IDs to avoid duplication
+      const processedMessageIds = new Set<string>();
 
       // 遍历所有行查找匹配sessionId的assistant消息 | Iterate all lines to find assistant messages matching sessionId
       for (const line of lines) {
@@ -223,17 +262,42 @@ export class UsageComponent extends BaseComponent {
         if (!trimmedLine) continue;
 
         try {
-          const entry = JSON.parse(trimmedLine) as TranscriptEntry;
+          const entry = JSON.parse(trimmedLine) as TranscriptEntry & {
+            sessionId?: string;
+            message?: {
+              usage?: {
+                input_tokens?: number;
+                output_tokens?: number;
+                cache_creation_input_tokens?: number;
+                cache_read_input_tokens?: number;
+                [key: string]: unknown;
+              };
+              model?: string;
+              id?: string;
+            };
+          }; // 扩展TranscriptEntry类型以支持实际数据结构
 
           // 检查是否为目标session的assistant消息且包含usage | Check if it's assistant message from target session with usage
           if (
             entry.type === 'assistant' &&
-            entry.session_id === sessionId &&
+            entry.sessionId === sessionId &&
             entry.message &&
             'usage' in entry.message
           ) {
             const usage = entry.message.usage;
-            
+            const messageModel = entry.message.model || modelId; // 使用消息中的实际模型ID
+            const messageId = entry.message.id;
+
+            // 跳过重复的消息ID，避免重复计算 | Skip duplicate message IDs to avoid double counting
+            if (messageId && processedMessageIds.has(messageId)) {
+              continue;
+            }
+
+            // 记录消息ID | Record message ID
+            if (messageId) {
+              processedMessageIds.add(messageId);
+            }
+
             // 验证usage数据完整性 | Validate usage data completeness
             const requiredKeys = [
               'input_tokens',
@@ -242,29 +306,48 @@ export class UsageComponent extends BaseComponent {
               'output_tokens',
             ];
 
-            if (usage && requiredKeys.every((key) => key in usage && typeof (usage as any)[key] === 'number')) {
-              totalInputTokens += usage.input_tokens || 0;
-              totalOutputTokens += usage.output_tokens || 0; 
-              totalCacheCreationTokens += usage.cache_creation_input_tokens || 0;
-              totalCacheReadTokens += usage.cache_read_input_tokens || 0;
+            if (
+              usage &&
+              requiredKeys.every(
+                (key) => key in usage && typeof (usage as Record<string, unknown>)[key] === 'number'
+              )
+            ) {
+              // 累计token数量 | Accumulate token counts
+              const inputTokens = usage.input_tokens || 0;
+              const outputTokens = usage.output_tokens || 0;
+              const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
+              const cacheReadTokens = usage.cache_read_input_tokens || 0;
+
+              totalInputTokens += inputTokens;
+              totalOutputTokens += outputTokens;
+              totalCacheCreationTokens += cacheCreationTokens;
+              totalCacheReadTokens += cacheReadTokens;
+
+              // 按此消息的实际模型计算成本 | Calculate cost based on actual model of this message
+              const pricing = this.getModelPricing(messageModel);
+              const messageCost =
+                this.calculateCost(inputTokens, pricing.input) +
+                this.calculateCost(outputTokens, pricing.output) +
+                this.calculateCost(cacheCreationTokens, pricing.cache_creation) +
+                this.calculateCost(cacheReadTokens, pricing.cache_read);
+
+              totalCost += messageCost;
             }
           }
-        } catch (_parseError) {
-          // 忽略解析错误的行 | Ignore lines with parse errors
-          continue;
-        }
+        } catch (_parseError) {}
       }
 
       // 计算总token数 | Calculate total tokens
-      const totalTokens = totalInputTokens + totalOutputTokens + totalCacheCreationTokens + totalCacheReadTokens;
+      const totalTokens =
+        totalInputTokens + totalOutputTokens + totalCacheCreationTokens + totalCacheReadTokens;
 
-      // 计算成本 | Calculate costs  
-      const pricing = this.getModelPricing(modelId);
-      const inputCost = this.calculateCost(totalInputTokens, pricing.input);
-      const outputCost = this.calculateCost(totalOutputTokens, pricing.output);
-      const cacheCost = this.calculateCost(totalCacheCreationTokens, pricing.cache_creation) +
-                        this.calculateCost(totalCacheReadTokens, pricing.cache_read);
-      const totalCost = inputCost + outputCost + cacheCost;
+      // 为了向后兼容，计算平均成本组件 | For backward compatibility, calculate average cost components
+      const avgPricing = this.getModelPricing(modelId);
+      const inputCost = this.calculateCost(totalInputTokens, avgPricing.input);
+      const outputCost = this.calculateCost(totalOutputTokens, avgPricing.output);
+      const cacheCost =
+        this.calculateCost(totalCacheCreationTokens, avgPricing.cache_creation) +
+        this.calculateCost(totalCacheReadTokens, avgPricing.cache_read);
 
       const result: SessionUsageInfo = {
         input_tokens: totalInputTokens,
@@ -335,7 +418,7 @@ export class UsageComponent extends BaseComponent {
     const icon = this.getIcon('usage');
     const displayText = this.buildDisplayText(usageInfo);
     const color = this.getUsageColor(usageInfo);
-    
+
     return this.formatOutput(icon, displayText, color);
   }
 
@@ -345,7 +428,7 @@ export class UsageComponent extends BaseComponent {
    */
   private buildDisplayText(usageInfo: SessionUsageInfo): string {
     const { display_mode, show_model, precision } = this.usageConfig;
-    
+
     let text = '';
 
     // 添加模型名称前缀 | Add model name prefix
@@ -360,19 +443,19 @@ export class UsageComponent extends BaseComponent {
       case 'cost':
         text += this.formatCost(usageInfo.total_cost, precision);
         break;
-        
+
       case 'tokens':
         text += this.formatTokens(usageInfo.total_tokens);
         break;
-        
+
       case 'combined':
         text += `${this.formatCost(usageInfo.total_cost, precision)} (${this.formatTokens(usageInfo.total_tokens)})`;
         break;
-        
+
       case 'breakdown':
         text += this.formatBreakdown(usageInfo);
         break;
-        
+
       default:
         // 默认为combined模式 | Default to combined mode
         text += `${this.formatCost(usageInfo.total_cost, precision)} (${this.formatTokens(usageInfo.total_tokens)})`;
@@ -408,11 +491,11 @@ export class UsageComponent extends BaseComponent {
     if (usageInfo.input_tokens > 0) {
       parts.push(`${this.formatTokensShort(usageInfo.input_tokens)}in`);
     }
-    
+
     if (usageInfo.output_tokens > 0) {
       parts.push(`${this.formatTokensShort(usageInfo.output_tokens)}out`);
     }
-    
+
     const cacheTokens = usageInfo.cache_creation_tokens + usageInfo.cache_read_tokens;
     if (cacheTokens > 0) {
       parts.push(`${this.formatTokensShort(cacheTokens)}cache`);
@@ -452,16 +535,16 @@ export class UsageComponent extends BaseComponent {
    */
   private getUsageColor(usageInfo: SessionUsageInfo): string {
     const cost = usageInfo.total_cost;
-    
+
     // 颜色阈值 | Color thresholds
     if (cost > 1.0) {
-      return 'red';    // 高成本 | High cost
+      return 'red'; // 高成本 | High cost
     } else if (cost > 0.1) {
       return 'yellow'; // 中等成本 | Medium cost
     } else if (cost > 0) {
-      return 'green';  // 低成本 | Low cost
+      return 'green'; // 低成本 | Low cost
     } else {
-      return 'gray';   // 无成本 | No cost
+      return 'gray'; // 无成本 | No cost
     }
   }
 }

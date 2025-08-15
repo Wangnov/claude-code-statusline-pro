@@ -57,7 +57,6 @@ export class StatuslineGenerator {
     this.componentRegistry.register('tokens', new TokensComponentFactory());
     this.componentRegistry.register('usage', new UsageComponentFactory());
     this.componentRegistry.register('status', new StatusComponentFactory());
-    
   }
 
   /**
@@ -258,7 +257,6 @@ export class StatuslineGenerator {
   private getComponentOrder(): string[] {
     const components = this.config.components;
     let componentOrder: string[] = [];
-
 
     // 如果配置了组件顺序，使用配置的顺序 | If component order is configured, use configured order
     if (components?.order && Array.isArray(components.order)) {
