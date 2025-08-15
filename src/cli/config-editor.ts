@@ -17,6 +17,7 @@ import { StatuslineGenerator } from '../core/generator.js';
 import { TerminalDetector } from '../terminal/detector.js';
 import { MockDataGenerator } from './mock-data.js';
 import { LivePreviewEngine } from './preview-engine.js';
+import { initializeI18n, t, getCurrentLanguage, setLanguage, getI18nManager } from './i18n.js';
 
 /**
  * 配置编辑器选项
@@ -78,7 +79,8 @@ export class ConfigEditor {
    */
   async startInteractiveMode(): Promise<void> {
     try {
-      // 初始化配置
+      // 初始化i18n和配置
+      await initializeI18n();
       await this.loadConfiguration();
 
       // 检查终端兼容性
@@ -121,13 +123,13 @@ export class ConfigEditor {
     const capabilities = this.terminalDetector.detectCapabilities();
 
     if (!process.stdin.isTTY) {
-      throw new Error('交互模式需要TTY终端');
+      throw new Error(t('errors.terminalNotSupported'));
     }
 
-    console.log('🖥️  终端能力检测:');
-    console.log(`   颜色支持: ${capabilities.colors ? '✅' : '❌'}`);
-    console.log(`   表情符号: ${capabilities.emoji ? '✅' : '❌'}`);
-    console.log(`   Nerd Font: ${capabilities.nerdFont ? '✅' : '❌'}`);
+    console.log(t('terminal.detection.title'));
+    console.log(`   ${t('terminal.capabilities.colors')}: ${capabilities.colors ? '✅' : '❌'}`);
+    console.log(`   ${t('terminal.capabilities.emoji')}: ${capabilities.emoji ? '✅' : '❌'}`);
+    console.log(`   ${t('terminal.capabilities.nerdFont')}: ${capabilities.nerdFont ? '✅' : '❌'}`);
     console.log();
   }
 
@@ -143,8 +145,8 @@ export class ConfigEditor {
       ? '\x1b[1;36mClaude Code Statusline Pro v2.0.0\x1b[0m'
       : 'Claude Code Statusline Pro v2.0.0';
     const subtitle = capabilities.colors
-      ? '\x1b[36m🎛️  交互式配置编辑器 - Interactive Configuration Editor\x1b[0m'
-      : '🎛️  交互式配置编辑器 - Interactive Configuration Editor';
+      ? `\x1b[36m${t('editor.subtitle')}\x1b[0m`
+      : t('editor.subtitle');
 
     console.log(title);
     console.log(subtitle);
@@ -152,8 +154,8 @@ export class ConfigEditor {
     // 显示实时预览区域
     console.log();
     const previewTitle = capabilities.colors
-      ? '\x1b[32m✅ 实时预览 - Live Preview (配置变化时自动更新)\x1b[0m'
-      : '✅ 实时预览 - Live Preview (配置变化时自动更新)';
+      ? `\x1b[32m${t('editor.preview.title')}\x1b[0m`
+      : t('editor.preview.title');
     console.log(previewTitle);
     console.log();
 
@@ -176,19 +178,19 @@ export class ConfigEditor {
 
         // 紧凑的显示格式
         const scenarioLabel = capabilities.colors
-          ? `\x1b[90m场景: ${scenarioName}\x1b[0m`
-          : `场景: ${scenarioName}`;
+          ? `\x1b[90m${t('editor.preview.scenarios.' + scenarioId, { scenario: scenarioName })}\x1b[0m`
+          : `${t('editor.preview.scenarios.' + scenarioId, { scenario: scenarioName })}`;
 
         console.log(`${scenarioLabel}`);
         console.log(output);
         console.log();
       } catch (error) {
         const errorLabel = capabilities.colors
-          ? `\x1b[31m场景: ${scenarioId} - 错误\x1b[0m`
-          : `场景: ${scenarioId} - 错误`;
+          ? `\x1b[31m${t('editor.preview.scenarios.error')}: ${scenarioId}\x1b[0m`
+          : `${t('editor.preview.scenarios.error')}: ${scenarioId}`;
 
         console.log(errorLabel);
-        console.log(`❌ 渲染失败: ${error instanceof Error ? error.message : String(error)}`);
+        console.log(`❌ ${t('messages.error')}: ${error instanceof Error ? error.message : String(error)}`);
         console.log();
       }
     }
@@ -224,6 +226,9 @@ export class ConfigEditor {
           case 'presets':
             await this.configurePresets();
             break;
+          case 'language':
+            await this.configureLanguage();
+            break;
           case 'reset':
             await this.resetConfiguration();
             break;
@@ -251,45 +256,50 @@ export class ConfigEditor {
    * 显示主菜单
    */
   private async showMainMenu(): Promise<string> {
-    const unsavedIndicator = this.hasUnsavedChanges ? ' (*)' : '';
+    const unsavedIndicator = this.hasUnsavedChanges ? t('editor.menu.unsavedIndicator') : '';
 
     return await select({
-      message: `配置菜单${unsavedIndicator}`,
+      message: `${t('editor.menu.title')}${unsavedIndicator}`,
       choices: [
         {
-          name: '🧩 组件配置 - 配置显示组件',
+          name: t('editor.menu.items.components.name'),
           value: 'components',
-          description: '启用/禁用和配置各个状态行组件',
+          description: t('editor.menu.items.components.description'),
         },
         {
-          name: '🎨 主题管理 - 主题管理',
+          name: t('editor.menu.items.themes.name'),
           value: 'themes',
-          description: '选择和自定义视觉主题',
+          description: t('editor.menu.items.themes.description'),
         },
         {
-          name: '💄 样式设置 - 样式设置',
+          name: t('editor.menu.items.styles.name'),
           value: 'styles',
-          description: '配置颜色、图标和视觉元素',
+          description: t('editor.menu.items.styles.description'),
         },
         {
-          name: '📋 组件预设 - 组件预设',
+          name: t('editor.menu.items.presets.name'),
           value: 'presets',
-          description: '管理组件顺序和预设配置',
+          description: t('editor.menu.items.presets.description'),
         },
         {
-          name: '🔄 重置配置 - 重置为默认',
+          name: t('editor.menu.items.language.name'),
+          value: 'language',
+          description: t('editor.menu.items.language.description'),
+        },
+        {
+          name: t('editor.menu.items.reset.name'),
           value: 'reset',
-          description: '将配置重置为出厂默认值',
+          description: t('editor.menu.items.reset.description'),
         },
         {
-          name: '💾 保存配置 - 保存配置',
+          name: t('editor.menu.items.save.name'),
           value: 'save',
-          description: '保存当前配置到文件',
+          description: t('editor.menu.items.save.description'),
         },
         {
-          name: '🚪 退出编辑器 - 退出编辑器',
+          name: t('editor.menu.items.exit.name'),
           value: 'exit',
-          description: '退出配置编辑器',
+          description: t('editor.menu.items.exit.description'),
         },
       ],
       pageSize: 10,
@@ -301,15 +311,15 @@ export class ConfigEditor {
    */
   private async configureComponents(): Promise<void> {
     const componentName = await select({
-      message: '选择要配置的组件：',
+      message: t('editor.components.title'),
       choices: [
-        { name: '📁 项目名称 - 项目名称显示', value: 'project' },
-        { name: '🤖 AI模型 - AI模型信息', value: 'model' },
-        { name: '🌿 Git分支 - Git分支显示', value: 'branch' },
-        { name: '📊 Token使用 - Token使用率和进度', value: 'tokens' },
-        { name: '💰 使用量统计 - 成本和使用量信息', value: 'usage' },
-        { name: '⚡ 会话状态 - 会话状态指示器', value: 'status' },
-        { name: '← 返回主菜单', value: 'back' },
+        { name: t('editor.components.items.project.name'), value: 'project' },
+        { name: t('editor.components.items.model.name'), value: 'model' },
+        { name: t('editor.components.items.branch.name'), value: 'branch' },
+        { name: t('editor.components.items.tokens.name'), value: 'tokens' },
+        { name: t('editor.components.items.usage.name'), value: 'usage' },
+        { name: t('editor.components.items.status.name'), value: 'status' },
+        { name: t('editor.components.items.back'), value: 'back' },
       ],
     });
 
@@ -332,15 +342,15 @@ export class ConfigEditor {
     ] as ComponentConfig;
 
     if (!component) {
-      console.log(`组件 ${componentName} 未找到`);
+      console.log(t('errors.componentNotFound', { component: componentName }));
       return;
     }
 
-    console.log(`\\n🔧 配置 ${componentName} 组件:`);
+    console.log(`\\n🔧 ${t('editor.components.configuration.enable', { component: componentName })}`);
 
     // 启用/禁用组件
     const enabled = await confirm({
-      message: `启用 ${componentName} 组件？`,
+      message: t('editor.components.configuration.enable', { component: componentName }),
       default: component.enabled,
     });
 
@@ -348,7 +358,7 @@ export class ConfigEditor {
     let icon = component.emoji_icon;
     if (enabled) {
       icon = await input({
-        message: `${componentName} 组件图标：`,
+        message: t('editor.components.configuration.icon', { component: componentName }),
         default: component.emoji_icon,
       });
     }
@@ -357,16 +367,16 @@ export class ConfigEditor {
     let color = component.icon_color;
     if (enabled) {
       color = await select({
-        message: `${componentName} 组件颜色：`,
+        message: t('editor.components.configuration.color', { component: componentName }),
         choices: [
-          { name: '青色 (默认)', value: 'cyan' },
-          { name: '绿色', value: 'green' },
-          { name: '黄色', value: 'yellow' },
-          { name: '蓝色', value: 'blue' },
-          { name: '紫红色', value: 'magenta' },
-          { name: '红色', value: 'red' },
-          { name: '白色', value: 'white' },
-          { name: '灰色', value: 'gray' },
+          { name: t('colors.cyan'), value: 'cyan' },
+          { name: t('colors.green'), value: 'green' },
+          { name: t('colors.yellow'), value: 'yellow' },
+          { name: t('colors.blue'), value: 'blue' },
+          { name: t('colors.magenta'), value: 'magenta' },
+          { name: t('colors.red'), value: 'red' },
+          { name: t('colors.white'), value: 'white' },
+          { name: t('colors.gray'), value: 'gray' },
         ],
         default: component.icon_color || 'cyan',
       });
@@ -395,7 +405,7 @@ export class ConfigEditor {
 
     this.hasUnsavedChanges = true;
 
-    console.log(`✅ ${componentName} 组件配置已更新！`);
+    console.log(t('editor.components.configuration.updated', { component: componentName }));
     await this.waitForKeyPress();
   }
 
@@ -404,16 +414,16 @@ export class ConfigEditor {
    */
   private async configureUsageComponent(): Promise<void> {
     const component = this.currentConfig.components?.usage;
-    
+
     if (!component) {
-      console.log('Usage组件配置未找到，将创建默认配置');
+      console.log(t('errors.componentNotFound', { component: 'Usage' }));
     }
 
-    console.log('\n💰 配置Usage组件:');
+    console.log(`\n${t('editor.usage.title')}`);
 
     // 启用/禁用组件
     const enabled = await confirm({
-      message: '启用Usage组件？',
+      message: t('editor.components.configuration.enable', { component: 'Usage' }),
       default: component?.enabled ?? false,
     });
 
@@ -426,32 +436,32 @@ export class ConfigEditor {
     if (enabled) {
       // 配置显示模式
       displayMode = await select({
-        message: '选择显示模式：',
+        message: t('editor.usage.displayMode.title'),
         choices: [
-          { name: 'cost - 仅显示成本 ($0.05)', value: 'cost' },
-          { name: 'tokens - 仅显示Token数量 (1.2K tokens)', value: 'tokens' },
-          { name: 'combined - 成本+Token ($0.05 (1.2K))', value: 'combined' },
-          { name: 'breakdown - 详细分解 (1.2Kin+0.8Kout+0.3Kcache)', value: 'breakdown' },
+          { name: t('editor.usage.displayMode.cost'), value: 'cost' },
+          { name: t('editor.usage.displayMode.tokens'), value: 'tokens' },
+          { name: t('editor.usage.displayMode.combined'), value: 'combined' },
+          { name: t('editor.usage.displayMode.breakdown'), value: 'breakdown' },
         ],
         default: component?.display_mode || 'combined',
       });
 
       // 配置是否显示模型名称
       showModel = await confirm({
-        message: '显示模型名称？',
+        message: t('editor.usage.showModel'),
         default: component?.show_model ?? false,
       });
 
       // 配置精度（仅在成本相关模式下显示）
       if (displayMode === 'cost' || displayMode === 'combined') {
         precision = await select({
-          message: '选择成本显示精度：',
+          message: t('editor.usage.precision.title'),
           choices: [
-            { name: '0位小数 ($1)', value: 0 },
-            { name: '1位小数 ($1.2)', value: 1 },
-            { name: '2位小数 ($1.23)', value: 2 },
-            { name: '3位小数 ($1.234)', value: 3 },
-            { name: '4位小数 ($1.2345)', value: 4 },
+            { name: t('editor.usage.precision.options.0'), value: 0 },
+            { name: t('editor.usage.precision.options.1'), value: 1 },
+            { name: t('editor.usage.precision.options.2'), value: 2 },
+            { name: t('editor.usage.precision.options.3'), value: 3 },
+            { name: t('editor.usage.precision.options.4'), value: 4 },
           ],
           default: component?.precision ?? 2,
         });
@@ -459,22 +469,22 @@ export class ConfigEditor {
 
       // 配置图标
       icon = await input({
-        message: 'Usage组件图标：',
+        message: t('editor.components.configuration.icon', { component: 'Usage' }),
         default: component?.emoji_icon || '💰',
       });
 
       // 配置颜色
       color = await select({
-        message: 'Usage组件颜色：',
+        message: t('editor.components.configuration.color', { component: 'Usage' }),
         choices: [
-          { name: '青色 (默认)', value: 'cyan' },
-          { name: '绿色', value: 'green' },
-          { name: '黄色', value: 'yellow' },
-          { name: '蓝色', value: 'blue' },
-          { name: '紫红色', value: 'magenta' },
-          { name: '红色', value: 'red' },
-          { name: '白色', value: 'white' },
-          { name: '灰色', value: 'gray' },
+          { name: t('colors.cyan'), value: 'cyan' },
+          { name: t('colors.green'), value: 'green' },
+          { name: t('colors.yellow'), value: 'yellow' },
+          { name: t('colors.blue'), value: 'blue' },
+          { name: t('colors.magenta'), value: 'magenta' },
+          { name: t('colors.red'), value: 'red' },
+          { name: t('colors.white'), value: 'white' },
+          { name: t('colors.gray'), value: 'gray' },
         ],
         default: component?.icon_color || 'cyan',
       });
@@ -507,7 +517,7 @@ export class ConfigEditor {
 
     this.hasUnsavedChanges = true;
 
-    console.log('✅ Usage组件配置已更新！');
+    console.log(t('editor.usage.updated'));
     await this.waitForKeyPress();
   }
 
@@ -662,6 +672,69 @@ export class ConfigEditor {
       console.log('✅ 配置已重置为默认值');
     } else {
       console.log('重置已取消');
+    }
+
+    await this.waitForKeyPress();
+  }
+
+  /**
+   * 配置语言设置 | Configure Language Settings
+   */
+  private async configureLanguage(): Promise<void> {
+    const i18nManager = getI18nManager();
+    const currentLang = getCurrentLanguage();
+    const supportedLanguages = i18nManager.getSupportedLanguages();
+
+    console.log(`\n${t('editor.language.title')}`);
+    
+    // 显示当前语言设置 | Display current language setting
+    const currentLangDisplay = currentLang === 'zh' ? '简体中文 (zh)' : 'English (en)';
+    console.log(`${t('editor.language.current')}: ${currentLangDisplay}`);
+    console.log();
+
+    // 语言选择界面 | Language selection interface
+    const selectedLang = await select({
+      message: t('editor.language.select'),
+      choices: [
+        {
+          name: '简体中文 (zh) - Chinese Simplified',
+          value: 'zh',
+          description: '使用中文界面 | Use Chinese interface',
+        },
+        {
+          name: 'English (en) - English',
+          value: 'en', 
+          description: 'Use English interface | 使用英文界面',
+        },
+        {
+          name: t('editor.components.items.back'),
+          value: 'back',
+        },
+      ],
+      default: currentLang,
+    });
+
+    if (selectedLang === 'back') return;
+
+    // 如果语言有变化，应用新语言设置 | Apply new language setting if changed
+    if (selectedLang !== currentLang) {
+      try {
+        // 设置新语言 | Set new language
+        await setLanguage(selectedLang as 'zh' | 'en');
+        
+        // 更新配置对象中的语言设置 | Update language setting in config object
+        this.currentConfig.language = selectedLang as 'zh' | 'en';
+        this.hasUnsavedChanges = true;
+
+        // 显示成功消息 | Display success message
+        const newLangDisplay = selectedLang === 'zh' ? '简体中文' : 'English';
+        console.log(`${t('editor.language.updated')}: ${newLangDisplay}`);
+        console.log(`${t('editor.language.immediate')}`);
+      } catch (error) {
+        console.error(`${t('editor.language.failed')}:`, error);
+      }
+    } else {
+      console.log(t('editor.language.noChange'));
     }
 
     await this.waitForKeyPress();
