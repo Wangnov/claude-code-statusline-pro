@@ -1,4 +1,8 @@
 import { defineConfig } from 'tsup';
+import { readFileSync } from 'fs';
+
+// 读取版本号用于构建时注入
+const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
 export default defineConfig([
   // Library entry
@@ -11,6 +15,9 @@ export default defineConfig([
     sourcemap: true,
     clean: true,
     splitting: false,
+    define: {
+      '__PACKAGE_VERSION__': JSON.stringify(packageJson.version),
+    },
   },
   // CLI entry
   {
