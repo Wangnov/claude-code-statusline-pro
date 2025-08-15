@@ -16,10 +16,18 @@ import type { InputData } from '../config/schema.js';
 import { StatuslineGenerator } from '../core/generator.js';
 import { detect as detectTerminalCapabilities } from '../terminal/detector.js';
 import { ConfigEditor } from './config-editor.js';
+import { initializeI18n, t } from './i18n.js';
 import { formatCliMessage } from './message-icons.js';
 import { MockDataGenerator } from './mock-data.js';
 
 const program = new Command();
+
+/**
+ * 初始化应用程序 | Initialize application
+ */
+async function initializeApp(): Promise<void> {
+  await initializeI18n();
+}
 
 /**
  * 主程序入口点 - Statusline生成器
@@ -33,14 +41,18 @@ program
   .version('2.0.0-beta.1')
   .argument('[preset]', 'preset string like PMBT (Project, Model, Branch, Tokens)')
   .option('-p, --preset <preset>', 'component preset override')
-  .option('-t, --theme <theme>', 'theme name (minimal, verbose, developer)')
+  .option('-t, --theme <theme>', 'theme name (classic, powerline, capsule)')
   .option('--no-colors', 'disable colors output')
   .option('--no-emoji', 'disable emoji output')
   .option('--no-icons', 'disable Nerd Font icons')
   .option('-c, --config <path>', 'custom config file path')
   .option('-d, --debug', 'debug mode with verbose output')
-  .option('-m, --mock <scenario>', 'use mock data scenario (dev, critical, error, thinking, complete)')
+  .option(
+    '-m, --mock <scenario>',
+    'use mock data scenario (dev, critical, error, thinking, complete)'
+  )
   .action(async (preset, options) => {
+    await initializeApp();
     try {
       // 加载配置，内联参数具有最高优先级
       const configLoader = new ConfigLoader();
@@ -95,6 +107,7 @@ program
         const mockData = mockGenerator.generate(options.mock);
         const result = await generator.generate(mockData);
         console.log(result);
+        process.exit(0);
         return;
       }
 
@@ -108,6 +121,7 @@ program
 
       const result = await generator.generate(inputData);
       console.log(result);
+      process.exit(0);
     } catch (error) {
       if (options.debug) {
         console.error('Error:', error);
@@ -130,6 +144,7 @@ program
   .option('-i, --init', 'initialize new configuration with intelligent terminal detection')
   .option('-t, --theme <theme>', 'specify theme for initialization (classic, powerline, capsule)')
   .action(async (options) => {
+    await initializeApp();
     try {
       const configLoader = new ConfigLoader();
 
@@ -138,27 +153,27 @@ program
         const exists = await configLoader.configExists(options.file);
 
         if (exists) {
-          console.log(formatCliMessage('info', 'Configuration file already exists.'));
+          console.log(formatCliMessage('info', t('config.exists')));
           const overwrite = await confirm({
-            message: 'Do you want to overwrite the existing configuration?',
+            message: t('config.overwrite'),
             default: false,
           });
 
           if (!overwrite) {
-            console.log(formatCliMessage('info', 'Configuration initialization cancelled.'));
+            console.log(formatCliMessage('info', t('messages.cancelled')));
             return;
           }
         }
 
         // 智能终端检测 | Intelligent terminal detection
-        console.log(formatCliMessage('info', 'Detecting terminal capabilities...'));
+        console.log(formatCliMessage('info', t('terminal.detection.title')));
         const capabilities = detectTerminalCapabilities();
 
         // 根据终端能力选择最佳主题 | Select optimal theme based on terminal capabilities
         let selectedTheme: string;
         if (options.theme) {
           selectedTheme = options.theme;
-          console.log(formatCliMessage('theme', `Using specified theme: ${selectedTheme}`));
+          console.log(formatCliMessage('theme', t('config.theme', { theme: selectedTheme })));
         } else {
           if (capabilities.nerdFont) {
             selectedTheme = 'powerline';
@@ -175,7 +190,7 @@ program
             selectedTheme = 'classic';
             console.log(
               formatCliMessage(
-                'warn',
+                'warning',
                 'Limited terminal capabilities - using Classic theme with text fallback'
               )
             );
@@ -185,11 +200,9 @@ program
         // 创建带有智能配置的默认文件 | Create default file with intelligent configuration
         await configLoader.createDefaultConfig(options.file, selectedTheme, capabilities);
 
-        console.log(formatCliMessage('success', 'Configuration file initialized successfully'));
-        console.log(formatCliMessage('folder', `Theme: ${selectedTheme}`));
-        console.log(
-          formatCliMessage('info', 'You can customize your configuration by editing config.toml')
-        );
+        console.log(formatCliMessage('success', t('config.initialized')));
+        console.log(formatCliMessage('folder', t('config.theme', { theme: selectedTheme })));
+        console.log(formatCliMessage('info', t('config.customization')));
         return;
       }
 
@@ -217,7 +230,7 @@ program
 program
   .command('theme')
   .description('theme management and selection')
-  .argument('[name]', 'theme name to apply (minimal, verbose, developer)')
+  .argument('[name]', 'theme name to apply (classic, powerline, capsule)')
   .action(async (name) => {
     try {
       if (name) {
@@ -366,18 +379,18 @@ async function readStdinData(): Promise<InputData> {
  */
 async function resetConfiguration(configPath?: string): Promise<void> {
   const confirm_reset = await confirm({
-    message: '确定要将配置重置为默认值吗？',
+    message: t('config.reset.confirm'),
     default: false,
   });
 
   if (!confirm_reset) {
-    console.log(formatCliMessage('info', '重置已取消。'));
+    console.log(formatCliMessage('info', t('messages.cancelled')));
     return;
   }
 
   const configLoader = new ConfigLoader();
   await configLoader.resetToDefaults(configPath);
-  console.log(formatCliMessage('success', '配置已重置为默认值'));
+  console.log(formatCliMessage('success', t('config.reset.success')));
 }
 
 /**
@@ -386,20 +399,22 @@ async function resetConfiguration(configPath?: string): Promise<void> {
 async function applyTheme(themeName: string): Promise<void> {
   const configLoader = new ConfigLoader();
   await configLoader.applyTheme(themeName);
-  console.log(formatCliMessage('success', `已应用主题: ${themeName}`));
+  console.log(formatCliMessage('success', t('editor.themes.applied', { theme: themeName })));
 }
 
 /**
  * 启动主题选择器
  */
 async function startThemeSelector(): Promise<void> {
+  await initializeApp();
+
   const theme = await select({
-    message: '选择主题：',
+    message: t('editor.themes.title'),
     choices: [
-      { name: '简洁主题 - 清爽简单', value: 'minimal' },
-      { name: '详细主题 - 详细信息', value: 'verbose' },
-      { name: '开发者主题 - 便于调试', value: 'developer' },
-      { name: '自定义主题 - 编辑当前主题', value: 'custom' },
+      { name: t('editor.themes.items.classic.name'), value: 'classic' },
+      { name: t('editor.themes.items.powerline.name'), value: 'powerline' },
+      { name: t('editor.themes.items.capsule.name'), value: 'capsule' },
+      { name: t('editor.themes.items.custom.name'), value: 'custom' },
     ],
   });
 
@@ -414,7 +429,7 @@ async function startThemeSelector(): Promise<void> {
 // 错误处理和优雅退出
 process.on('uncaughtException', (error) => {
   if (error instanceof Error && error.name === 'ExitPromptError') {
-    console.log(`\n${formatCliMessage('goodbye', 'Goodbye!')}`);
+    console.log(`\n${formatCliMessage('goodbye', t('messages.goodbye'))}`);
     process.exit(0);
   } else {
     console.error('Uncaught exception:', error);
@@ -423,7 +438,7 @@ process.on('uncaughtException', (error) => {
 });
 
 process.on('SIGINT', () => {
-  console.log(`\n${formatCliMessage('goodbye', 'Goodbye!')}`);
+  console.log(`\n${formatCliMessage('goodbye', t('messages.goodbye'))}`);
   process.exit(0);
 });
 

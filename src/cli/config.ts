@@ -1,214 +1,226 @@
 #!/usr/bin/env node
 
 /**
- * 配置管理 CLI 工具
- * 专门用于配置文件操作的独立工具
+ * Claude Code Statusline Pro - 配置管理 CLI 工具 | Configuration Management CLI Tool
+ * v2.0.0 重构版：简化命令结构，集成国际化支持，增强配置诊断
+ *
+ * 核心功能 | Core Features:
+ * - init: 智能终端检测和配置初始化
+ * - edit: 交互式配置编辑，集成验证和诊断功能
+ *
+ * @author Claude Code Team
+ * @version 2.0.0-beta.1
  */
 
 import { Command } from 'commander';
 import { ConfigLoader } from '../config/loader.js';
 import { detect as detectTerminalCapabilities } from '../terminal/detector.js';
 import { ConfigEditor } from './config-editor.js';
+import { initializeI18n, t } from './i18n.js';
 import { formatCliMessage } from './message-icons.js';
-import { LivePreviewEngine } from './preview-engine.js';
 
-const program = new Command();
+/**
+ * 初始化CLI程序 | Initialize CLI program
+ */
+async function initializeCLI(): Promise<Command> {
+  // 初始化国际化系统 | Initialize i18n system
+  await initializeI18n();
 
-program
-  .name('claude-statusline-config')
-  .description('Claude Code Statusline Pro configuration manager')
-  .version('2.0.0-beta.1');
+  const program = new Command();
 
-// 初始化配置文件
-program
-  .command('init')
-  .description('initialize configuration file with intelligent terminal detection')
-  .option('-f, --force', 'overwrite existing configuration')
-  .option('-t, --theme <theme>', 'specify theme (classic, powerline, capsule)')
-  .action(async (options) => {
-    try {
-      const configLoader = new ConfigLoader();
-      const exists = await configLoader.configExists();
+  program
+    .name('claude-statusline-config')
+    .description(t('cli.app.description'))
+    .version(t('cli.app.version'));
 
-      if (exists && !options.force) {
-        console.log(
-          formatCliMessage('info', 'Configuration file already exists. Use --force to overwrite.')
-        );
-        return;
-      }
+  return program;
+}
 
-      // 智能终端检测 | Intelligent terminal detection
-      console.log(formatCliMessage('info', 'Detecting terminal capabilities...'));
-      const capabilities = detectTerminalCapabilities();
+/**
+ * 配置初始化命令 | Configuration initialization command
+ * 智能终端检测，自动选择最佳主题和配置
+ */
+function registerInitCommand(program: Command): void {
+  program
+    .command('init')
+    .description(t('cli.commands.config.options.init'))
+    .option('-f, --force', t('cli.commands.config.options.reset'))
+    .option('-t, --theme <theme>', t('cli.commands.config.options.theme'))
+    .action(async (options) => {
+      try {
+        const configLoader = new ConfigLoader();
+        const exists = await configLoader.configExists();
 
-      // 根据终端能力选择最佳主题 | Select optimal theme based on terminal capabilities
-      let selectedTheme: string;
-      if (options.theme) {
-        selectedTheme = options.theme;
-        console.log(formatCliMessage('theme', `Using specified theme: ${selectedTheme}`));
-      } else {
-        if (capabilities.nerdFont) {
-          selectedTheme = 'powerline';
-          console.log(
-            formatCliMessage(
-              'success',
-              'Nerd Font detected - using Powerline theme for best experience'
-            )
-          );
-        } else if (capabilities.emoji) {
-          selectedTheme = 'classic';
-          console.log(formatCliMessage('info', 'Emoji support detected - using Classic theme'));
-        } else {
-          selectedTheme = 'classic';
-          console.log(
-            formatCliMessage(
-              'warn',
-              'Limited terminal capabilities - using Classic theme with text fallback'
-            )
-          );
+        if (exists && !options.force) {
+          console.log(formatCliMessage('info', `${t('config.exists')} ${t('config.overwrite')}`));
+          return;
         }
+
+        // 智能终端检测 | Intelligent terminal detection
+        console.log(formatCliMessage('info', t('terminal.detection.title')));
+        const capabilities = detectTerminalCapabilities();
+
+        // 显示检测结果 | Show detection results
+        console.log(
+          `   ${t('terminal.capabilities.colors')}: ${capabilities.colors ? '✅' : '❌'}`
+        );
+        console.log(`   ${t('terminal.capabilities.emoji')}: ${capabilities.emoji ? '✅' : '❌'}`);
+        console.log(
+          `   ${t('terminal.capabilities.nerdFont')}: ${capabilities.nerdFont ? '✅' : '❌'}`
+        );
+        console.log();
+
+        // 根据终端能力选择最佳主题 | Select optimal theme based on terminal capabilities
+        let selectedTheme: string;
+        if (options.theme) {
+          selectedTheme = options.theme;
+          console.log(formatCliMessage('theme', t('config.theme', { theme: selectedTheme })));
+        } else {
+          if (capabilities.nerdFont) {
+            selectedTheme = 'powerline';
+            console.log(
+              formatCliMessage('success', 'Nerd Font检测成功 - 使用Powerline主题获得最佳体验')
+            );
+          } else if (capabilities.emoji) {
+            selectedTheme = 'classic';
+            console.log(formatCliMessage('info', 'Emoji支持检测成功 - 使用Classic主题'));
+          } else {
+            selectedTheme = 'classic';
+            console.log(formatCliMessage('warn', '终端功能有限 - 使用Classic主题和文本回退模式'));
+          }
+        }
+
+        // 创建带有智能配置的默认文件 | Create default file with intelligent configuration
+        await configLoader.createDefaultConfig(undefined, selectedTheme, capabilities);
+
+        console.log(formatCliMessage('success', t('config.initialized')));
+        console.log(formatCliMessage('folder', t('config.theme', { theme: selectedTheme })));
+        console.log(formatCliMessage('info', t('config.customization')));
+      } catch (error) {
+        console.error(formatCliMessage('error', `${t('errors.configLoadFailed')}:`), error);
+        process.exit(1);
       }
+    });
+}
 
-      // 创建带有智能配置的默认文件 | Create default file with intelligent configuration
-      await configLoader.createDefaultConfig(undefined, selectedTheme, capabilities);
+/**
+ * 配置诊断功能 | Configuration diagnostic functionality
+ * 显示配置完整性状态和决策链路
+ */
+async function showConfigDiagnostics(
+  configLoader: ConfigLoader,
+  configPath?: string
+): Promise<void> {
+  try {
+    const config = await configLoader.load(configPath);
+    const configSource = configLoader.getConfigSource();
 
-      console.log(formatCliMessage('success', 'Configuration file initialized successfully'));
-      console.log(formatCliMessage('folder', `Theme: ${selectedTheme}`));
-      console.log(
-        formatCliMessage('info', 'You can customize your configuration by editing config.toml')
-      );
-    } catch (error) {
-      console.error(formatCliMessage('error', 'Failed to initialize config:'), error);
-      process.exit(1);
-    }
-  });
+    console.log(formatCliMessage('config', t('diagnosis.title')));
+    console.log('='.repeat(50));
 
-// 显示配置信息
-program
-  .command('show')
-  .description('show current configuration')
-  .option('-f, --file <path>', 'config file path')
-  .action(async (options) => {
-    try {
-      const configLoader = new ConfigLoader();
-      const config = await configLoader.load(options.file);
+    // 配置源信息 | Configuration source info
+    console.log(t('diagnosis.source') + (configSource || 'default'));
+    console.log(t('config.theme', { theme: config.theme || 'classic' }));
+    console.log(`${t('editor.presets.applied', { preset: config.preset || 'PMBTS' })}`);
+    console.log();
 
-      console.log(formatCliMessage('config', 'Current Configuration:'));
-      console.log('========================');
-      console.log(JSON.stringify(config, null, 2));
-      console.log(
-        `\n${formatCliMessage('folder', `Config source: ${configLoader.getConfigSource()}`)}`
-      );
-    } catch (error) {
-      console.error('Failed to show config:', error);
-      process.exit(1);
-    }
-  });
-
-// 交互式编辑
-program
-  .command('edit')
-  .description('open interactive configuration editor')
-  .option('-f, --file <path>', 'config file path')
-  .action(async (options) => {
-    try {
-      const editor = new ConfigEditor({
-        configPath: options.file,
-      });
-      await editor.startInteractiveMode();
-    } catch (error) {
-      console.error('Configuration editor failed:', error);
-      process.exit(1);
-    }
-  });
-
-// 预览配置效果
-program
-  .command('preview [theme]')
-  .description('preview configuration with mock data')
-  .option('-f, --file <path>', 'config file path')
-  .option('-s, --scenarios <scenarios...>', 'specific scenarios to preview')
-  .action(async (theme, options) => {
-    try {
-      const engine = new LivePreviewEngine({
-        configPath: options.file,
-        theme: theme,
+    // 组件启用状态诊断 | Component enable status diagnostic
+    console.log(`📊 ${t('editor.components.title')}`);
+    const components = Object.entries(config.components || {})
+      .filter(([key]) => key !== 'order')
+      .map(([name, component]: [string, unknown]) => {
+        const comp = component as Record<string, unknown> | null;
+        const isEnabled = comp?.enabled === true;
+        const statusIcon = isEnabled ? '✅' : '❌';
+        const componentName = t(`componentNames.${name}` as keyof typeof t);
+        return `   ${statusIcon} ${componentName} (${name})`;
       });
 
-      // 确保引擎初始化完成
-      await engine.initialize();
+    console.log(components.join('\n'));
 
-      const scenarios = options.scenarios || ['dev', 'critical', 'error'];
-      await engine.renderStaticPreview(scenarios);
-    } catch (error) {
-      console.error('Preview failed:', error);
-      process.exit(1);
-    }
-  });
+    // 终端能力状态 | Terminal capability status
+    console.log();
+    console.log(`🖥️  ${t('terminal.detection.title')}`);
+    const capabilities = detectTerminalCapabilities();
+    console.log(`   ${t('terminal.capabilities.colors')}: ${capabilities.colors ? '✅' : '❌'}`);
+    console.log(`   ${t('terminal.capabilities.emoji')}: ${capabilities.emoji ? '✅' : '❌'}`);
+    console.log(
+      `   ${t('terminal.capabilities.nerdFont')}: ${capabilities.nerdFont ? '✅' : '❌'}`
+    );
+  } catch (error) {
+    console.error(formatCliMessage('error', `${t('errors.configLoadFailed')}:`), error);
+    throw error;
+  }
+}
 
-// 验证配置
-program
-  .command('validate')
-  .description('validate configuration file')
-  .argument('[file]', 'config file path')
-  .action(async (file) => {
-    try {
-      const configLoader = new ConfigLoader();
-      const config = await configLoader.load(file);
+/**
+ * 交互式配置编辑命令 | Interactive configuration edit command
+ * 集成配置诊断、验证和完整性检查功能
+ */
+function registerEditCommand(program: Command): void {
+  program
+    .command('edit')
+    .description(t('cli.commands.config.description'))
+    .option('-f, --file <path>', t('cli.commands.config.options.file'))
+    .option('--diagnose', '显示配置诊断信息后进入编辑模式')
+    .action(async (options) => {
+      try {
+        const configLoader = new ConfigLoader();
 
-      console.log(formatCliMessage('success', 'Configuration is valid'));
-      console.log(formatCliMessage('folder', `Config source: ${configLoader.getConfigSource()}`));
-      console.log(formatCliMessage('theme', `Theme: ${config.theme || 'default'}`));
-      console.log(formatCliMessage('info', `Preset: ${config.preset || 'PMBTS'}`));
+        // 配置诊断模式 | Configuration diagnostic mode
+        if (options.diagnose) {
+          await showConfigDiagnostics(configLoader, options.file);
+          console.log();
+          console.log(formatCliMessage('info', t('messages.keyPress')));
+          // 等待用户按键 | Wait for user keypress (only in TTY environments)
+          if (process.stdin.isTTY) {
+            process.stdin.setRawMode(true);
+            process.stdin.resume();
+            process.stdin.once('data', () => {
+              process.stdin.setRawMode(false);
+              process.stdin.pause();
+            });
+            await new Promise((resolve) => process.stdin.once('data', resolve));
+          } else {
+            // 非TTY环境下使用简单延迟 | Use simple delay in non-TTY environments
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+          console.log();
+        }
 
-      // 组件状态
-      const components = Object.entries(config.components || {})
-        .filter(([key]) => key !== 'order')
-        .map(([name, component]: [string, unknown]) => {
-          const comp = component as Record<string, unknown> | null;
-          const statusIcon = comp?.enabled ? 'success' : 'error';
-          return `${formatCliMessage(statusIcon, '').trim()} ${name}`;
+        // 启动交互式编辑器 | Start interactive editor
+        const editor = new ConfigEditor({
+          configPath: options.file,
         });
+        await editor.startInteractiveMode();
+      } catch (error) {
+        console.error(formatCliMessage('error', `${t('errors.configLoadFailed')}:`), error);
+        process.exit(1);
+      }
+    });
+}
 
-      console.log(formatCliMessage('info', `Components: ${components.join(', ')}`));
-    } catch (error) {
-      console.error(formatCliMessage('error', 'Configuration validation failed:'));
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exit(1);
-    }
-  });
+/**
+ * 主程序入口 | Main program entry
+ */
+async function main(): Promise<void> {
+  try {
+    const program = await initializeCLI();
 
-// 重置配置
-program
-  .command('reset')
-  .description('reset configuration to defaults')
-  .option('-f, --file <path>', 'config file path')
-  .action(async (options) => {
-    try {
-      const configLoader = new ConfigLoader();
-      await configLoader.resetToDefaults(options.file);
-      console.log(formatCliMessage('success', 'Configuration reset to defaults'));
-    } catch (error) {
-      console.error('Failed to reset config:', error);
-      process.exit(1);
-    }
-  });
+    // 注册命令 | Register commands
+    registerInitCommand(program);
+    registerEditCommand(program);
 
-// 应用主题
-program
-  .command('theme')
-  .description('apply theme')
-  .argument('<name>', 'theme name (minimal, verbose, developer)')
-  .option('-f, --file <path>', 'config file path')
-  .action(async (name, options) => {
-    try {
-      const configLoader = new ConfigLoader();
-      await configLoader.applyTheme(name, options.file);
-      console.log(formatCliMessage('success', `Applied theme: ${name}`));
-    } catch (error) {
-      console.error('Failed to apply theme:', error);
-      process.exit(1);
-    }
-  });
+    // 解析命令行参数 | Parse command line arguments
+    await program.parseAsync();
+  } catch (error) {
+    console.error(formatCliMessage('error', `${t('errors.configLoadFailed')}:`), error);
+    process.exit(1);
+  }
+}
 
-program.parse();
+// 启动主程序 | Start main program
+main().catch((error) => {
+  console.error('Fatal error:', error);
+  process.exit(1);
+});

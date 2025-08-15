@@ -7,19 +7,40 @@
  * @license MIT
  */
 
+// 组件配置映射系统导出 (Component configuration mapping system exports)
+export {
+  ComponentConfigMapper,
+  defaultComponentConfigMapper,
+  formatComponentConfigSummary,
+  getComponentConfigCategoriesCount,
+  getComponentConfigItemCount,
+  isValidComponent,
+} from './cli/component-config-mapper.js';
 export { ConfigEditor, createConfigEditor } from './cli/config-editor.js';
+// 国际化系统导出 (I18n system exports)
+export {
+  getCurrentLanguage,
+  getI18nManager,
+  I18nManager,
+  initializeI18n,
+  setLanguage,
+  t,
+} from './cli/i18n.js';
 // CLI 工具导出 (供高级用户使用)
 export {
   CliMessageIconManager,
   formatCliMessage,
+  formatLocalizedCliMessage,
   getCliIcon,
+  getCliIconDescription,
   getCliIconManager,
+  initializeCliIconManager,
 } from './cli/message-icons.js';
 export { MockDataGenerator, mockDataGenerator } from './cli/mock-data.js';
 export { createLivePreviewEngine, LivePreviewEngine } from './cli/preview-engine.js';
 // 组件系统导出
 export { Component, ComponentFactory, ComponentRegistry } from './components/base.js';
-export { BranchComponent } from './components/branch.js';
+export { BranchComponent, BranchComponentFactory } from './components/branch.js';
 export { ModelComponent } from './components/model.js';
 export { ProjectComponent } from './components/project.js';
 export { StatusComponent } from './components/status.js';
@@ -62,6 +83,16 @@ export type {
 // 类型定义导出
 import type { InputData } from './config/schema.js';
 
+export type {
+  SupportedLanguage,
+  TranslationKeys,
+  TranslationParams,
+} from './cli/i18n.js';
+// CLI和i18n类型导出
+export type {
+  CliIconMap,
+  CliMessageIconOptions,
+} from './cli/message-icons.js';
 export type {
   ComponentConfig,
   ComponentMetadata,

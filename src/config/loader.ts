@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import TOML from '@iarna/toml';
 import type { ZodError } from 'zod';
+import { detectSystemLanguage, getI18nManager } from '../cli/i18n.js';
 import type { TerminalCapabilities } from '../terminal/detector.js';
 import { type ComponentsConfig, type Config, ConfigSchema } from './schema.js';
 
@@ -42,6 +43,18 @@ export interface ConfigLoadOptions {
 export class ConfigLoader {
   private cachedConfig: Config | null = null;
   private configPath: string | null = null;
+  private i18nManager: any = null; // 延迟初始化以避免循环依赖 | Lazy initialization to avoid circular dependency
+
+  /**
+   * 获取i18n管理器实例 | Get i18n manager instance
+   * 延迟初始化以避免循环依赖 | Lazy initialization to avoid circular dependency
+   */
+  private getI18n() {
+    if (!this.i18nManager) {
+      this.i18nManager = getI18nManager();
+    }
+    return this.i18nManager;
+  }
 
   /**
    * 查找配置文件 | Find config file
@@ -75,6 +88,7 @@ export class ConfigLoader {
 
   /**
    * 深度合并对象 | Deep merge objects
+   * 增强版本，更好地处理配置合并 | Enhanced version for better config merging
    */
   private deepMerge<T extends Record<string, unknown>>(target: T, source: Partial<T>): T {
     const result = { ...target };
@@ -83,12 +97,27 @@ export class ConfigLoader {
       const sourceValue = source[key];
       const targetValue = result[key];
 
-      if (sourceValue && typeof sourceValue === 'object' && !Array.isArray(sourceValue)) {
+      if (sourceValue === undefined || sourceValue === null) {
+        // 跳过undefined和null值，保留目标值 | Skip undefined/null values, keep target value
+        continue;
+      }
+
+      if (Array.isArray(sourceValue)) {
+        // 数组直接覆盖 | Arrays directly override
+        result[key] = [...sourceValue] as T[Extract<keyof T, string>];
+      } else if (
+        sourceValue &&
+        typeof sourceValue === 'object' &&
+        typeof targetValue === 'object' &&
+        !Array.isArray(targetValue)
+      ) {
+        // 递归合并对象 | Recursively merge objects
         result[key] = this.deepMerge(
-          targetValue || ({} as Record<string, unknown>),
-          sourceValue
+          (targetValue as Record<string, unknown>) || {},
+          sourceValue as Record<string, unknown>
         ) as T[Extract<keyof T, string>];
-      } else if (sourceValue !== undefined) {
+      } else {
+        // 基础类型或特殊情况直接覆盖 | Primitive types or special cases directly override
         result[key] = sourceValue as T[Extract<keyof T, string>];
       }
     }
@@ -162,13 +191,21 @@ export class ConfigLoader {
     }
 
     // 更新组件启用状态 | Update component enabled status
+    // 注意：用户明确设置的enabled状态应该优先于preset
     const allComponents = Object.values(mapping);
     for (const componentName of allComponents) {
       if (updatedConfig.components) {
         const component =
           updatedConfig.components[componentName as keyof typeof updatedConfig.components];
-        if (component && typeof component === 'object' && 'enabled' in component) {
-          (component as Record<string, unknown>).enabled = newOrder.includes(componentName);
+        // 确保component是对象且不是数组（排除order等数组字段）
+        if (component && typeof component === 'object' && !Array.isArray(component)) {
+          // 只有当用户没有明确设置enabled时，才应用preset的启用状态
+          // Only apply preset's enabled status when user hasn't explicitly set enabled
+          if (!('enabled' in component)) {
+            (component as Record<string, unknown>).enabled = newOrder.includes(componentName);
+          }
+          // 如果用户已经明确设置了enabled，保持用户的设置不变
+          // If user has explicitly set enabled, keep user's setting unchanged
         }
       }
     }
@@ -288,15 +325,32 @@ export class ConfigLoader {
           // 深度清理 TOML 解析后的 Symbol 属性
           const cleanedConfig = this.cleanSymbols(parsedToml);
 
-          // 直接验证新格式配置 | Directly validate new format config
-          userConfig = ConfigSchema.parse(cleanedConfig);
+          // 与默认配置深度合并以确保完整性 | Deep merge with defaults to ensure completeness
+          const defaultConfig = this.getDefaultConfig();
+          const mergedConfig = this.deepMerge(defaultConfig, cleanedConfig as Partial<Config>);
+
+          // 验证合并后的完整配置 | Validate merged complete config
+          userConfig = ConfigSchema.parse(mergedConfig);
         } catch (error) {
-          console.warn(`Failed to parse config file ${this.configPath}:`, error);
-          throw error;
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.warn(`Failed to parse config file ${this.configPath}:`);
+          console.warn(`Error: ${errorMessage}`);
+
+          // 提供恢复建议 | Provide recovery suggestions
+          if (errorMessage.includes('TOML')) {
+            console.warn('Suggestion: Check TOML syntax in your config file');
+            console.warn(`You can run 'npm run config validate' to check the file`);
+          } else if (errorMessage.includes('language')) {
+            console.warn('Suggestion: Check language field (should be "zh" or "en")');
+          }
+
+          console.warn('Falling back to default configuration...');
+          // 不抛出错误，而是继续使用默认配置 | Don't throw error, continue with default config
+          userConfig = this.getDefaultConfig();
         }
       } else {
-        // 没有找到配置文件，使用默认配置
-        userConfig = ConfigSchema.parse({});
+        // 没有找到配置文件，使用完整的默认配置 | No config file found, use complete default config
+        userConfig = this.getDefaultConfig();
       }
 
       // 命令行预设覆盖 | Command line preset override
@@ -324,6 +378,15 @@ export class ConfigLoader {
       // 应用主题配置 | Apply theme config
       finalConfig = await this.applyThemeConfig(finalConfig);
 
+      // 设置i18n语言 | Set i18n language
+      if (finalConfig.language) {
+        try {
+          await this.getI18n().setLanguage(finalConfig.language as 'zh' | 'en');
+        } catch (error) {
+          console.warn('Failed to set language from config, using default:', error);
+        }
+      }
+
       // 缓存配置 | Cache config
       this.cachedConfig = finalConfig;
 
@@ -334,15 +397,40 @@ export class ConfigLoader {
         const zodError = error as ZodError;
         console.error('Configuration validation failed:');
         for (const issue of zodError.issues) {
-          console.error(`  ${issue.path.join('.')}: ${issue.message}`);
+          const pathString = issue.path.length > 0 ? issue.path.join('.') : 'root';
+          console.error(`  ${pathString}: ${issue.message}`);
+
+          // 提供具体的修复建议 | Provide specific fix suggestions
+          if (issue.path.includes('language')) {
+            console.error('    Hint: language should be "zh" or "en"');
+          } else if (issue.path.includes('theme')) {
+            console.error('    Hint: theme should be "classic", "powerline", or "capsule"');
+          } else if (issue.code === 'invalid_type') {
+            const invalidTypeIssue = issue as any; // Type assertion for Zod issue
+            console.error(
+              `    Hint: expected ${invalidTypeIssue.expected}, got ${invalidTypeIssue.received}`
+            );
+          }
         }
+        console.error('\nTo fix validation errors:');
+        console.error('1. Check the config file syntax and field types');
+        console.error('2. Run "npm run config validate" to test your changes');
+        console.error('3. Run "npm run config reset" to restore defaults');
       } else {
-        console.error('Failed to load configuration:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Failed to load configuration:', errorMessage);
+
+        // 根据错误类型提供建议 | Provide suggestions based on error type
+        if (errorMessage.includes('ENOENT') || errorMessage.includes('not found')) {
+          console.error('Suggestion: Config file not found, creating default configuration');
+        } else if (errorMessage.includes('EACCES') || errorMessage.includes('permission')) {
+          console.error('Suggestion: Check file permissions for config.toml');
+        }
       }
 
       // 返回默认配置 | Return default config
-      console.warn('Using default configuration');
-      const defaultConfig = ConfigSchema.parse({});
+      console.warn('\nUsing default configuration as fallback');
+      const defaultConfig = this.getDefaultConfig();
       this.cachedConfig = this.applyPreset(defaultConfig);
       return this.cachedConfig;
     }
@@ -380,14 +468,26 @@ export class ConfigLoader {
       const parsedToml = TOML.parse(configContent);
 
       // 验证配置 | Validate config
-      ConfigSchema.parse(parsedToml);
+      const validatedConfig = ConfigSchema.parse(parsedToml);
+
+      // 额外的语言相关验证 | Additional language-related validation
+      const additionalErrors = this.validateLanguageFields(validatedConfig);
+
+      if (additionalErrors.length > 0) {
+        return { valid: false, errors: additionalErrors };
+      }
 
       return { valid: true, errors: [] };
     } catch (error) {
       if (error instanceof Error && 'issues' in error) {
         const zodError = error as ZodError;
         for (const issue of zodError.issues) {
-          errors.push(`${issue.path.join('.')}: ${issue.message}`);
+          // 过滤掉Symbol值，只保留字符串和数字 | Filter out Symbol values, keep only strings and numbers
+          const pathParts = issue.path.filter(
+            (part) => typeof part === 'string' || typeof part === 'number'
+          );
+          const pathString = pathParts.length > 0 ? pathParts.join('.') : 'root';
+          errors.push(`${pathString}: ${issue.message}`);
         }
       } else {
         errors.push(error instanceof Error ? error.message : 'Unknown error');
@@ -398,6 +498,43 @@ export class ConfigLoader {
   }
 
   /**
+   * 验证语言相关字段 | Validate language-related fields
+   * 提供专门的语言配置验证 | Provides specialized language config validation
+   */
+  private validateLanguageFields(config: Config): string[] {
+    const errors: string[] = [];
+
+    // 验证语言字段 | Validate language field
+    if (config.language) {
+      const supportedLanguages = ['zh', 'en'];
+      if (!supportedLanguages.includes(config.language)) {
+        errors.push(
+          `Invalid language "${config.language}". Supported languages: ${supportedLanguages.join(', ')}`
+        );
+      }
+
+      // 检查语言与i18n系统的兼容性 | Check compatibility with i18n system
+      if (!this.getI18n().isLanguageSupported(config.language)) {
+        errors.push(`Language "${config.language}" is not supported by the i18n system`);
+      }
+    }
+
+    // 验证主题与语言的兼容性 | Validate theme-language compatibility
+    if (config.theme && config.language) {
+      // 这里可以添加特定主题与语言组合的验证逻辑
+      // For now, all themes support all languages
+    }
+
+    // 验证终端能力与语言的兼容性 | Validate terminal capabilities with language
+    if (config.terminal && config.language) {
+      // 语言字段对终端能力没有特殊要求，但可以在这里添加未来的验证逻辑
+      // No special requirements for terminal capabilities with language, but could add future validation logic here
+    }
+
+    return errors;
+  }
+
+  /**
    * 别名方法
    */
   async load(configPath?: string): Promise<Config> {
@@ -405,10 +542,48 @@ export class ConfigLoader {
   }
 
   /**
-   * 获取配置源路径
+   * 获取配置源信息 | Get configuration source information
+   * 提供详细的配置来源追踪 | Provides detailed config source tracking
    */
-  getConfigSource(): string | null {
-    return this.configPath;
+  getConfigSource(): { path: string | null; type: string; exists: boolean; readable: boolean } {
+    if (!this.configPath) {
+      return {
+        path: null,
+        type: 'default',
+        exists: false,
+        readable: false,
+      };
+    }
+
+    const exists = fs.existsSync(this.configPath);
+    let readable = false;
+
+    if (exists) {
+      try {
+        // 检查文件是否可读 | Check if file is readable
+        fs.accessSync(this.configPath, fs.constants.R_OK);
+        readable = true;
+      } catch {
+        readable = false;
+      }
+    }
+
+    // 确定配置类型 | Determine config type
+    let type = 'unknown';
+    if (this.configPath.includes(process.cwd())) {
+      type = 'project';
+    } else if (this.configPath.includes('.config')) {
+      type = 'user';
+    } else if (this.configPath.includes('configs')) {
+      type = 'template';
+    }
+
+    return {
+      path: this.configPath,
+      type,
+      exists,
+      readable,
+    };
   }
 
   /**
@@ -446,6 +621,12 @@ export class ConfigLoader {
           (parsedConfig as Record<string, unknown>).theme = theme;
         }
 
+        // 智能语言检测 | Intelligent language detection
+        if (!(parsedConfig as Record<string, unknown>).language) {
+          const detectedLanguage = detectSystemLanguage();
+          (parsedConfig as Record<string, unknown>).language = detectedLanguage;
+        }
+
         // 根据终端能力调整配置 | Adjust config based on terminal capabilities
         if (capabilities) {
           const styleSection =
@@ -470,9 +651,11 @@ export class ConfigLoader {
       } else {
         // 回退到基础配置 | Fallback to basic config
         console.warn('Default config template not found, using basic configuration');
+        const detectedLanguage = detectSystemLanguage();
         const defaultConfig = ConfigSchema.parse({
           preset: 'PMBTS',
           theme: theme || 'classic',
+          language: detectedLanguage,
         });
         configContent = TOML.stringify(defaultConfig as TOML.JsonMap);
       }
@@ -488,9 +671,11 @@ export class ConfigLoader {
       console.error('Failed to create default config from template, using fallback:', error);
 
       // 最终回退：创建基础配置 | Final fallback: create basic config
+      const detectedLanguage = detectSystemLanguage();
       const fallbackConfig = ConfigSchema.parse({
         preset: 'PMBTS',
         theme: theme || 'classic',
+        language: detectedLanguage,
       });
       const targetPath = configPath || path.join(process.cwd(), 'config.toml');
       const tomlContent = TOML.stringify(fallbackConfig as TOML.JsonMap);
@@ -515,10 +700,14 @@ export class ConfigLoader {
   }
 
   /**
-   * 重置配置到默认值
+   * 重置配置到默认值 | Reset configuration to defaults
+   * 包含智能语言检测 | Includes intelligent language detection
    */
   async resetToDefaults(configPath?: string): Promise<void> {
-    const defaultConfig = ConfigSchema.parse({});
+    const detectedLanguage = detectSystemLanguage();
+    const defaultConfig = ConfigSchema.parse({
+      language: detectedLanguage,
+    });
     await this.save(defaultConfig, configPath);
   }
 
@@ -538,10 +727,14 @@ export class ConfigLoader {
   }
 
   /**
-   * 获取默认配置
+   * 获取默认配置 | Get default configuration
+   * 包含智能语言检测 | Includes intelligent language detection
    */
   getDefaultConfig(): Config {
-    return ConfigSchema.parse({});
+    const detectedLanguage = detectSystemLanguage();
+    return ConfigSchema.parse({
+      language: detectedLanguage,
+    });
   }
 }
 
