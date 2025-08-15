@@ -2,7 +2,7 @@
  * Claude Code Statusline Pro - 公共API导出
  * Enhanced statusline for Claude Code with TypeScript, live preview, and interactive configuration
  *
- * @version 2.0.0-beta.1
+ * @version 2.0.0
  * @author wangnov
  * @license MIT
  */
@@ -130,7 +130,24 @@ export * from './utils/index.js';
 /**
  * 版本信息
  */
-export const VERSION = '2.0.0-beta.1';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+// 动态读取 package.json 中的版本号
+function getVersion(): string {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const packagePath = join(__dirname, '..', 'package.json');
+    const packageJson = JSON.parse(readFileSync(packagePath, 'utf-8'));
+    return packageJson.version;
+  } catch {
+    return '2.0.0'; // fallback version
+  }
+}
+
+export const VERSION = getVersion();
 
 /**
  * 默认导出 - 主要的StatuslineGenerator类

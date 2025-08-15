@@ -9,7 +9,7 @@
  * - edit: 交互式配置编辑，集成验证和诊断功能
  *
  * @author Claude Code Team
- * @version 2.0.0-beta.1
+ * @version 2.0.0
  */
 
 import { Command } from 'commander';

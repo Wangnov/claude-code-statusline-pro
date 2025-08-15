@@ -1,6 +1,6 @@
 {
   "name": "claude-code-statusline-pro",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Enhanced configurable statusline for Claude Code with preset system, TOML configuration, and cross-platform support",
   "type": "module",
   "main": "./dist/index.cjs",
