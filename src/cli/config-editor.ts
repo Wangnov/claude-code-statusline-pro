@@ -52,6 +52,8 @@ export class ConfigEditor {
   private currentConfig!: Config;
   private options: Required<ConfigEditorOptions>;
   private hasUnsavedChanges = false;
+  
+  // 编辑器实例 | Editor instances
   private presetEditor!: PresetEditor;
   private componentEditor!: ComponentEditor;
   private themeEditor!: ThemeEditor;

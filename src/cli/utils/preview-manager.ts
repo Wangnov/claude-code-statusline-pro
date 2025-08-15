@@ -14,7 +14,7 @@ import { confirm, select } from '@inquirer/prompts';
 import type { Config } from '../../config/schema.js';
 import { StatuslineGenerator } from '../../core/generator.js';
 import { TerminalDetector } from '../../terminal/detector.js';
-import { getCurrentLanguage, t } from '../i18n.js';
+import { getCurrentLanguage } from '../i18n.js';
 import { MockDataGenerator } from '../mock-data.js';
 
 /**
@@ -242,14 +242,14 @@ export class PreviewManager {
 
     // 1. 顶部: 完整场景的mock数据预览
     await this.renderSingleScenarioPreview(config, 'complete');
-    
+
     console.log();
-    
+
     // 2. 上中部: 配置摘要
     this.showConfigSummary(config);
-    
+
     console.log();
-    
+
     // 3. 中下部准备: 分隔线
     const separator = '─'.repeat(70);
     console.log(separator);
@@ -262,10 +262,10 @@ export class PreviewManager {
     try {
       const mockGenerator = new MockDataGenerator();
       const mockData = mockGenerator.generate(scenarioId);
-      
+
       const generator = new StatuslineGenerator(config, { disableCache: true });
       const output = await generator.generate(mockData);
-      
+
       console.log(output);
     } catch (error) {
       console.log(`预览生成失败: ${error instanceof Error ? error.message : String(error)}`);

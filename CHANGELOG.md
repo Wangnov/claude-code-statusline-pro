@@ -4,6 +4,49 @@
 
 All notable changes to this project will be documented in this file. The project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2025-08-15
+
+### 🎉 正式版发布 | Official Release
+
+#### ✨ 新增功能 | New Features
+
+##### 🔍 智能终端能力检测 | Smart Terminal Capability Detection
+- **VS Code/Cursor settings.json字体检测** | VS Code/Cursor settings.json font detection
+  - 自动读取编辑器配置文件 | Automatically read editor configuration files
+  - 支持terminal.integrated.fontFamily | Support terminal.integrated.fontFamily
+  - 自动回退到editor.fontFamily | Automatic fallback to editor.fontFamily
+  - 支持Windows/macOS/Linux全平台 | Support Windows/macOS/Linux platforms
+- **增强的Nerd Font检测** | Enhanced Nerd Font detection
+  - 50+种Nerd Font字体模式识别 | 50+ Nerd Font pattern recognition
+  - 支持VS Code Portable版本 | Support VS Code Portable version
+  - 支持工作区和全局配置 | Support workspace and global configuration
+- **智能三级图标回退机制** | Smart three-level icon fallback mechanism
+  - Nerd Font图标（最佳体验）| Nerd Font icons (best experience)
+  - Emoji图标（良好兼容性）| Emoji icons (good compatibility)
+  - 文本图标（最大兼容性）| Text icons (maximum compatibility)
+
+##### 🔧 终端检测修复 | Terminal Detection Fixes
+- **修复macOS下emoji回退机制** | Fixed emoji fallback on macOS
+- **修复参数传递错误** | Fixed parameter passing errors
+- **优化VS Code/Cursor终端检测** | Optimized VS Code/Cursor terminal detection
+
+### 📝 配置改进 | Configuration Improvements
+- **自动配置检测优化** | Automatic configuration detection optimization
+- **更智能的默认值处理** | Smarter default value handling
+- **配置文件注释支持** | Configuration file comment support
+
+### 🐛 问题修复 | Bug Fixes
+- **修复detect()函数参数顺序问题** | Fixed detect() function parameter order issue
+- **修复配置参数映射错误** | Fixed configuration parameter mapping errors
+- **修复Windows路径处理问题** | Fixed Windows path handling issues
+
+### 📚 文档更新 | Documentation Updates
+- **更新终端适配文档** | Updated terminal adaptation documentation
+- **添加VS Code/Cursor配置说明** | Added VS Code/Cursor configuration instructions
+- **完善开发指南** | Improved development guide
+
+---
+
 ## [2.0.0-beta.1] - 2025-08-15
 
 ### 🚀 重大更新 | Major Updates
