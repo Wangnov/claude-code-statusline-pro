@@ -3,9 +3,9 @@
  * 检测终端对颜色、表情符号、Nerd Font的支持 | Detect terminal support for colors, emojis, Nerd Font
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 /**
  * 终端能力接口 | Terminal capabilities interface
@@ -164,7 +164,9 @@ function detectEmoji(
     process_info.push({
       stage: '平台检查',
       result: !isWindows,
-      reason: isWindows ? 'Windows平台，需要检查终端支持' : `${isMacOS ? 'macOS' : isLinux ? 'Linux' : '非Windows'}平台，默认支持表情符号`,
+      reason: isWindows
+        ? 'Windows平台，需要检查终端支持'
+        : `${isMacOS ? 'macOS' : isLinux ? 'Linux' : '非Windows'}平台，默认支持表情符号`,
       source: `platform=${process.platform}`,
     });
   }
@@ -182,7 +184,7 @@ function detectEmoji(
         });
       }
     }
-    
+
     if (debug) {
       process_info.push({
         stage: '表情符号检测结果',
@@ -421,11 +423,11 @@ function detectVSCodeFont(debug = false): { result: boolean; info?: DetectionInf
   }
 
   // 尝试读取VS Code/Cursor的settings.json
-  
+
   // 获取可能的配置文件路径
   const possiblePaths: string[] = [];
   const home = os.homedir();
-  
+
   // VS Code和Cursor配置路径
   if (process.platform === 'darwin') {
     // macOS
@@ -440,21 +442,29 @@ function detectVSCodeFont(debug = false): { result: boolean; info?: DetectionInf
       path.join(appData, 'Code', 'User', 'settings.json'),
       path.join(appData, 'Cursor', 'User', 'settings.json')
     );
-    
+
     // 也检查LOCALAPPDATA位置（一些版本可能使用）
     const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
     possiblePaths.push(
-      path.join(localAppData, 'Programs', 'Microsoft VS Code', 'resources', 'app', 'extensions', 'settings.json')
+      path.join(
+        localAppData,
+        'Programs',
+        'Microsoft VS Code',
+        'resources',
+        'app',
+        'extensions',
+        'settings.json'
+      )
     );
   } else {
     // Linux
     possiblePaths.push(
       path.join(home, '.config', 'Code', 'User', 'settings.json'),
       path.join(home, '.config', 'Cursor', 'User', 'settings.json'),
-      path.join(home, '.config', 'Code - OSS', 'User', 'settings.json')  // Open Source 版本
+      path.join(home, '.config', 'Code - OSS', 'User', 'settings.json') // Open Source 版本
     );
   }
-  
+
   // 工作区配置
   const cwd = process.cwd();
   if (cwd) {
@@ -463,7 +473,7 @@ function detectVSCodeFont(debug = false): { result: boolean; info?: DetectionInf
       path.join(cwd, '.cursor', 'settings.json')
     );
   }
-  
+
   // 从环境变量中获取额外的配置路径
   if (process.env.VSCODE_PORTABLE) {
     // VS Code Portable 版本
@@ -471,46 +481,47 @@ function detectVSCodeFont(debug = false): { result: boolean; info?: DetectionInf
       path.join(process.env.VSCODE_PORTABLE, 'user-data', 'User', 'settings.json')
     );
   }
-  
+
   let fontDetected = false;
   let detectedFont = '';
-  
+
   for (const configPath of possiblePaths) {
     try {
       if (fs.existsSync(configPath)) {
         const content = fs.readFileSync(configPath, 'utf-8');
-        
+
         // 移除注释以避免JSON解析错误
         const jsonContent = content
-          .replace(/\/\/.*$/gm, '')  // 移除单行注释
-          .replace(/\/\*[\s\S]*?\*\//g, '');  // 移除多行注释
-        
+          .replace(/\/\/.*$/gm, '') // 移除单行注释
+          .replace(/\/\*[\s\S]*?\*\//g, ''); // 移除多行注释
+
         try {
           const settings = JSON.parse(jsonContent);
-          
+
           // 检查terminal.integrated.fontFamily
           // 如果没有设置终端字体，VS Code/Cursor会使用编辑器字体
-          const terminalFont = settings['terminal.integrated.fontFamily'] || 
-                             settings['terminal']?.['integrated']?.['fontFamily'] ||
-                             settings['editor.fontFamily'] ||
-                             settings['editor']?.['fontFamily'];
-          
+          const terminalFont =
+            settings['terminal.integrated.fontFamily'] ||
+            settings.terminal?.integrated?.fontFamily ||
+            settings['editor.fontFamily'] ||
+            settings.editor?.fontFamily;
+
           if (terminalFont) {
             detectedFont = terminalFont;
             const fontCheck = isNerdFontName(terminalFont, debug);
-            
+
             if (debug) {
               info.push({
                 stage: `配置文件: ${path.basename(path.dirname(configPath))}`,
                 result: fontCheck.result,
-                reason: fontCheck.result 
+                reason: fontCheck.result
                   ? `检测到Nerd Font: ${terminalFont}${fontCheck.matchedIndicator ? ` (${fontCheck.matchedIndicator})` : ''}`
                   : `检测到字体但非Nerd Font: ${terminalFont}`,
-                
+
                 source: configPath,
               });
             }
-            
+
             if (fontCheck.result) {
               fontDetected = true;
               break;
@@ -522,22 +533,19 @@ function detectVSCodeFont(debug = false): { result: boolean; info?: DetectionInf
               stage: `配置文件解析`,
               result: false,
               reason: `JSON解析失败: ${parseError}`,
-                
+
               source: configPath,
             });
           }
         }
       }
-    } catch (readError) {
-      // 文件不存在或无法读取，继续尝试下一个
-      continue;
-    }
+    } catch (_readError) {}
   }
-  
+
   // 如果没有检测到Nerd Font，但在macOS/Linux下，仍然支持emoji
   const isMacOS = process.platform === 'darwin';
   const isLinux = process.platform === 'linux';
-  
+
   if (!fontDetected && debug) {
     if (detectedFont) {
       info.push({
@@ -554,7 +562,7 @@ function detectVSCodeFont(debug = false): { result: boolean; info?: DetectionInf
         source: 'vscode_config_not_found',
       });
     }
-    
+
     if (isMacOS || isLinux) {
       info.push({
         stage: 'VS Code Emoji支持',
@@ -580,7 +588,7 @@ function conservativeNerdFontDetection(debug = false): { result: boolean; info?:
     // 在macOS下默认支持emoji作为回退
     const isMacOS = process.platform === 'darwin';
     const isLinux = process.platform === 'linux';
-    
+
     if (debug) {
       info.push({
         stage: 'VS Code/Cursor保守检测',
@@ -588,7 +596,7 @@ function conservativeNerdFontDetection(debug = false): { result: boolean; info?:
         reason: 'VS Code/Cursor需要用户配置字体，保守返回false避免乱码',
         source: 'vscode_conservative',
       });
-      
+
       if (isMacOS || isLinux) {
         info.push({
           stage: '平台Emoji回退',
@@ -597,7 +605,7 @@ function conservativeNerdFontDetection(debug = false): { result: boolean; info?:
           source: 'platform_emoji_fallback',
         });
       }
-      
+
       return { result: false, info };
     }
     return { result: false };
