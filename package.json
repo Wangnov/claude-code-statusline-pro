@@ -68,6 +68,7 @@
     "@inquirer/input": "^4.2.1",
     "@inquirer/prompts": "^7.8.1",
     "@inquirer/select": "^4.3.1",
+    "@owloops/claude-powerline": "^1.5.3",
     "commander": "^14.0.0",
     "supports-color": "^10.1.0",
     "zod": "^4.0.17"
