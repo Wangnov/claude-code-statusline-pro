@@ -550,7 +550,7 @@ const zhTranslations: TranslationKeys = {
     app: {
       name: 'Claude Code状态行专业版',
       description: '增强的Claude Code状态行，支持实时预览和交互式配置',
-      version: '2.0.0-beta.1',
+      version: '2.0.0',
     },
     commands: {
       main: {
@@ -1036,7 +1036,7 @@ const enTranslations: TranslationKeys = {
       name: 'Claude Code Statusline Pro',
       description:
         'Enhanced statusline for Claude Code with live preview and interactive configuration',
-      version: '2.0.0-beta.1',
+      version: '2.0.0',
     },
     commands: {
       main: {

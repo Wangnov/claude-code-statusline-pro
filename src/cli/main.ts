@@ -11,6 +11,9 @@
 
 import { confirm, select } from '@inquirer/prompts';
 import { Command } from 'commander';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { ConfigLoader } from '../config/loader.js';
 import type { InputData } from '../config/schema.js';
 import { StatuslineGenerator } from '../core/generator.js';
@@ -19,6 +22,19 @@ import { ConfigEditor } from './config-editor.js';
 import { initializeI18n, t } from './i18n.js';
 import { formatCliMessage } from './message-icons.js';
 import { MockDataGenerator } from './mock-data.js';
+
+// 动态获取版本号
+function getVersion(): string {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const packagePath = join(__dirname, '..', '..', 'package.json');
+    const packageJson = JSON.parse(readFileSync(packagePath, 'utf-8'));
+    return packageJson.version;
+  } catch {
+    return '2.0.0'; // fallback version
+  }
+}
 
 const program = new Command();
 
@@ -38,7 +54,7 @@ program
   .description(
     'Enhanced statusline for Claude Code with live preview and interactive configuration'
   )
-  .version('2.0.0-beta.1')
+  .version(getVersion())
   .argument('[preset]', 'preset string like PMBT (Project, Model, Branch, Tokens)')
   .option('-p, --preset <preset>', 'component preset override')
   .option('-t, --theme <theme>', 'theme name (classic, powerline, capsule)')

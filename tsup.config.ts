@@ -15,13 +15,15 @@ export default defineConfig([
   // CLI entry
   {
     entry: { cli: 'src/cli/main.ts' },
-    format: ['esm', 'cjs'],
+    format: ['cjs'],
     target: 'node18',
     outDir: 'dist',
-    dts: true,
-    sourcemap: true,
+    dts: false,
+    sourcemap: false,
     clean: false,
     splitting: false,
+    bundle: true,
+    minify: true,
     banner: {
       js: '#!/usr/bin/env node',
     },
