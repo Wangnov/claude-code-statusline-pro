@@ -72,9 +72,9 @@ export class StatuslineGenerator {
       // 检测终端能力 | Detect terminal capabilities
       const capabilities = detect(
         this.config.style?.enable_colors,
-        this.config.terminal?.force_emoji,
-        this.config.terminal?.force_nerd_font,
-        this.config.terminal?.force_text
+        this.config.style?.enable_emoji,
+        this.config.style?.enable_nerd_font,
+        this.config.terminal?.force_nerd_font
       );
 
       // 初始化终端渲染器 | Initialize terminal renderer
@@ -285,9 +285,9 @@ export class StatuslineGenerator {
     // 检查终端能力：只有支持Nerd Font的终端才需要fake组件
     const capabilities = detect(
       this.config.style?.enable_colors,
-      this.config.terminal?.force_emoji,
-      this.config.terminal?.force_nerd_font,
-      this.config.terminal?.force_text
+      this.config.style?.enable_emoji,
+      this.config.style?.enable_nerd_font,
+      this.config.terminal?.force_nerd_font
     );
 
     // 只有在支持Nerd Font且有其他组件的情况下才添加fake组件
