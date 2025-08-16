@@ -1,5 +1,5 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'tsup';
-import { readFileSync } from 'fs';
 
 // 读取版本号用于构建时注入
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
@@ -16,7 +16,7 @@ export default defineConfig([
     clean: true,
     splitting: false,
     define: {
-      '__PACKAGE_VERSION__': JSON.stringify(packageJson.version),
+      __PACKAGE_VERSION__: JSON.stringify(packageJson.version),
     },
   },
   // CLI entry
@@ -37,21 +37,19 @@ export default defineConfig([
       '@inquirer/prompts',
       '@inquirer/checkbox',
       '@inquirer/confirm',
-      '@inquirer/input', 
+      '@inquirer/input',
       '@inquirer/select',
       '@iarna/toml',
       'commander',
       'supports-color',
-      'zod'
+      'zod',
     ],
-    external: [
-      'fs', 'path', 'os', 'child_process', 'url', 'util'
-    ],
+    external: ['fs', 'path', 'os', 'child_process', 'url', 'util'],
     banner: {
       js: '#!/usr/bin/env node',
     },
     define: {
-      '__PACKAGE_VERSION__': JSON.stringify(packageJson.version),
+      __PACKAGE_VERSION__: JSON.stringify(packageJson.version),
     },
   },
 ]);
