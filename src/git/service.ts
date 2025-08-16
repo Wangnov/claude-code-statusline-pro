@@ -5,11 +5,11 @@
  * Provides comprehensive Git information querying and cache management
  */
 
-import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join as pathJoin } from 'node:path';
 import type { GitCache } from './cache.js';
 import { createDefaultCacheConfig, createGitCache } from './cache.js';
+import { GitExecutionError, GitSecurityError, secureGitExecutor } from './secure-executor.js';
 import type {
   GitBranchInfo,
   GitExecOptions,
@@ -525,7 +525,6 @@ export class DefaultGitService implements GitService {
     options?: Partial<GitExecOptions>,
     retries = 0
   ): Promise<GitExecResult> {
-    const fullCommand = `git ${command}`;
     const execOptions: GitExecOptions = {
       cwd: this.config.cwd,
       timeout: this.config.timeout,
@@ -534,88 +533,176 @@ export class DefaultGitService implements GitService {
     };
 
     try {
-      const stdout = execSync(fullCommand, {
-        cwd: execOptions.cwd,
-        encoding: 'utf8',
-        timeout: execOptions.timeout,
-        env: execOptions.env,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
+      // 解析命令和参数 | Parse command and arguments
+      const parsedCommand = this.parseGitCommand(command);
+      const baseCommand = parsedCommand[0];
+      const args = parsedCommand.slice(1);
 
-      return {
-        stdout: stdout.toString(),
-        stderr: '',
-        exitCode: 0,
-        success: true,
-      };
+      if (!baseCommand) {
+        throw new GitSecurityError('Empty command after parsing', command);
+      }
+
+      // 使用安全执行器 | Use secure executor
+      const result = await secureGitExecutor.executeGitCommand(baseCommand, args, execOptions);
+
+      return result;
     } catch (error: unknown) {
-      // 增强错误处理和分类 | Enhanced error handling and classification
-      const errorObj = error as {
-        stderr?: Buffer;
-        message?: string;
-        killed?: boolean;
-        signal?: string;
-      };
-      const stderr = errorObj.stderr?.toString() || '';
-      const errorMessage = errorObj.message || '';
-
-      // 超时错误 | Timeout error
-      if (errorObj.killed && errorObj.signal === 'SIGTERM') {
-        // 超时重试机制 | Timeout retry mechanism
-        if (retries < 2) {
-          await this.delay(500); // 延迟500ms后重试 | Delay 500ms before retry
-          return this.execGit(command, options, retries + 1);
-        }
-        throw new GitTimeoutError(fullCommand, execOptions.timeout);
+      // 处理安全错误 | Handle security errors
+      if (error instanceof GitSecurityError) {
+        throw new GitSecurityError(`Git security violation: ${error.message}`, error.input);
       }
 
-      // 权限错误 | Permission error
-      if (
-        (errorObj as { status?: number }).status === 128 &&
-        (errorMessage.includes('Permission denied') || stderr.includes('permission denied'))
-      ) {
-        throw new GitPermissionError(fullCommand, execOptions.cwd);
+      if (error instanceof GitExecutionError) {
+        // 使用原有的错误处理逻辑 | Use existing error handling logic
+        return this.handleLegacyError(error.originalError, command, options, retries);
       }
 
-      // 仓库损坏错误 | Repository corrupt error
-      if (
-        (errorObj as { status?: number }).status === 128 &&
-        (stderr.includes('corrupt') || stderr.includes('bad object') || stderr.includes('broken'))
-      ) {
-        throw new GitCorruptError(execOptions.cwd, stderr);
-      }
+      // 处理其他错误
+      throw error;
+    }
+  }
 
-      // 网络错误 | Network error
-      if (
-        stderr.includes('Could not resolve host') ||
-        stderr.includes('Connection timed out') ||
-        stderr.includes('Failed to connect') ||
-        stderr.includes('network unreachable')
-      ) {
-        throw new GitNetworkError(fullCommand, stderr);
-      }
+  /**
+   * 安全解析Git命令字符串为命令和参数数组
+   */
+  private parseGitCommand(command: string): string[] {
+    if (!command || typeof command !== 'string') {
+      throw new GitSecurityError('Invalid command format', command);
+    }
 
-      // 仓库不存在错误 | Repository not found error
-      if (
-        (errorObj as { status?: number }).status === 128 &&
-        (stderr.includes('not a git repository') || errorMessage.includes('not a git repository'))
-      ) {
-        throw new GitRepoNotFoundError(execOptions.cwd);
-      }
+    // 处理常见的复合命令格式
+    const trimmed = command.trim();
 
-      if (!execOptions.ignoreErrors) {
-        throw new GitError(
-          errorMessage,
-          fullCommand,
-          (errorObj as { status?: number }).status || 1,
-          stderr
-        );
+    // 处理管道命令（如 "ls-files | wc -l"）
+    if (trimmed.includes('|')) {
+      // 拆分为多个安全命令执行
+      if (trimmed === 'ls-files | wc -l') {
+        // 特殊处理这个常见模式，转换为安全的单命令
+        return ['ls-files'];
       }
+      throw new GitSecurityError('Pipe operations not allowed', command);
+    }
 
+    // 简单的空格分割（对于复杂引号处理可以后续改进）
+    const parts = trimmed.split(/\s+/).filter((part) => part.length > 0);
+
+    if (parts.length === 0) {
+      throw new GitSecurityError('Empty command', command);
+    }
+
+    return parts;
+  }
+
+  /**
+   * 处理传统错误格式（保持向后兼容）
+   */
+  private async handleLegacyError(
+    error: Error,
+    command: string,
+    options?: Partial<GitExecOptions>,
+    retries = 0
+  ): Promise<GitExecResult> {
+    const execOptions: GitExecOptions = {
+      cwd: this.config.cwd,
+      timeout: this.config.timeout,
+      ignoreErrors: false,
+      ...options,
+    };
+
+    const fullCommand = `git ${command}`;
+
+    // 增强错误处理和分类 | Enhanced error handling and classification
+    const errorObj = error as {
+      stderr?: Buffer;
+      message?: string;
+      killed?: boolean;
+      signal?: string;
+      status?: number;
+    };
+    const stderr = errorObj.stderr?.toString() || '';
+    const errorMessage = errorObj.message || '';
+
+    // 超时错误 | Timeout error
+    if (errorObj.killed && errorObj.signal === 'SIGTERM') {
+      // 超时重试机制 | Timeout retry mechanism
+      if (retries < 2) {
+        await this.delay(500); // 延迟500ms后重试 | Delay 500ms before retry
+        return this.execGit(command, options, retries + 1);
+      }
+      throw new GitTimeoutError(fullCommand, execOptions.timeout);
+    }
+
+    // 权限错误 | Permission error
+    if (
+      errorObj.status === 128 &&
+      (errorMessage.includes('Permission denied') || stderr.includes('permission denied'))
+    ) {
+      throw new GitPermissionError(fullCommand, execOptions.cwd);
+    }
+
+    // 仓库损坏错误 | Repository corrupt error
+    if (
+      errorObj.status === 128 &&
+      (stderr.includes('corrupt') || stderr.includes('bad object') || stderr.includes('broken'))
+    ) {
+      throw new GitCorruptError(execOptions.cwd, stderr);
+    }
+
+    // 网络错误 | Network error
+    if (
+      stderr.includes('Could not resolve host') ||
+      stderr.includes('Connection timed out') ||
+      stderr.includes('Failed to connect') ||
+      stderr.includes('network unreachable')
+    ) {
+      throw new GitNetworkError(fullCommand, stderr);
+    }
+
+    // 仓库不存在错误 | Repository not found error
+    if (
+      errorObj.status === 128 &&
+      (stderr.includes('not a git repository') || errorMessage.includes('not a git repository'))
+    ) {
+      throw new GitRepoNotFoundError(execOptions.cwd);
+    }
+
+    if (!execOptions.ignoreErrors) {
+      throw new GitError(errorMessage, fullCommand, errorObj.status || 1, stderr);
+    }
+
+    return {
+      stdout: '',
+      stderr,
+      exitCode: errorObj.status || 1,
+      success: false,
+    };
+  }
+
+  /**
+   * 安全计算Git仓库文件数量 | Securely count Git repository files
+   */
+  private async countFilesSecurely(): Promise<GitExecResult> {
+    try {
+      const result = await this.execGit('ls-files', { ignoreErrors: true, timeout: 2000 });
+      if (result.success && result.stdout) {
+        // 安全地计算行数（文件数）
+        const fileCount = result.stdout
+          .trim()
+          .split('\n')
+          .filter((line) => line.trim().length > 0).length;
+        return {
+          stdout: fileCount.toString(),
+          stderr: '',
+          exitCode: 0,
+          success: true,
+        };
+      }
+      return result;
+    } catch (error) {
       return {
-        stdout: '',
-        stderr,
-        exitCode: (errorObj as { status?: number }).status || 1,
+        stdout: '0',
+        stderr: error instanceof Error ? error.message : 'Unknown error',
+        exitCode: 1,
         success: false,
       };
     }
@@ -648,7 +735,7 @@ export class DefaultGitService implements GitService {
       // 并行检查仓库大小指标 | Check repository size indicators in parallel
       const sizeChecks = [
         this.execGit('rev-list --all --count', { ignoreErrors: true, timeout: 2000 }),
-        this.execGit('ls-files | wc -l', { ignoreErrors: true, timeout: 2000 }),
+        this.countFilesSecurely(), // 使用安全的文件计数方法
         this.checkGitDirSize(),
       ];
 
