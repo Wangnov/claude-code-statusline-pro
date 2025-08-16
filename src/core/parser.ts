@@ -15,15 +15,17 @@ export interface ParseResult {
 export async function readFromStdin(): Promise<string> {
   return new Promise((resolve, reject) => {
     let input = '';
+    let isCleanedUp = false;
 
     // 设置超时 | Set timeout
     const timeout = setTimeout(() => {
+      cleanup();
       reject(new Error('Input timeout'));
     }, 5000);
 
     process.stdin.setEncoding('utf8');
 
-    process.stdin.on('readable', () => {
+    const onReadable = () => {
       let chunk: string | null;
       // 使用显式赋值避免表达式中的赋值
       chunk = process.stdin.read();
@@ -31,17 +33,32 @@ export async function readFromStdin(): Promise<string> {
         input += chunk;
         chunk = process.stdin.read();
       }
-    });
+    };
 
-    process.stdin.on('end', () => {
-      clearTimeout(timeout);
+    const onEnd = () => {
+      cleanup();
       resolve(input);
-    });
+    };
 
-    process.stdin.on('error', (error) => {
-      clearTimeout(timeout);
+    const onError = (error: Error) => {
+      cleanup();
       reject(error);
-    });
+    };
+
+    // 清理函数，防止事件监听器泄漏
+    const cleanup = () => {
+      if (isCleanedUp) return;
+      isCleanedUp = true;
+
+      clearTimeout(timeout);
+      process.stdin.removeListener('readable', onReadable);
+      process.stdin.removeListener('end', onEnd);
+      process.stdin.removeListener('error', onError);
+    };
+
+    process.stdin.on('readable', onReadable);
+    process.stdin.on('end', onEnd);
+    process.stdin.on('error', onError);
   });
 }
 

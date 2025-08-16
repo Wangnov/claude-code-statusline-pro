@@ -460,6 +460,9 @@ export class ConfigEditor {
    * 处理退出
    */
   private async handleExit(): Promise<boolean> {
+    // 清理所有编辑器资源
+    await this.cleanupEditors();
+
     if (this.hasUnsavedChanges) {
       const action = await select({
         message: '您有未保存的更改。您希望如何处理？',
@@ -485,12 +488,50 @@ export class ConfigEditor {
   }
 
   /**
+   * 清理所有编辑器资源，防止内存泄漏
+   */
+  private async cleanupEditors(): Promise<void> {
+    const editors = [
+      this.branchEditor,
+      this.tokensEditor,
+      this.modelEditor,
+      this.statusEditor,
+      this.themeEditor,
+      this.styleEditor,
+      this.componentEditor,
+      this.usageEditor,
+    ];
+
+    // 并行清理所有编辑器
+    const cleanupPromises = editors
+      .filter((editor) => editor)
+      .map(async (editor) => {
+        try {
+          if ('cleanup' in editor && typeof editor.cleanup === 'function') {
+            await editor.cleanup();
+          }
+        } catch (error) {
+          console.error('编辑器清理错误:', error);
+        }
+      });
+
+    await Promise.allSettled(cleanupPromises);
+  }
+
+  /**
    * 等待按键
    */
   private async waitForKeyPress(): Promise<void> {
     console.log('\n按任意键继续...');
-    return new Promise<void>((resolve) => {
+    return new Promise<void>((resolve, reject) => {
       const stdin = process.stdin;
+      let cleanup: (() => void) | null = null;
+
+      // 超时处理，防止永久等待
+      const timeout = setTimeout(() => {
+        if (cleanup) cleanup();
+        reject(new Error('等待按键超时'));
+      }, 30000); // 30秒超时
 
       // 设置stdin为原始模式
       if (stdin.isTTY) {
@@ -500,14 +541,7 @@ export class ConfigEditor {
       }
 
       const onData = (key: string) => {
-        // 清理监听器
-        stdin.removeListener('data', onData);
-
-        // 恢复stdin模式
-        if (stdin.isTTY) {
-          stdin.setRawMode(false);
-          stdin.pause();
-        }
+        if (cleanup) cleanup();
 
         // Ctrl+C 处理
         if (key === '\u0003') {
@@ -516,6 +550,19 @@ export class ConfigEditor {
         }
 
         resolve();
+      };
+
+      // 定义清理函数
+      cleanup = () => {
+        clearTimeout(timeout);
+        stdin.removeListener('data', onData);
+
+        // 恢复stdin模式
+        if (stdin.isTTY) {
+          stdin.setRawMode(false);
+          stdin.pause();
+        }
+        cleanup = null;
       };
 
       stdin.on('data', onData);

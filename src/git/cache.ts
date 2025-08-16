@@ -51,6 +51,11 @@ export interface GitCache {
   cleanup(): void;
 
   /**
+   * 销毁缓存实例并清理资源 | Destroy cache instance and cleanup resources
+   */
+  destroy(): void;
+
+  /**
    * 获取缓存统计信息 | Get cache statistics
    */
   getStats(): GitCacheStats;
@@ -80,6 +85,7 @@ export interface GitCacheStats {
 export class MemoryGitCache implements GitCache {
   private cache = new Map<GitCacheKey, GitCacheItem>();
   private config: GitCacheConfig;
+  private cleanupInterval?: NodeJS.Timeout;
   private stats = {
     hits: 0,
     misses: 0,
@@ -90,7 +96,7 @@ export class MemoryGitCache implements GitCache {
 
     // 定期清理过期缓存 | Periodically cleanup expired cache
     if (config.enabled) {
-      setInterval(() => this.cleanup(), Math.max(config.duration / 4, 5000));
+      this.cleanupInterval = setInterval(() => this.cleanup(), Math.max(config.duration / 4, 5000));
     }
   }
 
@@ -169,6 +175,17 @@ export class MemoryGitCache implements GitCache {
         this.cache.delete(key);
       }
     }
+  }
+
+  destroy(): void {
+    // 清理定时器，防止内存泄漏 | Clear interval to prevent memory leak
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      delete this.cleanupInterval;
+    }
+
+    // 清空缓存 | Clear cache
+    this.clear();
   }
 
   getStats(): GitCacheStats {

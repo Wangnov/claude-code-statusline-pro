@@ -78,6 +78,9 @@ export class LivePreviewEngine {
     dynamicBanner: boolean;
   };
   private isRunning = false;
+  private intervalId?: NodeJS.Timeout;
+  private sigintHandler?: () => void;
+  private keyHandler?: (key: string) => void;
 
   constructor(options: LivePreviewOptions = {}) {
     this.options = {
@@ -157,21 +160,22 @@ export class LivePreviewEngine {
     await this.renderLivePreview();
 
     // 开始实时更新循环
-    const intervalId = setInterval(async () => {
+    this.intervalId = setInterval(async () => {
       if (!this.isRunning) {
-        clearInterval(intervalId);
+        this.cleanup();
         return;
       }
       await this.renderLivePreview();
     }, this.options.refreshInterval);
 
     // 优雅处理退出
-    process.on('SIGINT', () => {
+    this.sigintHandler = () => {
       this.isRunning = false;
-      clearInterval(intervalId);
+      this.cleanup();
       console.log('\n👋 Preview stopped');
       process.exit(0);
-    });
+    };
+    process.on('SIGINT', this.sigintHandler);
   }
 
   /**
@@ -179,12 +183,7 @@ export class LivePreviewEngine {
    */
   stopLivePreview(): void {
     this.isRunning = false;
-
-    // 恢复终端状态
-    if (process.stdin.isTTY) {
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
-    }
+    this.cleanup();
 
     // 清屏并显示退出消息
     console.clear();
@@ -192,6 +191,34 @@ export class LivePreviewEngine {
 
     // 退出进程
     process.exit(0);
+  }
+
+  /**
+   * 清理资源，防止内存泄漏
+   */
+  private cleanup(): void {
+    // 清理定时器
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      delete this.intervalId;
+    }
+
+    // 清理事件监听器
+    if (this.sigintHandler) {
+      process.removeListener('SIGINT', this.sigintHandler);
+      delete this.sigintHandler;
+    }
+
+    if (this.keyHandler) {
+      process.stdin.removeListener('data', this.keyHandler);
+      delete this.keyHandler;
+    }
+
+    // 恢复终端状态
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+    }
   }
 
   /**
@@ -551,7 +578,7 @@ export class LivePreviewEngine {
       process.stdin.resume();
       process.stdin.setEncoding('utf8');
 
-      process.stdin.on('data', (key: string) => {
+      this.keyHandler = (key: string) => {
         switch (key) {
           case 'c':
             // 打开配置编辑器
@@ -572,7 +599,9 @@ export class LivePreviewEngine {
             this.stopLivePreview();
             break;
         }
-      });
+      };
+
+      process.stdin.on('data', this.keyHandler);
     }
   }
 
