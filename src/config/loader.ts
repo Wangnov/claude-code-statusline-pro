@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import TOML from '@iarna/toml';
 import type { ZodError } from 'zod';
-import { detectSystemLanguage, getI18nManager } from '../cli/i18n.js';
+import { detectSystemLanguage } from '../cli/i18n.js';
 import type { TerminalCapabilities } from '../terminal/detector.js';
 import { type ComponentsConfig, type Config, ConfigSchema } from './schema.js';
 
@@ -225,18 +225,7 @@ export interface ConfigLoadOptions {
 export class ConfigLoader {
   private cachedConfig: Config | null = null;
   private configPath: string | null = null;
-  private i18nManager: any = null; // 延迟初始化以避免循环依赖 | Lazy initialization to avoid circular dependency
-
-  /**
-   * 获取i18n管理器实例 | Get i18n manager instance
-   * 延迟初始化以避免循环依赖 | Lazy initialization to avoid circular dependency
-   */
-  private getI18n() {
-    if (!this.i18nManager) {
-      this.i18nManager = getI18nManager();
-    }
-    return this.i18nManager;
-  }
+  // i18n相关代码已移除，避免循环依赖 | i18n related code removed to avoid circular dependency
 
   /**
    * 查找配置文件 | Find config file
@@ -559,14 +548,8 @@ export class ConfigLoader {
       // 应用主题配置 | Apply theme config
       finalConfig = await this.applyThemeConfig(finalConfig);
 
-      // 设置i18n语言 | Set i18n language
-      if (finalConfig.language) {
-        try {
-          await this.getI18n().setLanguage(finalConfig.language as 'zh' | 'en');
-        } catch (error) {
-          console.warn('Failed to set language from config, using default:', error);
-        }
-      }
+      // 语言设置现在由I18nManager在初始化时处理，避免循环依赖
+      // Language setting is now handled by I18nManager during initialization to avoid circular dependency
 
       // 缓存配置 | Cache config
       this.cachedConfig = finalConfig;
@@ -695,7 +678,7 @@ export class ConfigLoader {
       }
 
       // 检查语言与i18n系统的兼容性 | Check compatibility with i18n system
-      if (!this.getI18n().isLanguageSupported(config.language)) {
+      if (config.language !== 'zh' && config.language !== 'en') {
         errors.push(`Language "${config.language}" is not supported by the i18n system`);
       }
     }

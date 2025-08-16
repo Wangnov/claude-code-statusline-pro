@@ -1528,7 +1528,7 @@ const translations: Record<SupportedLanguage, TranslationKeys> = {
  * 国际化管理器类 | Internationalization manager class
  */
 export class I18nManager {
-  private currentLanguage: SupportedLanguage = 'en';
+  private currentLanguage: SupportedLanguage = 'zh';
   private configLoader: ConfigLoader;
   private translationCache: Map<string, string> = new Map();
 
@@ -1565,8 +1565,8 @@ export class I18nManager {
       return 'zh';
     }
 
-    // 默认使用英文
-    return 'en';
+    // 默认使用中文
+    return 'zh';
   }
 
   /**
