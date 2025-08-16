@@ -31,6 +31,7 @@ export class PresetEditor {
   private terminalDetector: TerminalDetector;
   private _currentConfig!: Config;
   private _hasUnsavedChanges = false;
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Used in constructor only
   private options: Required<PresetEditorOptions>;
 
   constructor(options: PresetEditorOptions = {}) {
@@ -686,9 +687,7 @@ export class PresetEditor {
       newOrder[selectedIndex - 1] = newOrder[selectedIndex]!;
       newOrder[selectedIndex] = temp!;
 
-      console.log(
-        `\\n✅ 已上移 \"${order[selectedIndex]}\" | Moved \"${order[selectedIndex]}\" up`
-      );
+      console.log(`\\n✅ 已上移 "${order[selectedIndex]}" | Moved "${order[selectedIndex]}" up`);
       await this.waitForKeyPress();
 
       return newOrder;
@@ -739,9 +738,7 @@ export class PresetEditor {
       newOrder[selectedIndex] = newOrder[selectedIndex + 1]!;
       newOrder[selectedIndex + 1] = temp!;
 
-      console.log(
-        `\\n✅ 已下移 \"${order[selectedIndex]}\" | Moved \"${order[selectedIndex]}\" down`
-      );
+      console.log(`\\n✅ 已下移 "${order[selectedIndex]}" | Moved "${order[selectedIndex]}" down`);
       await this.waitForKeyPress();
 
       return newOrder;

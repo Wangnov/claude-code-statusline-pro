@@ -89,7 +89,9 @@ export interface ValidationManagerOptions {
  */
 export class ValidationManager {
   private terminalDetector: TerminalDetector;
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Used in constructor only
   private configLoader: ConfigLoader;
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Used in constructor only
   private options: Required<ValidationManagerOptions>;
 
   constructor(options: ValidationManagerOptions = {}) {

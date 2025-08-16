@@ -1393,7 +1393,9 @@ export class SuggestionManager {
         (a, b) => (b.priority || 0) - (a.priority || 0)
       );
 
-      sortedLevelSuggestions.forEach((suggestion) => this.displaySingleSuggestion(suggestion));
+      sortedLevelSuggestions.forEach((suggestion) => {
+        this.displaySingleSuggestion(suggestion);
+      });
     }
 
     // 显示统计信息

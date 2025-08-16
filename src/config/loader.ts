@@ -6,35 +6,6 @@ import { detectSystemLanguage, getI18nManager } from '../cli/i18n.js';
 import type { TerminalCapabilities } from '../terminal/detector.js';
 import { type ComponentsConfig, type Config, ConfigSchema } from './schema.js';
 
-// 获取当前目录，兼容 ESM 和 CJS
-function getCurrentDir(): string {
-  // CJS 环境
-  try {
-    // @ts-ignore - __dirname may not exist in ESM
-    if (typeof __dirname !== 'undefined') {
-      return __dirname;
-    }
-  } catch {
-    // 忽略错误
-  }
-
-  // ESM 环境回退 - 使用同步方式
-  try {
-    if (typeof import.meta !== 'undefined' && import.meta.url) {
-      // 直接构建路径，避免异步导入
-      const url = import.meta.url;
-      if (url.startsWith('file://')) {
-        return path.dirname(url.slice(7)); // 移除 'file://' 前缀
-      }
-    }
-  } catch {
-    // 忽略错误
-  }
-
-  // 最终回退到当前工作目录
-  return process.cwd();
-}
-
 // 内联默认配置模板，避免文件依赖
 const DEFAULT_CONFIG_TEMPLATE = `preset = "PMBTUS"
 theme = "classic"
@@ -927,14 +898,14 @@ export class ConfigLoader {
   getDefaultConfig(): Config {
     // 解析内联的完整默认配置
     const parsedConfig = TOML.parse(DEFAULT_CONFIG_TEMPLATE);
-    
+
     // 清理Symbol属性
     const cleanedConfig = this.cleanSymbols(parsedConfig);
-    
+
     // 智能语言检测
     const detectedLanguage = detectSystemLanguage();
     (cleanedConfig as any).language = detectedLanguage;
-    
+
     return ConfigSchema.parse(cleanedConfig);
   }
 }

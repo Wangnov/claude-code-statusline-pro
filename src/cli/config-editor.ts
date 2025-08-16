@@ -52,21 +52,28 @@ export class ConfigEditor {
   private currentConfig!: Config;
   private options: Required<ConfigEditorOptions>;
   private hasUnsavedChanges = false;
-  
+
   // 编辑器实例 | Editor instances
   private presetEditor!: PresetEditor;
   private componentEditor!: ComponentEditor;
   private themeEditor!: ThemeEditor;
   private styleEditor!: StyleEditor;
+  // TODO: 这些编辑器已初始化但未使用，预留给未来功能
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Reserved for future use
   private branchEditor!: BranchEditor;
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Reserved for future use
   private tokensEditor!: TokensEditor;
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Reserved for future use
   private modelEditor!: ModelEditor;
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Reserved for future use
   private statusEditor!: StatusEditor;
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Reserved for future use
   private usageEditor!: UsageEditor;
 
   // 工具管理器实例 | Tool manager instances
   private previewManager!: PreviewManager;
   private validationManager!: ValidationManager;
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Reserved for future use
   private suggestionManager!: SuggestionManager;
 
   constructor(options: ConfigEditorOptions = {}) {
