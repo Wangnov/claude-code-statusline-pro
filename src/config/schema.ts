@@ -577,7 +577,7 @@ const PresetMappingSchema = z
 /**
  * 语言配置Schema | Language config schema
  */
-const LanguageSchema = z.enum(['zh', 'en']).default('en');
+const LanguageSchema = z.enum(['zh', 'en']).default('zh');
 
 /**
  * 主配置Schema | Main config schema

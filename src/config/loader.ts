@@ -921,7 +921,8 @@ export class ConfigLoader {
         (parsedConfig as Record<string, unknown>).theme = theme;
       }
 
-      // 智能语言检测 | Intelligent language detection
+      // 智能语言检测 | Intelligent language detection  
+      // 只有当配置中没有语言设置时，才使用系统检测
       if (!(parsedConfig as Record<string, unknown>).language) {
         const detectedLanguage = detectSystemLanguage();
         (parsedConfig as Record<string, unknown>).language = detectedLanguage;
@@ -966,11 +967,11 @@ export class ConfigLoader {
       console.error('Failed to create default config from template, using fallback:', error);
 
       // 最终回退：创建基础配置 | Final fallback: create basic config
-      const detectedLanguage = detectSystemLanguage();
+      // 只有在没有其他语言配置时才使用系统检测
       const fallbackConfig = ConfigSchema.parse({
         preset: 'PMBTS',
         theme: theme || 'classic',
-        language: detectedLanguage,
+        // 让Schema使用默认值，不强制覆盖
       });
       let targetPath: string;
       if (configPath) {
@@ -1019,10 +1020,8 @@ export class ConfigLoader {
       targetPath = this.validateConfigPath(configPath);
     }
 
-    const detectedLanguage = detectSystemLanguage();
-    const defaultConfig = ConfigSchema.parse({
-      language: detectedLanguage,
-    });
+    // 使用Schema默认值，不强制设置语言
+    const defaultConfig = ConfigSchema.parse({});
     await this.save(defaultConfig, targetPath);
   }
 
@@ -1058,10 +1057,8 @@ export class ConfigLoader {
     // 清理Symbol属性
     const cleanedConfig = this.cleanSymbols(parsedConfig);
 
-    // 智能语言检测
-    const detectedLanguage = detectSystemLanguage();
-    (cleanedConfig as any).language = detectedLanguage;
-
+    // 保持默认配置模板中的语言设置，不强制覆盖
+    // 如果模板中没有语言设置，Schema会使用默认值'zh'
     return ConfigSchema.parse(cleanedConfig);
   }
 }
