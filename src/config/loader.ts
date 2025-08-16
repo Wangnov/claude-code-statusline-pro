@@ -7,216 +7,24 @@ import { detectSystemLanguage } from '../cli/i18n.js';
 import type { TerminalCapabilities } from '../terminal/detector.js';
 import { type ComponentsConfig, type Config, ConfigSchema } from './schema.js';
 
-// 内联默认配置模板，避免文件依赖
-const DEFAULT_CONFIG_TEMPLATE = `preset = "PMBTUS"
-theme = "classic"
-language = "zh"
-debug = false
-
-[terminal]
-force_nerd_font = false
-force_emoji = false
-force_text = false
-
-[style]
-separator = "|"
-enable_colors = true
-enable_emoji = true
-enable_nerd_font = true
-separator_color = "white"
-separator_before = " "
-separator_after = " "
-compact_mode = false
-max_width = 120
-
-[themes.classic]
-enable_gradient = true
-ignore_separator = false
-fine_progress = false
-capsule_style = false
-
-[themes.powerline]
-enable_gradient = true
-ignore_separator = false
-fine_progress = true
-capsule_style = false
-
-[themes.capsule]
-enable_gradient = true
-ignore_separator = true
-fine_progress = true
-capsule_style = true
-
-[components]
-order = ["project", "model", "branch", "tokens", "usage", "status"]
-
-[components.project]
-enabled = true
-icon_color = "blue"
-text_color = "white"
-emoji_icon = "📁"
-nerd_icon = ""
-text_icon = "[P]"
-show_when_empty = false
-
-[components.model]
-enabled = true
-icon_color = "cyan"
-text_color = "white"
-emoji_icon = "🤖"
-nerd_icon = ""
-text_icon = "[M]"
-show_full_name = false
-
-[components.model.mapping]
-claude-sonnet-4 = "S4"
-"claude-opus-4.1" = "O4.1"
-"claude-haiku-3.5" = "H3.5"
-
-[components.branch]
-enabled = true
-icon_color = "green"
-text_color = "white"
-emoji_icon = "🌿"
-nerd_icon = ""
-text_icon = "[B]"
-show_when_no_git = false
-max_length = 15
-
-[components.branch.status]
-show_dirty = true
-show_ahead_behind = true
-show_stash_count = true
-show_staged_count = false
-show_unstaged_count = false
-show_untracked_count = false
-
-[components.branch.operations]
-show_merge = true
-show_rebase = true
-show_cherry_pick = false
-show_bisect = false
-
-[components.branch.performance]
-enable_cache = true
-cache_ttl = 5_000
-git_timeout = 1_000
-parallel_commands = true
-lazy_load_status = true
-skip_on_large_repo = true
-large_repo_threshold = 10_000
-
-[components.tokens]
-enabled = true
-icon_color = "yellow"
-text_color = "white"
-emoji_icon = "📊"
-nerd_icon = ""
-text_icon = "[T]"
-show_gradient = true
-show_progress_bar = true
-show_percentage = true
-show_raw_numbers = false
-progress_width = 15
-
-[components.tokens.progress_bar_chars]
-filled = "█"
-empty = "░"
-backup = "▓"
-
-[components.tokens.colors]
-safe = "green"
-warning = "yellow"
-danger = "red"
-
-[components.tokens.thresholds]
-warning = 60
-danger = 85
-backup = 85
-critical = 95
-
-[components.tokens.status_icons.emoji]
-backup = "⚡"
-critical = "🔥"
-
-[components.tokens.status_icons.nerd]
-backup = ""
-critical = ""
-
-[components.tokens.status_icons.text]
-backup = "[!]"
-critical = "[X]"
-
-[components.tokens.context_windows]
-default = 200_000
-claude-sonnet-4 = 200_000
-"claude-opus-4.1" = 200_000
-"claude-haiku-3.5" = 200_000
-
-[components.usage]
-enabled = true
-icon_color = "cyan"
-text_color = "white"
-emoji_icon = "💰"
-nerd_icon = ""
-text_icon = "[$]"
-display_mode = "cost"
-show_model = false
-precision = 2
-
-[components.status]
-enabled = true
-icon_color = "magenta"
-text_color = "white"
-emoji_icon = "✨"
-nerd_icon = ""
-text_icon = "[S]"
-show_recent_errors = true
-
-[components.status.icons.emoji]
-ready = "✅"
-thinking = "💭"
-tool = "🔧"
-error = "❌"
-warning = "⚠️"
-
-[components.status.icons.nerd]
-ready = ""
-thinking = ""
-tool = ""
-error = ""
-warning = ""
-
-[components.status.icons.text]
-ready = "[OK]"
-thinking = "[...]"
-tool = "[TOOL]"
-error = "[ERR]"
-warning = "[WARN]"
-
-[components.status.colors]
-ready = "green"
-thinking = "yellow"
-tool = "blue"
-error = "red"
-warning = "yellow"
-
-[preset_mapping]
-P = "project"
-M = "model"
-B = "branch"
-T = "tokens"
-U = "usage"
-S = "status"
-
-[advanced]
-cache_enabled = true
-recent_error_count = 5
-git_timeout = 1_000
-custom_color_codes = {}
-
-[experimental]
-enable_experimental = false`;
+/**
+ * 获取模板文件路径 | Get template file path
+ */
+function getTemplateFilePath(): string {
+  // 查找项目根目录 - 从当前文件所在目录向上查找package.json
+  let currentDir = __dirname;
+  while (currentDir !== path.dirname(currentDir)) {
+    const packageJsonPath = path.join(currentDir, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      // 找到项目根目录，返回模板文件路径
+      return path.join(currentDir, 'configs', 'config.template.toml');
+    }
+    currentDir = path.dirname(currentDir);
+  }
+  
+  // 如果没找到项目根目录，回退到相对路径
+  return path.join(process.cwd(), 'configs', 'config.template.toml');
+}
 
 /**
  * 配置文件安全错误类
@@ -910,8 +718,29 @@ export class ConfigLoader {
     capabilities?: TerminalCapabilities
   ): Promise<void> {
     try {
-      // 使用内联默认配置模板 | Use inline default config template
-      let configContent: string = DEFAULT_CONFIG_TEMPLATE;
+      // 从外部模板文件读取配置 | Read config from external template file
+      let configContent: string;
+      const templatePath = getTemplateFilePath();
+      
+      try {
+        if (fs.existsSync(templatePath)) {
+          configContent = await this.readConfigFileSafely(templatePath);
+        } else {
+          throw new Error(`Template file not found: ${templatePath}`);
+        }
+      } catch (error) {
+        console.warn(`Failed to read template file: ${error instanceof Error ? error.message : String(error)}`);
+        console.warn('Using minimal fallback configuration...');
+        
+        // 最小化fallback配置 | Minimal fallback configuration
+        configContent = `preset = "PMBTUS"
+theme = "classic"
+language = "zh"
+debug = false
+
+[components]
+order = ["project", "model", "branch", "tokens", "usage", "status"]`;
+      }
 
       // 解析TOML并应用自定义选项 | Parse TOML and apply custom options
       const parsedConfig = TOML.parse(configContent);
@@ -1051,15 +880,35 @@ export class ConfigLoader {
    * 包含智能语言检测 | Includes intelligent language detection
    */
   getDefaultConfig(): Config {
-    // 解析内联的完整默认配置
-    const parsedConfig = TOML.parse(DEFAULT_CONFIG_TEMPLATE);
-
-    // 清理Symbol属性
-    const cleanedConfig = this.cleanSymbols(parsedConfig);
-
-    // 保持默认配置模板中的语言设置，不强制覆盖
-    // 如果模板中没有语言设置，Schema会使用默认值'zh'
-    return ConfigSchema.parse(cleanedConfig);
+    try {
+      // 从外部模板文件读取配置 | Read config from external template file
+      const templatePath = getTemplateFilePath();
+      
+      if (fs.existsSync(templatePath)) {
+        const configContent = fs.readFileSync(templatePath, 'utf8');
+        const parsedConfig = TOML.parse(configContent);
+        
+        // 清理Symbol属性
+        const cleanedConfig = this.cleanSymbols(parsedConfig);
+        
+        // 保持默认配置模板中的语言设置，不强制覆盖
+        // 如果模板中没有语言设置，Schema会使用默认值'zh'
+        return ConfigSchema.parse(cleanedConfig);
+      } else {
+        console.warn(`Template file not found: ${templatePath}, using schema defaults`);
+      }
+    } catch (error) {
+      console.warn(`Failed to read template file: ${error instanceof Error ? error.message : String(error)}`);
+      console.warn('Using schema defaults...');
+    }
+    
+    // 模板文件不存在或读取失败时的fallback - 使用Schema默认值
+    return ConfigSchema.parse({
+      preset: 'PMBTUS',
+      theme: 'classic',
+      language: 'zh',
+      debug: false,
+    });
   }
 }
 
