@@ -55,6 +55,7 @@
   },
   "files": [
     "dist/",
+    "configs/",
     "config.toml",
     "statusline.config.toml",
     "README.md",
