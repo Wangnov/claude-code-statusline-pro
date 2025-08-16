@@ -1,4 +1,3 @@
-import { execSync } from 'node:child_process';
 import type {
   BranchComponentConfig,
   BranchStatusIconsConfig,
@@ -19,6 +18,7 @@ import {
   createLightweightGitService,
   GitOperationType,
 } from '../git/index.js';
+import { safeExecGit } from '../git/secure-executor.js';
 import { BaseComponent, type ComponentFactory } from './base.js';
 
 /**
@@ -151,15 +151,15 @@ export class BranchComponent extends BaseComponent {
         } catch (_gitServiceError) {
           // GitService失败时回退到增强execSync | Fallback to enhanced execSync when GitService fails
           this.fallbackToExecSync = true;
-          return this.renderWithEnhancedExecSync(context);
+          return await this.renderWithEnhancedExecSync(context);
         }
       } else {
         // 使用增强execSync实现 | Use enhanced execSync implementation
-        return this.renderWithEnhancedExecSync(context);
+        return await this.renderWithEnhancedExecSync(context);
       }
     } catch (_error) {
       // 最终回退到基础实现 | Final fallback to basic implementation
-      return this.renderWithExecSync(context);
+      return await this.renderWithExecSync(context);
     }
   }
 
@@ -189,9 +189,9 @@ export class BranchComponent extends BaseComponent {
   }
 
   /**
-   * 使用execSync回退实现 | Fallback implementation using execSync
+   * 使用安全Git执行器的回退实现 | Fallback implementation using secure Git executor
    */
-  private renderWithExecSync(context: RenderContext): string | null {
+  private async renderWithExecSync(context: RenderContext): Promise<string | null> {
     const { inputData, config } = context;
 
     let branch = inputData.gitBranch;
@@ -199,11 +199,12 @@ export class BranchComponent extends BaseComponent {
     // 如果没有提供分支信息，尝试通过Git命令获取 | If no branch info provided, try to get via Git command
     if (!branch) {
       try {
-        branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', {
+        const result = await safeExecGit('rev-parse', ['--abbrev-ref', 'HEAD'], {
           cwd: inputData.workspace?.current_dir || inputData.cwd,
-          encoding: 'utf8',
           timeout: config.advanced?.git_timeout || 1000,
-        }).trim();
+          ignoreErrors: true,
+        });
+        branch = result.success ? result.stdout.trim() : 'no-git';
       } catch (_error) {
         branch = 'no-git';
       }
@@ -449,10 +450,10 @@ export class BranchComponent extends BaseComponent {
   }
 
   /**
-   * 增强的execSync实现 | Enhanced execSync implementation
+   * 增强的安全Git实现 | Enhanced secure Git implementation
    * 提供基础的Git增强功能，即使GitService不可用 | Provides basic Git enhancements even when GitService is unavailable
    */
-  private renderWithEnhancedExecSync(context: RenderContext): string | null {
+  private async renderWithEnhancedExecSync(context: RenderContext): Promise<string | null> {
     const { inputData, config } = context;
     const cwd = inputData.workspace?.current_dir || inputData.cwd || process.cwd();
     const timeout =
@@ -463,11 +464,12 @@ export class BranchComponent extends BaseComponent {
     // 获取分支名 | Get branch name
     if (!branch) {
       try {
-        branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', {
+        const result = await safeExecGit('rev-parse', ['--abbrev-ref', 'HEAD'], {
           cwd,
-          encoding: 'utf8',
           timeout,
-        }).trim();
+          ignoreErrors: true,
+        });
+        branch = result.success ? result.stdout.trim() : 'no-git';
       } catch (_error) {
         branch = 'no-git';
       }
@@ -494,13 +496,13 @@ export class BranchComponent extends BaseComponent {
       // 检查dirty状态 | Check dirty status
       if (this.branchConfig.status?.show_dirty) {
         try {
-          const status = execSync('git status --porcelain 2>/dev/null', {
+          const result = await safeExecGit('status', ['--porcelain'], {
             cwd,
-            encoding: 'utf8',
             timeout: timeout / 2, // 使用更短的超时 | Use shorter timeout
-          }).trim();
+            ignoreErrors: true,
+          });
 
-          if (status) {
+          if (result.success && result.stdout.trim()) {
             const dirtyIcon = this.getStatusIcon('dirty');
             parts.push(dirtyIcon);
           }
@@ -510,17 +512,18 @@ export class BranchComponent extends BaseComponent {
       // 检查ahead/behind状态 | Check ahead/behind status
       if (this.branchConfig.status?.show_ahead_behind) {
         try {
-          const aheadBehind = execSync(
-            'git rev-list --left-right --count HEAD...@{upstream} 2>/dev/null',
+          const result = await safeExecGit(
+            'rev-list',
+            ['--left-right', '--count', 'HEAD...@{upstream}'],
             {
               cwd,
-              encoding: 'utf8',
               timeout: timeout / 2,
+              ignoreErrors: true,
             }
-          ).trim();
+          );
 
-          if (aheadBehind && aheadBehind !== '0\t0') {
-            const [aheadStr, behindStr] = aheadBehind.split('\t');
+          if (result.success && result.stdout.trim() && result.stdout.trim() !== '0\t0') {
+            const [aheadStr, behindStr] = result.stdout.trim().split('\t');
             const ahead = Number(aheadStr);
             const behind = Number(behindStr);
             if (!Number.isNaN(ahead) && ahead > 0) {
@@ -538,14 +541,14 @@ export class BranchComponent extends BaseComponent {
       // 检查stash数量 | Check stash count
       if (this.branchConfig.status?.show_stash_count) {
         try {
-          const stashList = execSync('git stash list 2>/dev/null', {
+          const result = await safeExecGit('stash', ['list'], {
             cwd,
-            encoding: 'utf8',
             timeout: timeout / 2,
-          }).trim();
+            ignoreErrors: true,
+          });
 
-          if (stashList) {
-            const stashCount = stashList.split('\n').length;
+          if (result.success && result.stdout.trim()) {
+            const stashCount = result.stdout.trim().split('\n').length;
             if (stashCount > 0) {
               const stashIcon = this.getStatusIcon('stash');
               parts.push(`${stashIcon}${stashCount}`);
