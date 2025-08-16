@@ -15,8 +15,8 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "claude-code-statusline-pro": "./dist/cli.cjs",
-    "claude-statusline-config": "./dist/cli.cjs"
+    "claude-code-statusline-pro": "dist/cli.cjs",
+    "claude-statusline-config": "dist/cli.cjs"
   },
   "scripts": {
     "dev": "tsx src/cli/main.ts",
@@ -51,7 +51,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/wangnov/claude-code-statusline-pro.git"
+    "url": "git+https://github.com/wangnov/claude-code-statusline-pro.git"
   },
   "files": [
     "dist/",
