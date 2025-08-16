@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import TOML from '@iarna/toml';
 import type { ZodError } from 'zod';
@@ -217,6 +218,29 @@ custom_color_codes = {}
 [experimental]
 enable_experimental = false`;
 
+/**
+ * 配置文件安全错误类
+ */
+export class ConfigSecurityError extends Error {
+  constructor(
+    message: string,
+    public readonly path: string
+  ) {
+    super(`Security violation: ${message} (path: ${path})`);
+    this.name = 'ConfigSecurityError';
+  }
+}
+
+/**
+ * 最大配置文件大小限制 (1MB)
+ */
+const MAX_CONFIG_FILE_SIZE = 1024 * 1024;
+
+/**
+ * 允许的配置文件扩展名
+ */
+const ALLOWED_CONFIG_EXTENSIONS = new Set(['.toml']);
+
 export interface ConfigLoadOptions {
   customPath?: string | undefined;
   overridePreset?: string | undefined;
@@ -226,6 +250,87 @@ export class ConfigLoader {
   private cachedConfig: Config | null = null;
   private configPath: string | null = null;
   // i18n相关代码已移除，避免循环依赖 | i18n related code removed to avoid circular dependency
+
+  /**
+   * 验证并规范化配置文件路径
+   * 防止路径遍历攻击和恶意文件访问
+   */
+  private validateConfigPath(inputPath: string): string {
+    if (!inputPath || typeof inputPath !== 'string') {
+      throw new ConfigSecurityError('Invalid config path type', inputPath);
+    }
+
+    // 规范化路径，解析符号链接和相对路径
+    const resolved = path.resolve(inputPath);
+
+    // 定义允许的基础目录
+    const allowedBaseDirs = [
+      path.resolve(process.cwd()), // 当前工作目录及其子目录
+      path.resolve(os.homedir(), '.config'), // 用户配置目录
+      path.resolve(os.homedir()), // 用户主目录
+    ];
+
+    // 检查路径是否在允许的目录范围内
+    const isAllowed = allowedBaseDirs.some((baseDir) => {
+      const normalizedBase = path.normalize(baseDir);
+      const normalizedResolved = path.normalize(resolved);
+      return (
+        normalizedResolved.startsWith(normalizedBase + path.sep) ||
+        normalizedResolved === normalizedBase
+      );
+    });
+
+    if (!isAllowed) {
+      throw new ConfigSecurityError('Path outside allowed directories', resolved);
+    }
+
+    // 检查文件扩展名
+    const ext = path.extname(resolved).toLowerCase();
+    if (!ALLOWED_CONFIG_EXTENSIONS.has(ext)) {
+      throw new ConfigSecurityError('Invalid file extension', resolved);
+    }
+
+    // 防止特殊文件名
+    const basename = path.basename(resolved);
+    if (basename.startsWith('.') && basename !== '.gitignore') {
+      throw new ConfigSecurityError('Hidden files not allowed', resolved);
+    }
+
+    return resolved;
+  }
+
+  /**
+   * 安全读取配置文件，包含大小限制
+   */
+  private async readConfigFileSafely(filePath: string): Promise<string> {
+    try {
+      // 检查文件状态
+      const stats = await fs.promises.stat(filePath);
+
+      // 检查是否为普通文件
+      if (!stats.isFile()) {
+        throw new ConfigSecurityError('Path is not a regular file', filePath);
+      }
+
+      // 检查文件大小限制
+      if (stats.size > MAX_CONFIG_FILE_SIZE) {
+        throw new ConfigSecurityError(
+          `File size exceeds limit (${MAX_CONFIG_FILE_SIZE} bytes)`,
+          filePath
+        );
+      }
+
+      // 安全读取文件内容
+      return await fs.promises.readFile(filePath, 'utf8');
+    } catch (error) {
+      if (error instanceof ConfigSecurityError) {
+        throw error;
+      }
+      throw new Error(
+        `Failed to read config file: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
 
   /**
    * 查找配置文件 | Find config file
@@ -484,13 +589,17 @@ export class ConfigLoader {
       }
 
       // 查找配置文件 | Find config file
-      this.configPath = options.customPath || this.findConfigFile();
+      if (options.customPath) {
+        this.configPath = this.validateConfigPath(options.customPath);
+      } else {
+        this.configPath = this.findConfigFile();
+      }
 
       let userConfig: Partial<Config> = {};
 
       if (this.configPath && fs.existsSync(this.configPath)) {
         try {
-          const configContent = await fs.promises.readFile(this.configPath, 'utf8');
+          const configContent = await this.readConfigFileSafely(this.configPath);
           const parsedToml = TOML.parse(configContent);
           // 深度清理 TOML 解析后的 Symbol 属性
           const cleanedConfig = this.cleanSymbols(parsedToml);
@@ -621,14 +730,28 @@ export class ConfigLoader {
     const errors: string[] = [];
 
     try {
-      const targetPath = configPath || this.findConfigFile();
+      let targetPath: string | null;
+
+      if (configPath) {
+        try {
+          targetPath = this.validateConfigPath(configPath);
+        } catch (error) {
+          if (error instanceof ConfigSecurityError) {
+            errors.push(`Security error: ${error.message}`);
+            return { valid: false, errors };
+          }
+          throw error;
+        }
+      } else {
+        targetPath = this.findConfigFile();
+      }
 
       if (!targetPath || !fs.existsSync(targetPath)) {
         errors.push('Configuration file not found');
         return { valid: false, errors };
       }
 
-      const configContent = await fs.promises.readFile(targetPath, 'utf8');
+      const configContent = await this.readConfigFileSafely(targetPath);
       const parsedToml = TOML.parse(configContent);
 
       // 验证配置 | Validate config
@@ -702,7 +825,11 @@ export class ConfigLoader {
    * 别名方法
    */
   async load(configPath?: string): Promise<Config> {
-    return this.loadConfig({ customPath: configPath });
+    if (configPath) {
+      const validatedPath = this.validateConfigPath(configPath);
+      return this.loadConfig({ customPath: validatedPath });
+    }
+    return this.loadConfig();
   }
 
   /**
@@ -754,8 +881,22 @@ export class ConfigLoader {
    * 检查配置文件是否存在
    */
   async configExists(configPath?: string): Promise<boolean> {
-    const targetPath = configPath || this.findConfigFile();
-    return targetPath !== null && fs.existsSync(targetPath);
+    try {
+      let targetPath: string | null;
+
+      if (configPath) {
+        targetPath = this.validateConfigPath(configPath);
+      } else {
+        targetPath = this.findConfigFile();
+      }
+
+      return targetPath !== null && fs.existsSync(targetPath);
+    } catch (error) {
+      if (error instanceof ConfigSecurityError) {
+        return false; // 不安全的路径视为不存在
+      }
+      throw error;
+    }
   }
 
   /**
@@ -809,7 +950,13 @@ export class ConfigLoader {
       configContent = TOML.stringify(parsedConfig as TOML.JsonMap);
 
       // 写入配置文件 | Write config file
-      const targetPath = configPath || path.join(process.cwd(), 'config.toml');
+      let targetPath: string;
+      if (configPath) {
+        targetPath = this.validateConfigPath(configPath);
+      } else {
+        targetPath = path.join(process.cwd(), 'config.toml');
+      }
+
       await fs.promises.writeFile(targetPath, configContent, 'utf8');
 
       this.configPath = targetPath;
@@ -825,7 +972,13 @@ export class ConfigLoader {
         theme: theme || 'classic',
         language: detectedLanguage,
       });
-      const targetPath = configPath || path.join(process.cwd(), 'config.toml');
+      let targetPath: string;
+      if (configPath) {
+        targetPath = this.validateConfigPath(configPath);
+      } else {
+        targetPath = path.join(process.cwd(), 'config.toml');
+      }
+
       const tomlContent = TOML.stringify(fallbackConfig as TOML.JsonMap);
       await fs.promises.writeFile(targetPath, tomlContent, 'utf8');
 
@@ -839,7 +992,15 @@ export class ConfigLoader {
    * 保存为新格式 config.toml | Save as new format config.toml
    */
   async save(config: Config, configPath?: string): Promise<void> {
-    const targetPath = configPath || this.configPath || path.join(process.cwd(), 'config.toml');
+    let targetPath: string;
+
+    if (configPath) {
+      targetPath = this.validateConfigPath(configPath);
+    } else if (this.configPath) {
+      targetPath = this.configPath;
+    } else {
+      targetPath = path.join(process.cwd(), 'config.toml');
+    }
 
     const tomlContent = TOML.stringify(config as TOML.JsonMap);
     await fs.promises.writeFile(targetPath, tomlContent, 'utf8');
@@ -852,18 +1013,30 @@ export class ConfigLoader {
    * 包含智能语言检测 | Includes intelligent language detection
    */
   async resetToDefaults(configPath?: string): Promise<void> {
+    let targetPath: string | undefined;
+
+    if (configPath) {
+      targetPath = this.validateConfigPath(configPath);
+    }
+
     const detectedLanguage = detectSystemLanguage();
     const defaultConfig = ConfigSchema.parse({
       language: detectedLanguage,
     });
-    await this.save(defaultConfig, configPath);
+    await this.save(defaultConfig, targetPath);
   }
 
   /**
    * 应用主题
    */
   async applyTheme(themeName: string, configPath?: string): Promise<void> {
-    const currentConfig = await this.load(configPath);
+    let targetPath: string | undefined;
+
+    if (configPath) {
+      targetPath = this.validateConfigPath(configPath);
+    }
+
+    const currentConfig = await this.load(targetPath);
 
     // 这里应该有主题配置逻辑，暂时简化处理
     const themedConfig = {
@@ -871,7 +1044,7 @@ export class ConfigLoader {
       theme: themeName as 'classic' | 'powerline' | 'capsule',
     };
 
-    await this.save(themedConfig, configPath);
+    await this.save(themedConfig, targetPath);
   }
 
   /**
