@@ -20,7 +20,8 @@ import {
   isEnterKey,
   isSpaceKey,
 } from '@inquirer/core';
-import chalk from 'chalk';
+// 移除chalk依赖，使用ANSI转义序列代替
+// import chalk from 'chalk';
 
 /**
  * 选择器选项接口
@@ -201,7 +202,7 @@ export const realTimePreviewSelector = createPrompt<string, RealTimePreviewSelec
 
       // 选择指示器
       if (isSelected) {
-        line += chalk.cyan('❯ ');
+        line += '\x1b[36m❯ \x1b[0m';
       } else {
         line += '  ';
       }
@@ -209,21 +210,21 @@ export const realTimePreviewSelector = createPrompt<string, RealTimePreviewSelec
       // 选项名称
       if (isDisabled) {
         const disabledText = typeof choice.disabled === 'string' ? choice.disabled : choice.name;
-        line += chalk.gray(`${disabledText} (disabled)`);
+        line += `\x1b[90m${disabledText} (disabled)\x1b[0m`;
       } else if (isSelected) {
-        line += chalk.cyan.bold(choice.name);
+        line += `\x1b[36;1m${choice.name}\x1b[0m`;
       } else {
         line += choice.name;
       }
 
       // 分类标签
       if (showCategory && choice.category) {
-        line += chalk.gray(` [${choice.category}]`);
+        line += `\x1b[90m [${choice.category}]\x1b[0m`;
       }
 
       // 描述
       if (showDescription && choice.description && !isDisabled) {
-        line += '\n    ' + chalk.gray(choice.description);
+        line += `\n    \x1b[90m${choice.description}\x1b[0m`;
       }
 
       return line;
@@ -238,15 +239,15 @@ export const realTimePreviewSelector = createPrompt<string, RealTimePreviewSelec
       const pageEnd = Math.min(pageStart + pageSize, validChoices.length);
       const pageChoices = validChoices.slice(pageStart, pageEnd);
 
-      let output = chalk.bold(message) + '\n';
+      let output = `\x1b[1m${message}\x1b[0m\n`;
 
       // 状态指示器
       if (isPreviewing) {
-        output += chalk.yellow('⏳ 正在预览...') + '\n';
+        output += '\x1b[33m⏳ 正在预览...\x1b[0m\n';
       } else if (error) {
-        output += chalk.red(`❌ 预览错误: ${error}`) + '\n';
+        output += `\x1b[31m❌ 预览错误: ${error}\x1b[0m\n`;
       } else {
-        output += chalk.green('✅ 预览就绪') + '\n';
+        output += '\x1b[32m✅ 预览就绪\x1b[0m\n';
       }
 
       output += '\n';
@@ -262,9 +263,9 @@ export const realTimePreviewSelector = createPrompt<string, RealTimePreviewSelec
       if (validChoices.length > pageSize) {
         const currentPage = Math.floor(selectedIndex / pageSize) + 1;
         const totalPages = Math.ceil(validChoices.length / pageSize);
-        output += '\n' + chalk.gray(`第 ${currentPage}/${totalPages} 页 | ↑↓ 导航 | Enter 选择`);
+        output += `\n\x1b[90m第 ${currentPage}/${totalPages} 页 | ↑↓ 导航 | Enter 选择\x1b[0m`;
       } else {
-        output += '\n' + chalk.gray('↑↓ 导航 | Enter 选择');
+        output += '\n\x1b[90m↑↓ 导航 | Enter 选择\x1b[0m';
       }
 
       return output;
