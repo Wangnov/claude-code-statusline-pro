@@ -11,6 +11,8 @@
 import { confirm, input, select } from '@inquirer/prompts';
 import type { Config } from '../../config/schema.js';
 import { getCurrentLanguage, setLanguage, t } from '../i18n.js';
+import { realTimePreviewSelector, type Choice, type PreviewCallback } from '../components/index.js';
+import { createPreviewManager } from '../utils/preview-manager.js';
 
 /**
  * 样式编辑器类
@@ -85,9 +87,11 @@ export class StyleEditor {
 
   /**
    * 配置语言设置 | Configure Language Settings
+   * 重构版本：使用实时预览选择器，支持语言切换的实时预览
    */
   async configureLanguage(): Promise<void> {
     const currentLang = getCurrentLanguage();
+    const previewManager = createPreviewManager();
 
     console.log(`\n${t('editor.language.title')}`);
 
@@ -96,26 +100,65 @@ export class StyleEditor {
     console.log(`${t('editor.language.current')}: ${currentLangDisplay}`);
     console.log();
 
-    // 语言选择界面 | Language selection interface
-    const selectedLang = await select({
+    // 创建语言选择选项 | Create language selection choices
+    const choices: Choice[] = [
+      {
+        name: '简体中文 (zh) - Chinese Simplified',
+        value: 'zh',
+        description: '使用中文界面 | Use Chinese interface',
+      },
+      {
+        name: 'English (en) - English',
+        value: 'en',
+        description: 'Use English interface | 使用英文界面',
+      },
+      {
+        name: t('editor.components.items.back'),
+        value: 'back',
+      },
+    ];
+
+    // 创建语言预览回调函数 | Create language preview callback
+    const languagePreviewCallback: PreviewCallback = async (choice: Choice, index: number) => {
+      if (choice.value === 'back') {
+        // 如果选择返回，显示当前配置预览
+        await previewManager.updateLivePreview(this.currentConfig);
+        return;
+      }
+
+      if (choice.value === 'zh' || choice.value === 'en') {
+        try {
+          // 临时切换语言进行预览（不保存到配置）
+          const tempConfig = { ...this.currentConfig, language: choice.value as 'zh' | 'en' };
+          
+          // 显示语言切换预览效果
+          console.clear();
+          console.log(`🔄 ${choice.value === 'zh' ? '预览中文界面效果' : 'Previewing English interface'}...\n`);
+          
+          // 显示配置预览
+          await previewManager.renderLivePreviewInterface(tempConfig);
+          
+          // 显示语言预览信息
+          const previewMsg = choice.value === 'zh' 
+            ? '✨ 中文界面预览 - 所有菜单和消息将使用中文显示'
+            : '✨ English Interface Preview - All menus and messages will be displayed in English';
+          console.log(`\n${previewMsg}`);
+          
+        } catch (error) {
+          console.log(`❌ 语言预览失败: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    };
+
+    // 使用实时预览选择器进行语言选择 | Use real-time preview selector for language selection
+    const selectedLang = await realTimePreviewSelector({
       message: t('editor.language.select'),
-      choices: [
-        {
-          name: '简体中文 (zh) - Chinese Simplified',
-          value: 'zh',
-          description: '使用中文界面 | Use Chinese interface',
-        },
-        {
-          name: 'English (en) - English',
-          value: 'en',
-          description: 'Use English interface | 使用英文界面',
-        },
-        {
-          name: t('editor.components.items.back'),
-          value: 'back',
-        },
-      ],
-      default: currentLang,
+      choices,
+      default: choices.findIndex(c => c.value === currentLang),
+      onPreview: languagePreviewCallback,
+      previewDelay: 150,
+      showDescription: true,
+      showCategory: false,
     });
 
     if (selectedLang === 'back') return;
@@ -130,17 +173,25 @@ export class StyleEditor {
         this.currentConfig.language = selectedLang as 'zh' | 'en';
         this.onConfigUpdate(this.currentConfig, true);
 
-        // 显示成功消息 | Display success message
+        // 显示成功消息并刷新界面 | Display success message and refresh interface
+        console.clear();
         const newLangDisplay = selectedLang === 'zh' ? '简体中文' : 'English';
         console.log(`${t('editor.language.updated')}: ${newLangDisplay}`);
         console.log(`${t('editor.language.immediate')}`);
+        
+        // 显示应用后的配置预览
+        await previewManager.updateLivePreview(this.currentConfig);
+        
       } catch (error) {
         console.error(`${t('editor.language.failed')}:`, error);
+        await previewManager.updateLivePreview(this.currentConfig);
       }
     } else {
+      console.clear();
       console.log(t('editor.language.noChange'));
+      await previewManager.updateLivePreview(this.currentConfig);
     }
 
-    await this.waitForKeyPress();
+    // 移除等待按键逻辑，直接返回
   }
 }
