@@ -221,26 +221,26 @@ export class ConfigEditor {
         switch (action) {
           case 'components':
             await this.componentEditor.configureComponents();
-            await this.showConfigurationUpdatePreview('组件配置已更新');
+            // 配置更新后自动刷新预览，无需确认
             break;
           case 'themes':
             await this.themeEditor.configureThemes();
-            await this.showConfigurationUpdatePreview('主题配置已更新');
+            // 主题编辑器已集成实时预览，无需额外预览步骤
             break;
           case 'styles':
             await this.styleEditor.configureStyles();
-            await this.showConfigurationUpdatePreview('样式配置已更新');
+            // 样式配置更新后自动刷新预览，无需确认
             break;
           case 'presets':
             await this.presetEditor.configurePresets();
-            await this.showConfigurationUpdatePreview('预设配置已更新');
+            // 预设配置更新后自动刷新预览，无需确认
             break;
           case 'preview':
             await this.previewManager.showInteractivePreviewMenu(this.currentConfig);
             break;
           case 'language':
             await this.styleEditor.configureLanguage();
-            await this.showConfigurationUpdatePreview('语言设置已更新');
+            // 语言编辑器已集成实时预览，无需额外预览步骤
             break;
           case 'reset':
             await this.resetConfiguration();
