@@ -34,6 +34,8 @@ export interface PreviewManagerOptions {
 export class PreviewManager {
   private terminalDetector: TerminalDetector;
   private options: Required<PreviewManagerOptions>;
+  private previewCache: Map<string, { output: string; timestamp: number; config: string }>;
+  private cacheTimeout: number = 5000; // 缓存5秒
 
   constructor(options: PreviewManagerOptions = {}) {
     this.terminalDetector = new TerminalDetector();
@@ -41,6 +43,7 @@ export class PreviewManager {
       enableColors: options.enableColors ?? true,
       defaultScenario: options.defaultScenario ?? 'dev',
     };
+    this.previewCache = new Map();
   }
 
   /**
@@ -142,7 +145,7 @@ export class PreviewManager {
   /**
    * 显示配置预览 | Show Configuration Preview
    * 在配置更新后显示即时预览效果
-   * 从 config-editor.ts 第430-478行迁移
+   * 重构版本：移除确认框，提供即时预览
    */
   async showConfigPreview(config: Config, updateMessage: string): Promise<void> {
     const capabilities = this.terminalDetector.detectCapabilities();
@@ -153,38 +156,25 @@ export class PreviewManager {
       : `✅ ${updateMessage}`;
     console.log(`\n${message}`);
 
-    // 询问是否查看预览效果
-    const showPreview = await confirm({
-      message: '是否查看配置效果预览？ | Would you like to see the configuration preview?',
-      default: true,
-    });
+    // 直接显示预览效果，无需确认
+    try {
+      const mockGenerator = new MockDataGenerator();
+      const mockData = mockGenerator.generate(this.options.defaultScenario);
+      const generator = new StatuslineGenerator(config, { disableCache: true });
+      const output = await generator.generate(mockData);
 
-    if (showPreview) {
-      // 显示简化版预览 - 只显示一个主要场景
-      try {
-        const mockGenerator = new MockDataGenerator();
-        const mockData = mockGenerator.generate(this.options.defaultScenario); // 使用默认场景作为预览
-        const generator = new StatuslineGenerator(config, { disableCache: true });
-        const output = await generator.generate(mockData);
-
-        console.log('\n📊 配置预览效果 | Configuration Preview:');
-        console.log(`   ${output}`);
-
-        // 显示场景切换选项
-        const switchScenario = await confirm({
-          message: '是否切换到其他场景查看效果？ | Switch to other scenarios?',
-          default: false,
-        });
-
-        if (switchScenario) {
-          await this.showScenarioSwitcher(config);
-        }
-      } catch (error) {
-        const errorMsg = capabilities.colors
-          ? `\x1b[31m❌ 预览生成失败: ${error instanceof Error ? error.message : String(error)}\x1b[0m`
-          : `❌ 预览生成失败: ${error instanceof Error ? error.message : String(error)}`;
-        console.log(errorMsg);
-      }
+      console.log('\n📊 配置预览效果 | Configuration Preview:');
+      console.log(`   ${output}`);
+      
+      // 显示额外的场景预览（可选）
+      console.log('\n🔄 其他场景预览 | Other Scenarios:');
+      await this.renderQuickMultiScenario(config);
+      
+    } catch (error) {
+      const errorMsg = capabilities.colors
+        ? `\x1b[31m❌ 预览生成失败: ${error instanceof Error ? error.message : String(error)}\x1b[0m`
+        : `❌ 预览生成失败: ${error instanceof Error ? error.message : String(error)}`;
+      console.log(errorMsg);
     }
 
     await this.waitForKeyPress();
@@ -313,14 +303,33 @@ export class PreviewManager {
 
   /**
    * 快速预览单个场景
-   * 新增的便捷方法
+   * 重构优化：添加缓存机制提升性能
    */
   async quickPreview(config: Config, scenarioId: string = 'dev'): Promise<string> {
     try {
+      // 生成缓存键
+      const configKey = JSON.stringify(config);
+      const cacheKey = `${scenarioId}-${this.hashString(configKey)}`;
+      
+      // 检查缓存
+      const cached = this.previewCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < this.cacheTimeout && cached.config === configKey) {
+        return cached.output;
+      }
+
       const mockGenerator = new MockDataGenerator();
       const mockData = mockGenerator.generate(scenarioId);
       const generator = new StatuslineGenerator(config, { disableCache: true });
-      return await generator.generate(mockData);
+      const output = await generator.generate(mockData);
+      
+      // 缓存结果
+      this.previewCache.set(cacheKey, {
+        output,
+        timestamp: Date.now(),
+        config: configKey
+      });
+      
+      return output;
     } catch (error) {
       throw new Error(
         `Quick preview failed: ${error instanceof Error ? error.message : String(error)}`
@@ -519,6 +528,127 @@ export class PreviewManager {
     }
 
     await this.waitForKeyPress();
+  }
+
+  /**
+   * 即时预览更新方法 | Live Preview Update Method
+   * 重构新增：提供无确认的即时预览更新
+   */
+  async updateLivePreview(config: Config): Promise<void> {
+    try {
+      // 清除控制台并显示更新中状态
+      console.clear();
+      console.log('🔄 正在更新实时预览...\n');
+
+      // 立即渲染实时预览界面
+      await this.renderLivePreviewInterface(config);
+      
+      // 显示快速多场景预览
+      await this.renderQuickMultiScenario(config);
+      
+    } catch (error) {
+      console.log(`❌ 实时预览更新失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * 快速多场景预览渲染 | Quick Multi-Scenario Preview Rendering
+   * 优化性能的场景预览方法
+   */
+  private async renderQuickMultiScenario(config: Config): Promise<void> {
+    const scenarios = [
+      { id: 'dev', name: '🟢 开发', color: '\x1b[32m' },
+      { id: 'critical', name: '🟡 临界', color: '\x1b[33m' },
+      { id: 'complete', name: '🔵 完整', color: '\x1b[34m' }
+    ];
+
+    console.log('\n📊 多场景快速预览:');
+    
+    for (const scenario of scenarios) {
+      try {
+        const output = await this.quickPreview(config, scenario.id);
+        const displayName = this.terminalDetector.detectCapabilities().colors
+          ? `${scenario.color}${scenario.name}\x1b[0m`
+          : scenario.name;
+        
+        console.log(`   ${displayName}: ${output}`);
+      } catch (error) {
+        console.log(`   ${scenario.name}: ❌ 渲染失败`);
+      }
+    }
+  }
+
+  /**
+   * 无阻塞预览方法 | Non-blocking Preview Method
+   * 重构新增：提供快速、无交互的预览功能
+   */
+  async getInstantPreview(config: Config, scenarioId: string = 'dev'): Promise<string> {
+    return this.quickPreview(config, scenarioId);
+  }
+
+  /**
+   * 批量即时预览 | Batch Instant Preview
+   * 重构新增：同时获取多个场景的预览结果
+   */
+  async getBatchInstantPreview(config: Config, scenarios: string[] = ['dev', 'critical', 'complete']): Promise<Record<string, string>> {
+    const results: Record<string, string> = {};
+    
+    // 并行处理场景预览，提升性能
+    const promises = scenarios.map(async (scenarioId) => {
+      try {
+        const output = await this.quickPreview(config, scenarioId);
+        return { scenarioId, output, error: null };
+      } catch (error) {
+        return { 
+          scenarioId, 
+          output: '', 
+          error: error instanceof Error ? error.message : String(error) 
+        };
+      }
+    });
+    
+    const resolvedResults = await Promise.all(promises);
+    
+    for (const result of resolvedResults) {
+      results[result.scenarioId] = result.error 
+        ? `Error: ${result.error}` 
+        : result.output;
+    }
+    
+    return results;
+  }
+
+  /**
+   * 字符串哈希方法 | String Hash Method
+   * 用于生成缓存键
+   */
+  private hashString(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // 转换为32位整数
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  /**
+   * 清空预览缓存 | Clear Preview Cache
+   * 重构新增：清理缓存的方法
+   */
+  clearPreviewCache(): void {
+    this.previewCache.clear();
+  }
+
+  /**
+   * 获取缓存统计 | Get Cache Statistics
+   * 重构新增：获取缓存使用情况
+   */
+  getCacheStats(): { size: number; entries: string[] } {
+    return {
+      size: this.previewCache.size,
+      entries: Array.from(this.previewCache.keys())
+    };
   }
 }
 
