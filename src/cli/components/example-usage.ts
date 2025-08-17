@@ -225,6 +225,9 @@ export async function runAllExamples(): Promise<void> {
 }
 
 // 如果直接运行此文件，执行所有示例
-if (import.meta.url === `file://${process.argv[1]}`) {
+// 处理ES模块和CommonJS兼容性
+if (typeof import.meta !== 'undefined' && import.meta.url === `file://${process.argv[1]}`) {
+  runAllExamples();
+} else if (typeof require !== 'undefined' && require.main === module) {
   runAllExamples();
 }

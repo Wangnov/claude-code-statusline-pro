@@ -1,11 +1,23 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import TOML from '@iarna/toml';
 import type { ZodError } from 'zod';
 import { detectSystemLanguage } from '../cli/i18n.js';
 import type { TerminalCapabilities } from '../terminal/detector.js';
 import { type ComponentsConfig, type Config, ConfigSchema } from './schema.js';
+
+// ES模块和CommonJS兼容的__dirname处理
+let __dirname: string;
+if (typeof import.meta !== 'undefined' && import.meta.url) {
+  // ES模块环境
+  const __filename = fileURLToPath(import.meta.url);
+  __dirname = path.dirname(__filename);
+} else {
+  // CommonJS环境或者运行时兼容
+  __dirname = process.cwd();
+}
 
 /**
  * 获取模板文件路径 | Get template file path
