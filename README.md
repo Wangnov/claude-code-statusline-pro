@@ -2,7 +2,7 @@
 
 [![npm version](https://badge.fury.io/js/claude-code-statusline-pro.svg)](https://badge.fury.io/js/claude-code-statusline-pro)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/Node.js-16+-green.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/wangnov/claude-code-statusline-pro)
 
 [中文](#使用指南) | [English](#user-guide)
@@ -23,6 +23,27 @@
 - 🌈 **跨平台兼容**: Windows、macOS、Linux智能适配，支持各种终端
 - ⚡ **高性能优化**: 缓存机制，300ms更新间隔，符合Claude Code官方建议
 - 🌐 **双语支持**: 中英双语配置界面和错误提示
+
+## 📋 系统要求
+
+在开始使用之前，请确保您的系统满足以下要求：
+
+### 必需条件
+- **Claude Code**: 版本 ≥ 1.0.71
+- **Node.js**: 版本 ≥ 18.0.0 ([下载安装](https://nodejs.org/))
+- **npm**: 通常随Node.js自动安装
+
+### 检查当前版本
+```bash
+# 检查Claude Code版本
+claude --version
+
+# 检查Node.js版本
+node --version
+
+# 检查npm版本
+npm --version
+```
 
 ## 🚀 快速开始
 
@@ -230,7 +251,44 @@ force_text = false          # 强制文本模式
 
 ## 🔧 故障排除
 
-### 常见问题
+### 版本兼容性问题
+
+**Q: 状态栏完全不显示或显示错误**
+```bash
+# 错误示例：status line command failed: npx claude-code-statusline-pro@latest
+# 解决方案：升级Claude Code到最新版本
+npm install -g @anthropic-ai/claude-code@latest
+```
+
+**Q: 提示"command not found: npx"或Node.js相关错误**
+```bash
+# 错误示例：/bin/sh: npx: command not found
+# 解决方案：安装或更新Node.js环境
+# 访问官网下载最新版本：https://nodejs.org/
+# 或使用包管理器安装：
+
+# macOS (使用Homebrew)
+brew install node
+
+# Ubuntu/Debian
+sudo apt update && sudo apt install nodejs npm
+
+# Windows
+# 请访问 https://nodejs.org/ 下载安装包
+```
+
+**Q: Claude Code版本过旧导致的兼容性问题**
+```bash
+# 检查Claude Code版本
+claude --version
+
+# 如果版本低于1.0.71，请更新
+npm install -g @anthropic-ai/claude-code@latest
+
+# 更新后重启终端并重新打开Claude Code
+```
+
+### 显示问题
 
 **Q: 图标显示为方框或乱码**
 ```bash
@@ -276,6 +334,27 @@ echo '{"model":{"id":"claude-sonnet-4"}}' | npx claude-code-statusline-pro@lates
 - 🌈 **Cross-platform Compatibility**: Smart adaptation for Windows, macOS, Linux, supporting various terminals
 - ⚡ **High Performance Optimization**: Caching mechanism, 300ms update interval, following Claude Code official recommendations
 - 🌐 **Bilingual Support**: Chinese and English configuration interface with error messages
+
+## 📋 System Requirements
+
+Before getting started, please ensure your system meets the following requirements:
+
+### Prerequisites
+- **Claude Code**: Version ≥ 1.0.71
+- **Node.js**: Version ≥ 18.0.0 ([Download](https://nodejs.org/))
+- **npm**: Usually installed automatically with Node.js
+
+### Check Current Versions
+```bash
+# Check Claude Code version
+claude --version
+
+# Check Node.js version
+node --version
+
+# Check npm version
+npm --version
+```
 
 ## 🚀 Quick Start
 
@@ -484,7 +563,44 @@ Smart detection and automatic adaptation for different terminal environments:
 
 ## 🔧 Troubleshooting
 
-### Common Issues
+### Version Compatibility Issues
+
+**Q: Status bar not displaying or showing errors**
+```bash
+# Error example: status line command failed: npx claude-code-statusline-pro@latest
+# Solution: Upgrade Claude Code to the latest version
+npm install -g @anthropic-ai/claude-code@latest
+```
+
+**Q: "command not found: npx" or Node.js related errors**
+```bash
+# Error example: /bin/sh: npx: command not found
+# Solution: Install or update Node.js environment
+# Visit official website for latest version: https://nodejs.org/
+# Or use package managers:
+
+# macOS (using Homebrew)
+brew install node
+
+# Ubuntu/Debian
+sudo apt update && sudo apt install nodejs npm
+
+# Windows
+# Please visit https://nodejs.org/ to download installer
+```
+
+**Q: Compatibility issues due to outdated Claude Code version**
+```bash
+# Check Claude Code version
+claude --version
+
+# If version is below 1.0.71, please update
+npm install -g @anthropic-ai/claude-code@latest
+
+# Restart terminal and reopen Claude Code after update
+```
+
+### Display Issues
 
 **Q: Icons display as squares or garbled text**
 ```bash
@@ -513,5 +629,3 @@ echo '{"model":{"id":"claude-sonnet-4"}}' | npx claude-code-statusline-pro@lates
 # Test specific preset and theme
 echo '{"model":{"id":"claude-sonnet-4"}}' | npx claude-code-statusline-pro@latest --preset MT --theme classic
 ```
-
----
