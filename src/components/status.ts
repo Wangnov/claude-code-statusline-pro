@@ -314,7 +314,7 @@ export class StatusComponent extends BaseComponent {
   /**
    * 获取状态图标 | Get status icon
    * 使用三级图标选择逻辑：nerd → emoji → text | Use three-level icon selection: nerd → emoji → text
-   * 与BaseComponent标准集成 | Integrated with BaseComponent standards
+   * 支持强制参数，与BaseComponent标准集成 | Support force parameters, integrated with BaseComponent standards
    */
   private getStatusIcon(type: StatusType): string {
     const statusIcons = this.statusConfig.icons;
@@ -331,17 +331,38 @@ export class StatusComponent extends BaseComponent {
       return defaultIcons[type] || '';
     }
 
-    // 1. 优先使用Nerd Font图标（如果支持）| Prefer Nerd Font icons (if supported)
-    if (this.capabilities.nerdFont && statusIcons.nerd?.[type]) {
+    // 检查是否有强制图标设置（通过renderContext获取配置）
+    const context = this.renderContext as ExtendedRenderContext;
+    const forceEmoji = context?.config?.terminal?.force_emoji === true;
+    const forceNerdFont = context?.config?.terminal?.force_nerd_font === true;
+    const forceText = context?.config?.terminal?.force_text === true;
+
+    // 1. 如果强制文本模式
+    if (forceText && statusIcons.text?.[type]) {
+      return this.renderIcon(statusIcons.text[type]);
+    }
+
+    // 2. 如果强制启用Nerd Font
+    if (forceNerdFont && statusIcons.nerd?.[type] !== undefined) {
       return this.renderIcon(statusIcons.nerd[type]);
     }
 
-    // 2. 其次使用Emoji图标（如果支持）| Use Emoji icons (if supported)
+    // 3. 如果强制启用emoji
+    if (forceEmoji && statusIcons.emoji?.[type]) {
+      return this.renderIcon(statusIcons.emoji[type]);
+    }
+
+    // 4. 自动检测模式：优先使用Nerd Font图标（如果支持）
+    if (this.capabilities.nerdFont && statusIcons.nerd?.[type] !== undefined) {
+      return this.renderIcon(statusIcons.nerd[type]);
+    }
+
+    // 5. 自动检测模式：其次使用Emoji图标（如果支持）
     if (this.capabilities.emoji && statusIcons.emoji?.[type]) {
       return this.renderIcon(statusIcons.emoji[type]);
     }
 
-    // 3. 最后回退到文本图标 | Fall back to text icons
+    // 6. 最后回退到文本图标
     if (statusIcons.text?.[type]) {
       return this.renderIcon(statusIcons.text[type]);
     }

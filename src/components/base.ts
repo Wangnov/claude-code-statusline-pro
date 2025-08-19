@@ -103,17 +103,38 @@ export abstract class BaseComponent implements Component {
    * 优先级：nerd_icon → emoji_icon → text_icon
    */
   protected selectIcon(): string {
-    // 1. 如果支持Nerd Font且配置了nerd_icon
-    if (this.capabilities.nerdFont && this.config.nerd_icon) {
+    // 检查是否有强制图标设置（通过renderContext获取配置）
+    const context = this.renderContext as ExtendedRenderContext;
+    const forceEmoji = context?.config?.terminal?.force_emoji === true;
+    const forceNerdFont = context?.config?.terminal?.force_nerd_font === true;
+    const forceText = context?.config?.terminal?.force_text === true;
+
+    // 1. 如果强制文本模式
+    if (forceText) {
+      return this.config.text_icon || '';
+    }
+
+    // 2. 如果强制启用Nerd Font（最高优先级）
+    if (forceNerdFont && this.config.nerd_icon !== undefined) {
       return this.config.nerd_icon;
     }
 
-    // 2. 如果支持emoji且配置了emoji_icon
+    // 3. 如果强制启用emoji
+    if (forceEmoji && this.config.emoji_icon) {
+      return this.config.emoji_icon;
+    }
+
+    // 4. 自动检测模式：优先使用Nerd Font（修复：检查 nerd_icon 是否定义）
+    if (this.capabilities.nerdFont && this.config.nerd_icon !== undefined) {
+      return this.config.nerd_icon;
+    }
+
+    // 5. 自动检测模式：回退到emoji
     if (this.capabilities.emoji && this.config.emoji_icon) {
       return this.config.emoji_icon;
     }
 
-    // 3. 回退到文本图标
+    // 6. 最后回退到文本图标
     return this.config.text_icon || '';
   }
 

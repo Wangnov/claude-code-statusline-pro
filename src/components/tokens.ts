@@ -150,8 +150,10 @@ export class TokensComponent extends BaseComponent {
       const lines = transcript.trim().split('\n');
 
       let contextUsedTokens = 0;
+      let maxUsageTokens = 0;
 
-      // 从最后开始查找最新的assistant消息 | Find latest assistant message from the end
+      // 从最后开始查找最新的assistant消息，统计所有有效usage以找到最高值
+      // Find latest assistant message from the end, collect all valid usage to find maximum
       for (let i = lines.length - 1; i >= 0; i--) {
         const line = lines[i]?.trim();
         if (!line) continue;
@@ -170,15 +172,31 @@ export class TokensComponent extends BaseComponent {
             ];
 
             if (usage && requiredKeys.every((key) => key in usage)) {
-              contextUsedTokens =
+              const currentUsage =
                 usage.input_tokens +
                 usage.cache_creation_input_tokens +
                 usage.cache_read_input_tokens +
                 usage.output_tokens;
-              break;
+
+              // 跳过usage为0的情况，继续查找有效的usage
+              // Skip usage of 0, continue searching for valid usage
+              if (currentUsage > 0) {
+                maxUsageTokens = Math.max(maxUsageTokens, currentUsage);
+                // 找到第一个非零usage就使用它（最新的有效usage）
+                // Use the first non-zero usage found (latest valid usage)
+                if (contextUsedTokens === 0) {
+                  contextUsedTokens = currentUsage;
+                }
+              }
             }
           }
         } catch (_parseError) {}
+      }
+
+      // 如果没有找到有效的usage，使用最高的usage值
+      // If no valid usage found, use the maximum usage value
+      if (contextUsedTokens === 0 && maxUsageTokens > 0) {
+        contextUsedTokens = maxUsageTokens;
       }
 
       const contextWindow = this.getContextWindow();
@@ -356,7 +374,7 @@ export class TokensComponent extends BaseComponent {
     const { contextUsedTokens, contextWindow, usagePercentage, progressBar, warning, critical } =
       tokenUsage;
 
-    const icon = this.getIcon('token');
+    const icon = this.renderIcon();
 
     // 确定颜色 | Determine color
     let colorName = 'yellow'; // 默认颜色
@@ -404,7 +422,7 @@ export class TokensComponent extends BaseComponent {
 
   /**
    * 获取状态图标 - 三级图标选择逻辑 | Get status icon - three-level icon selection logic
-   * 优先级：nerd_icon → emoji_icon → text_icon
+   * 支持强制参数和优先级：nerd_icon → emoji_icon → text_icon
    */
   private getStatusIcon(critical: boolean, warning: boolean): string {
     if (!critical && !warning) return '';
@@ -417,23 +435,44 @@ export class TokensComponent extends BaseComponent {
       return critical ? '🔥' : '⚡';
     }
 
-    // 1. 优先使用Nerd Font图标（如果支持）| Prefer Nerd Font icons (if supported)
-    if (this.capabilities.nerdFont && statusIcons.nerd?.[statusType]) {
+    // 检查是否有强制图标设置（通过renderContext获取配置）
+    const context = this.renderContext as ExtendedRenderContext;
+    const forceEmoji = context?.config?.terminal?.force_emoji === true;
+    const forceNerdFont = context?.config?.terminal?.force_nerd_font === true;
+    const forceText = context?.config?.terminal?.force_text === true;
+
+    // 1. 如果强制文本模式
+    if (forceText && statusIcons.text?.[statusType]) {
+      return statusIcons.text[statusType];
+    }
+
+    // 2. 如果强制启用Nerd Font
+    if (forceNerdFont && statusIcons.nerd?.[statusType] !== undefined) {
       return statusIcons.nerd[statusType];
     }
 
-    // 2. 其次使用Emoji图标（如果支持）| Use Emoji icons (if supported)
+    // 3. 如果强制启用emoji
+    if (forceEmoji && statusIcons.emoji?.[statusType]) {
+      return statusIcons.emoji[statusType];
+    }
+
+    // 4. 自动检测模式：优先使用Nerd Font图标（如果支持）
+    if (this.capabilities.nerdFont && statusIcons.nerd?.[statusType] !== undefined) {
+      return statusIcons.nerd[statusType];
+    }
+
+    // 5. 自动检测模式：其次使用Emoji图标（如果支持）
     if (this.capabilities.emoji && statusIcons.emoji?.[statusType]) {
       return statusIcons.emoji[statusType];
     }
 
-    // 3. 最后回退到文本图标 | Fall back to text icons
+    // 6. 最后回退到文本图标
     if (statusIcons.text?.[statusType]) {
       return statusIcons.text[statusType];
     }
 
     // 最后的回退：硬编码默认值 | Final fallback: hardcoded defaults
-    return critical ? '🔥' : '⚡';
+    return critical ? '[X]' : '[!]';
   }
 }
 
