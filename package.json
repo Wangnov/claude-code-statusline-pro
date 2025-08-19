@@ -76,7 +76,7 @@
     "zod": "^4.0.17"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.1.4",
+    "@biomejs/biome": "^2.2.0",
     "@changesets/cli": "^2.27.8",
     "@types/node": "^24.2.1",
     "@types/supports-color": "^8.1.3",
