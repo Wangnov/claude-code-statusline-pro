@@ -1,5 +1,5 @@
 preset = "PMBTUS"
-theme = "capsule"
+theme = "classic"
 language = "zh"
 debug = false
 
@@ -38,92 +38,92 @@ fine_progress = true
 capsule_style = true
 
 [components]
-order = [ "project", "model", "branch", "tokens", "usage", "status" ]
+order = ["project", "model", "branch", "tokens", "usage", "status"]
 
-  [components.project]
-  enabled = true
-  icon_color = "blue"
-  text_color = "white"
-  emoji_icon = "📁"
-  nerd_icon = ""
-  text_icon = "[P]"
-  show_when_empty = false
+[components.project]
+enabled = true
+icon_color = "blue"
+text_color = "white"
+emoji_icon = "📁"
+nerd_icon = ""
+text_icon = "[P]"
+show_when_empty = false
 
-  [components.model]
-  enabled = true
-  icon_color = "cyan"
-  text_color = "white"
-  emoji_icon = "🤖"
-  nerd_icon = ""
-  text_icon = "[M]"
-  show_full_name = false
+[components.model]
+enabled = true
+icon_color = "cyan"
+text_color = "white"
+emoji_icon = "🤖"
+nerd_icon = ""
+text_icon = "[M]"
+show_full_name = false
 
-    [components.model.mapping]
-    claude-sonnet-4 = "S4"
-    "claude-opus-4.1" = "O4.1"
-    "claude-haiku-3.5" = "H3.5"
+[components.model.mapping]
+claude-sonnet-4 = "S4"
+"claude-opus-4.1" = "O4.1"
+"claude-haiku-3.5" = "H3.5"
 
-  [components.branch]
-  enabled = true
-  icon_color = "green"
-  text_color = "white"
-  emoji_icon = "🌿"
-  nerd_icon = ""
-  text_icon = "[B]"
-  show_when_no_git = false
-  max_length = 15
+[components.branch]
+enabled = true
+icon_color = "green"
+text_color = "white"
+emoji_icon = "🌿"
+nerd_icon = ""
+text_icon = "[B]"
+show_when_no_git = false
+max_length = 15
 
-    [components.branch.status]
-    show_dirty = true
-    show_ahead_behind = true
-    show_stash_count = true
-    show_staged_count = false
-    show_unstaged_count = false
-    show_untracked_count = false
+[components.branch.status]
+show_dirty = true
+show_ahead_behind = true
+show_stash_count = true
+show_staged_count = false
+show_unstaged_count = false
+show_untracked_count = false
 
-    [components.branch.operations]
-    show_merge = true
-    show_rebase = true
-    show_cherry_pick = false
-    show_bisect = false
+[components.branch.operations]
+show_merge = true
+show_rebase = true
+show_cherry_pick = false
+show_bisect = false
 
-    [components.branch.performance]
-    enable_cache = true
-    cache_ttl = 5_000
-    git_timeout = 1_000
-    parallel_commands = true
-    lazy_load_status = true
-    skip_on_large_repo = true
-    large_repo_threshold = 10_000
+[components.branch.performance]
+enable_cache = true
+cache_ttl = 5_000
+git_timeout = 1_000
+parallel_commands = true
+lazy_load_status = true
+skip_on_large_repo = true
+large_repo_threshold = 10_000
 
-  [components.tokens]
-  enabled = true
-  icon_color = "yellow"
-  text_color = "white"
-  emoji_icon = "📊"
-  nerd_icon = ""
-  text_icon = "[T]"
-  show_gradient = true
-  show_progress_bar = true
-  show_percentage = true
-  show_raw_numbers = false
-  progress_width = 15
+[components.tokens]
+enabled = true
+icon_color = "yellow"
+text_color = "white"
+emoji_icon = "📊"
+nerd_icon = ""
+text_icon = "[T]"
+show_gradient = true
+show_progress_bar = true
+show_percentage = true
+show_raw_numbers = false
+progress_width = 15
 
-    [components.tokens.progress_bar_chars]
-    filled = "█"
-    empty = "░"
-    backup = "▓"
+[components.tokens.progress_bar_chars]
+filled = "█"
+empty = "░"
+backup = "▓"
 
-    [components.tokens.colors]
-    safe = "green"
-    warning = "yellow"
-    danger = "red"
+[components.tokens.colors]
+safe = "green"
+warning = "yellow"
+danger = "red"
 
-    [components.tokens.thresholds]
-    warning = 60
-    danger = 85
-    backup = 85
-    critical = 95
+[components.tokens.thresholds]
+warning = 60
+danger = 85
+backup = 85
+critical = 95
 
 [components.tokens.status_icons.emoji]
 backup = "⚡"
@@ -137,31 +137,31 @@ critical = ""
 backup = "[!]"
 critical = "[X]"
 
-    [components.tokens.context_windows]
-    default = 200_000
-    claude-sonnet-4 = 200_000
-    "claude-opus-4.1" = 200_000
-    "claude-haiku-3.5" = 200_000
+[components.tokens.context_windows]
+default = 200_000
+claude-sonnet-4 = 200_000
+"claude-opus-4.1" = 200_000
+"claude-haiku-3.5" = 200_000
 
-  [components.usage]
-  enabled = true
-  icon_color = "cyan"
-  text_color = "white"
-  emoji_icon = "💰"
-  nerd_icon = ""
-  text_icon = "[$]"
-  display_mode = "cost"
-  show_model = false
-  precision = 2
+[components.usage]
+enabled = true
+icon_color = "cyan"
+text_color = "white"
+emoji_icon = "💰"
+nerd_icon = ""
+text_icon = "[$]"
+display_mode = "cost"
+show_model = false
+precision = 2
 
-  [components.status]
-  enabled = true
-  icon_color = "magenta"
-  text_color = "white"
-  emoji_icon = "✨"
-  nerd_icon = ""
-  text_icon = "[S]"
-  show_recent_errors = true
+[components.status]
+enabled = true
+icon_color = "magenta"
+text_color = "white"
+emoji_icon = "✨"
+nerd_icon = ""
+text_icon = "[S]"
+show_recent_errors = true
 
 [components.status.icons.emoji]
 ready = "✅"
@@ -184,12 +184,12 @@ tool = "[TOOL]"
 error = "[ERR]"
 warning = "[WARN]"
 
-    [components.status.colors]
-    ready = "green"
-    thinking = "yellow"
-    tool = "blue"
-    error = "red"
-    warning = "yellow"
+[components.status.colors]
+ready = "green"
+thinking = "yellow"
+tool = "blue"
+error = "red"
+warning = "yellow"
 
 [preset_mapping]
 P = "project"
@@ -203,7 +203,7 @@ S = "status"
 cache_enabled = true
 recent_error_count = 5
 git_timeout = 1_000
-custom_color_codes = { }
+custom_color_codes = {}
 
 [experimental]
 enable_experimental = false
