@@ -10,11 +10,15 @@ import { type ComponentsConfig, type Config, ConfigSchema } from './schema.js';
 
 // ES模块和CommonJS兼容的__dirname处理
 let __dirname: string;
-if (typeof import.meta !== 'undefined' && import.meta.url) {
-  // ES模块环境
-  const __filename = fileURLToPath(import.meta.url);
-  __dirname = path.dirname(__filename);
-} else {
+try {
+  // ES模块环境检测
+  if (typeof import.meta !== 'undefined' && import.meta.url) {
+    const __filename = fileURLToPath(import.meta.url);
+    __dirname = path.dirname(__filename);
+  } else {
+    throw new Error('import.meta不可用');
+  }
+} catch {
   // CommonJS环境或者运行时兼容
   __dirname = process.cwd();
 }
@@ -33,7 +37,7 @@ function getTemplateFilePath(): string {
     }
     currentDir = path.dirname(currentDir);
   }
-  
+
   // 如果没找到项目根目录，回退到相对路径
   return path.join(process.cwd(), 'configs', 'config.template.toml');
 }
@@ -733,7 +737,7 @@ export class ConfigLoader {
       // 从外部模板文件读取配置 | Read config from external template file
       let configContent: string;
       const templatePath = getTemplateFilePath();
-      
+
       try {
         if (fs.existsSync(templatePath)) {
           configContent = await this.readConfigFileSafely(templatePath);
@@ -741,9 +745,11 @@ export class ConfigLoader {
           throw new Error(`Template file not found: ${templatePath}`);
         }
       } catch (error) {
-        console.warn(`Failed to read template file: ${error instanceof Error ? error.message : String(error)}`);
+        console.warn(
+          `Failed to read template file: ${error instanceof Error ? error.message : String(error)}`
+        );
         console.warn('Using minimal fallback configuration...');
-        
+
         // 最小化fallback配置 | Minimal fallback configuration
         configContent = `preset = "PMBTUS"
 theme = "classic"
@@ -762,7 +768,7 @@ order = ["project", "model", "branch", "tokens", "usage", "status"]`;
         (parsedConfig as Record<string, unknown>).theme = theme;
       }
 
-      // 智能语言检测 | Intelligent language detection  
+      // 智能语言检测 | Intelligent language detection
       // 只有当配置中没有语言设置时，才使用系统检测
       if (!(parsedConfig as Record<string, unknown>).language) {
         const detectedLanguage = detectSystemLanguage();
@@ -895,14 +901,14 @@ order = ["project", "model", "branch", "tokens", "usage", "status"]`;
     try {
       // 从外部模板文件读取配置 | Read config from external template file
       const templatePath = getTemplateFilePath();
-      
+
       if (fs.existsSync(templatePath)) {
         const configContent = fs.readFileSync(templatePath, 'utf8');
         const parsedConfig = TOML.parse(configContent);
-        
+
         // 清理Symbol属性
         const cleanedConfig = this.cleanSymbols(parsedConfig);
-        
+
         // 保持默认配置模板中的语言设置，不强制覆盖
         // 如果模板中没有语言设置，Schema会使用默认值'zh'
         return ConfigSchema.parse(cleanedConfig);
@@ -910,10 +916,12 @@ order = ["project", "model", "branch", "tokens", "usage", "status"]`;
         console.warn(`Template file not found: ${templatePath}, using schema defaults`);
       }
     } catch (error) {
-      console.warn(`Failed to read template file: ${error instanceof Error ? error.message : String(error)}`);
+      console.warn(
+        `Failed to read template file: ${error instanceof Error ? error.message : String(error)}`
+      );
       console.warn('Using schema defaults...');
     }
-    
+
     // 模板文件不存在或读取失败时的fallback - 使用Schema默认值
     return ConfigSchema.parse({
       preset: 'PMBTUS',

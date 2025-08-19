@@ -6,8 +6,12 @@
 import type { ConfigLoader } from '../../config/loader.js';
 import type { Config } from '../../config/schema.js';
 import { LivePreviewEngine } from '../preview-engine.js';
-import { createThemeSelector, createLanguageSelector, realTimePreviewSelector } from './realtime-preview-selector.js';
 import type { Choice, PreviewCallback } from './realtime-preview-selector.js';
+import {
+  createLanguageSelector,
+  createThemeSelector,
+  realTimePreviewSelector,
+} from './realtime-preview-selector.js';
 
 /**
  * 集成配置接口
@@ -56,7 +60,7 @@ export class RealTimePreviewSelectorIntegration {
    * 创建集成了预览引擎的主题选择器
    */
   createIntegratedThemeSelector(): (message?: string) => Promise<string> {
-    const previewCallback: PreviewCallback = async (choice, index) => {
+    const previewCallback: PreviewCallback = async (choice, _index) => {
       if (!this.previewEngine) {
         // 如果没有预览引擎，显示简单的主题信息
         console.log(`\n🎨 主题: ${choice.name}`);
@@ -74,14 +78,13 @@ export class RealTimePreviewSelectorIntegration {
 
         // 触发预览渲染
         const scenarios = this.previewEngine.getAvailableScenarios().slice(0, 2);
-        
+
         console.log(`\n🎨 预览主题: ${choice.name}`);
         console.log('📟 状态行预览:');
-        
+
         for (const scenarioId of scenarios) {
           await this.previewEngine.renderStaticPreview([scenarioId]);
         }
-
       } catch (error) {
         console.error(`❌ 预览主题 ${choice.value} 失败:`, error);
       }
@@ -94,7 +97,7 @@ export class RealTimePreviewSelectorIntegration {
    * 创建集成了语言预览的语言选择器
    */
   createIntegratedLanguageSelector(): (message?: string) => Promise<string> {
-    const previewCallback: PreviewCallback = async (choice, index) => {
+    const previewCallback: PreviewCallback = async (choice, _index) => {
       try {
         // 模拟语言切换预览
         const languageMessages: Record<string, Record<string, string>> = {
@@ -104,13 +107,13 @@ export class RealTimePreviewSelectorIntegration {
             theme: '主题',
             config: '配置',
           },
-          'en': {
+          en: {
             title: 'English Interface',
             status: 'Status Line',
             theme: 'Theme',
             config: 'Configuration',
           },
-          'ja': {
+          ja: {
             title: '日本語インターフェース',
             status: 'ステータスライン',
             theme: 'テーマ',
@@ -118,15 +121,14 @@ export class RealTimePreviewSelectorIntegration {
           },
         };
 
-        const messages = languageMessages[choice.value] || languageMessages['en'];
-        
+        const messages = languageMessages[choice.value] || languageMessages.en;
+
         console.log(`\n🌐 语言预览: ${choice.name}`);
         console.log(`📋 界面元素预览:`);
         console.log(`   ${messages?.title || 'Unknown'}`);
         console.log(`   ${messages?.status || 'Status'}: ✓ 已就绪`);
         console.log(`   ${messages?.theme || 'Theme'}: Classic`);
         console.log(`   ${messages?.config || 'Config'}: 已加载`);
-
       } catch (error) {
         console.error(`❌ 预览语言 ${choice.value} 失败:`, error);
       }
@@ -179,7 +181,7 @@ export class RealTimePreviewSelectorIntegration {
         },
       ];
 
-      const previewCallback: PreviewCallback = async (choice, index) => {
+      const previewCallback: PreviewCallback = async (choice, _index) => {
         try {
           console.log(`\n⚙️ 组件预览: ${choice.name}`);
           console.log(`📝 组件类型: ${choice.value}`);
@@ -188,7 +190,8 @@ export class RealTimePreviewSelectorIntegration {
 
           // 模拟组件配置预览
           const currentConfig = this.integration.currentConfig;
-          const componentConfig = currentConfig.components && (currentConfig.components as any)[choice.value];
+          const componentConfig =
+            currentConfig.components && (currentConfig.components as any)[choice.value];
 
           if (componentConfig) {
             console.log(`⚙️ 当前配置:`);
@@ -202,7 +205,6 @@ export class RealTimePreviewSelectorIntegration {
           } else {
             console.log(`⚠️ 组件未配置`);
           }
-
         } catch (error) {
           console.error(`❌ 预览组件 ${choice.value} 失败:`, error);
         }
@@ -258,7 +260,7 @@ export class RealTimePreviewSelectorIntegration {
         },
       ];
 
-      const previewCallback: PreviewCallback = async (choice, index) => {
+      const previewCallback: PreviewCallback = async (choice, _index) => {
         try {
           console.log(`\n📦 预设预览: ${choice.name}`);
           console.log(`🏷️ 预设值: ${choice.value}`);
@@ -266,18 +268,21 @@ export class RealTimePreviewSelectorIntegration {
 
           // 解析预设包含的组件
           const componentMap: Record<string, string> = {
-            'P': 'Project',
-            'M': 'Model', 
-            'B': 'Branch',
-            'T': 'Tokens',
-            'S': 'Status',
-            'U': 'Usage',
+            P: 'Project',
+            M: 'Model',
+            B: 'Branch',
+            T: 'Tokens',
+            S: 'Status',
+            U: 'Usage',
           };
 
           if (choice.value === 'FULL') {
             console.log(`📋 包含组件: ${Object.values(componentMap).join(', ')}`);
           } else {
-            const components = choice.value.split('').map(char => componentMap[char]).filter(Boolean);
+            const components = choice.value
+              .split('')
+              .map((char) => componentMap[char])
+              .filter(Boolean);
             console.log(`📋 包含组件: ${components.join(', ')}`);
           }
 
@@ -286,7 +291,6 @@ export class RealTimePreviewSelectorIntegration {
             console.log(`🔍 正在生成预设预览...`);
             // 这里可以应用预设并生成预览
           }
-
         } catch (error) {
           console.error(`❌ 预览预设 ${choice.value} 失败:`, error);
         }

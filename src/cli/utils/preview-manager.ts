@@ -10,7 +10,7 @@
  * - 配置效果预览
  */
 
-import { confirm, select } from '@inquirer/prompts';
+import { select } from '@inquirer/prompts';
 import type { Config } from '../../config/schema.js';
 import { StatuslineGenerator } from '../../core/generator.js';
 import { TerminalDetector } from '../../terminal/detector.js';
@@ -165,11 +165,10 @@ export class PreviewManager {
 
       console.log('\n📊 配置预览效果 | Configuration Preview:');
       console.log(`   ${output}`);
-      
+
       // 显示额外的场景预览（可选）
       console.log('\n🔄 其他场景预览 | Other Scenarios:');
       await this.renderQuickMultiScenario(config);
-      
     } catch (error) {
       const errorMsg = capabilities.colors
         ? `\x1b[31m❌ 预览生成失败: ${error instanceof Error ? error.message : String(error)}\x1b[0m`
@@ -310,10 +309,14 @@ export class PreviewManager {
       // 生成缓存键
       const configKey = JSON.stringify(config);
       const cacheKey = `${scenarioId}-${this.hashString(configKey)}`;
-      
+
       // 检查缓存
       const cached = this.previewCache.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < this.cacheTimeout && cached.config === configKey) {
+      if (
+        cached &&
+        Date.now() - cached.timestamp < this.cacheTimeout &&
+        cached.config === configKey
+      ) {
         return cached.output;
       }
 
@@ -321,14 +324,14 @@ export class PreviewManager {
       const mockData = mockGenerator.generate(scenarioId);
       const generator = new StatuslineGenerator(config, { disableCache: true });
       const output = await generator.generate(mockData);
-      
+
       // 缓存结果
       this.previewCache.set(cacheKey, {
         output,
         timestamp: Date.now(),
-        config: configKey
+        config: configKey,
       });
-      
+
       return output;
     } catch (error) {
       throw new Error(
@@ -542,10 +545,9 @@ export class PreviewManager {
 
       // 立即渲染实时预览界面
       await this.renderLivePreviewInterface(config);
-      
+
       // 显示快速多场景预览
       await this.renderQuickMultiScenario(config);
-      
     } catch (error) {
       console.log(`❌ 实时预览更新失败: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -559,20 +561,20 @@ export class PreviewManager {
     const scenarios = [
       { id: 'dev', name: '🟢 开发', color: '\x1b[32m' },
       { id: 'critical', name: '🟡 临界', color: '\x1b[33m' },
-      { id: 'complete', name: '🔵 完整', color: '\x1b[34m' }
+      { id: 'complete', name: '🔵 完整', color: '\x1b[34m' },
     ];
 
     console.log('\n📊 多场景快速预览:');
-    
+
     for (const scenario of scenarios) {
       try {
         const output = await this.quickPreview(config, scenario.id);
         const displayName = this.terminalDetector.detectCapabilities().colors
           ? `${scenario.color}${scenario.name}\x1b[0m`
           : scenario.name;
-        
+
         console.log(`   ${displayName}: ${output}`);
-      } catch (error) {
+      } catch (_error) {
         console.log(`   ${scenario.name}: ❌ 渲染失败`);
       }
     }
@@ -590,31 +592,32 @@ export class PreviewManager {
    * 批量即时预览 | Batch Instant Preview
    * 重构新增：同时获取多个场景的预览结果
    */
-  async getBatchInstantPreview(config: Config, scenarios: string[] = ['dev', 'critical', 'complete']): Promise<Record<string, string>> {
+  async getBatchInstantPreview(
+    config: Config,
+    scenarios: string[] = ['dev', 'critical', 'complete']
+  ): Promise<Record<string, string>> {
     const results: Record<string, string> = {};
-    
+
     // 并行处理场景预览，提升性能
     const promises = scenarios.map(async (scenarioId) => {
       try {
         const output = await this.quickPreview(config, scenarioId);
         return { scenarioId, output, error: null };
       } catch (error) {
-        return { 
-          scenarioId, 
-          output: '', 
-          error: error instanceof Error ? error.message : String(error) 
+        return {
+          scenarioId,
+          output: '',
+          error: error instanceof Error ? error.message : String(error),
         };
       }
     });
-    
+
     const resolvedResults = await Promise.all(promises);
-    
+
     for (const result of resolvedResults) {
-      results[result.scenarioId] = result.error 
-        ? `Error: ${result.error}` 
-        : result.output;
+      results[result.scenarioId] = result.error ? `Error: ${result.error}` : result.output;
     }
-    
+
     return results;
   }
 
@@ -626,7 +629,7 @@ export class PreviewManager {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // 转换为32位整数
     }
     return Math.abs(hash).toString(36);
@@ -647,7 +650,7 @@ export class PreviewManager {
   getCacheStats(): { size: number; entries: string[] } {
     return {
       size: this.previewCache.size,
-      entries: Array.from(this.previewCache.keys())
+      entries: Array.from(this.previewCache.keys()),
     };
   }
 }

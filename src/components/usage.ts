@@ -15,7 +15,8 @@ interface SessionUsageInfo {
   // Token数据 | Token data
   input_tokens: number;
   output_tokens: number;
-  cache_creation_tokens: number;
+  cache_creation_5m_tokens: number; // 5分钟缓存创建tokens
+  cache_creation_1h_tokens: number; // 1小时缓存创建tokens
   cache_read_tokens: number;
   total_tokens: number;
 
@@ -36,7 +37,8 @@ interface SessionUsageInfo {
 interface ModelPricing {
   input: number; // 输入token价格 ($/M tokens) | Input token price ($/M tokens)
   output: number; // 输出token价格 ($/M tokens) | Output token price ($/M tokens)
-  cache_creation: number; // 缓存创建价格 ($/M tokens) | Cache creation price ($/M tokens)
+  cache_creation_5m: number; // 5分钟缓存创建价格 ($/M tokens) | 5-minute cache creation price ($/M tokens)
+  cache_creation_1h: number; // 1小时缓存创建价格 ($/M tokens) | 1-hour cache creation price ($/M tokens)
   cache_read: number; // 缓存读取价格 ($/M tokens) | Cache read price ($/M tokens)
 }
 
@@ -49,27 +51,31 @@ const MODEL_PRICING = {
   'claude-sonnet-4-20250514': {
     input: 3, // $3/M tokens
     output: 15, // $15/M tokens
-    cache_creation: 3.75, // $3.75/M tokens (5min cache writes)
-    cache_read: 0.3, // $0.30/M tokens (cache hits)
+    cache_creation_5m: 3.75, // $3.75/M tokens (1.25x input price)
+    cache_creation_1h: 6, // $6/M tokens (2x input price)
+    cache_read: 0.3, // $0.30/M tokens (0.1x input price)
   },
 
   // Claude Sonnet 3.5 (各种版本兼容) | Claude Sonnet 3.5 (Various version compatibility)
   'claude-3-5-sonnet-20241022': {
     input: 3,
     output: 15,
-    cache_creation: 3.75,
-    cache_read: 0.3,
+    cache_creation_5m: 3.75, // 1.25x input price
+    cache_creation_1h: 6, // 2x input price
+    cache_read: 0.3, // 0.1x input price
   },
   'claude-3-5-sonnet': {
     input: 3,
     output: 15,
-    cache_creation: 3.75,
+    cache_creation_5m: 3.75,
+    cache_creation_1h: 6,
     cache_read: 0.3,
   },
   'claude-sonnet': {
     input: 3,
     output: 15,
-    cache_creation: 3.75,
+    cache_creation_5m: 3.75,
+    cache_creation_1h: 6,
     cache_read: 0.3,
   },
 
@@ -77,13 +83,15 @@ const MODEL_PRICING = {
   'claude-3-5-haiku-20241022': {
     input: 0.8, // $0.80/M tokens (官方定价)
     output: 4, // $4/M tokens (官方定价)
-    cache_creation: 1.0, // $1/M tokens (5min cache writes)
-    cache_read: 0.08, // $0.08/M tokens (cache hits)
+    cache_creation_5m: 1.0, // $1/M tokens (1.25x input price)
+    cache_creation_1h: 1.6, // $1.6/M tokens (2x input price)
+    cache_read: 0.08, // $0.08/M tokens (0.1x input price)
   },
   'claude-3-5-haiku': {
     input: 0.8,
     output: 4,
-    cache_creation: 1.0,
+    cache_creation_5m: 1.0,
+    cache_creation_1h: 1.6,
     cache_read: 0.08,
   },
 
@@ -91,16 +99,18 @@ const MODEL_PRICING = {
   'claude-3-opus-20240229': {
     input: 15,
     output: 75,
-    cache_creation: 18.75,
-    cache_read: 1.5,
+    cache_creation_5m: 18.75, // 1.25x input price
+    cache_creation_1h: 30, // 2x input price
+    cache_read: 1.5, // 0.1x input price
   },
 
   // 默认回退价格 | Default fallback pricing
   default: {
     input: 3,
     output: 15,
-    cache_creation: 3.75,
-    cache_read: 0.3,
+    cache_creation_5m: 3.75, // 1.25x input price
+    cache_creation_1h: 6, // 2x input price
+    cache_read: 0.3, // 0.1x input price
   },
 } as const;
 
@@ -122,7 +132,8 @@ const getModelPricing = (modelId: string): ModelPricing => {
   return {
     input: 3,
     output: 15,
-    cache_creation: 3.75,
+    cache_creation_5m: 3.75,
+    cache_creation_1h: 6,
     cache_read: 0.3,
   };
 };
@@ -181,13 +192,14 @@ export class UsageComponent extends BaseComponent {
     const defaultUsage: SessionUsageInfo = {
       input_tokens: 15000,
       output_tokens: 5000,
-      cache_creation_tokens: 2000,
+      cache_creation_5m_tokens: 2000,
+      cache_creation_1h_tokens: 1000,
       cache_read_tokens: 8000,
-      total_tokens: 30000,
+      total_tokens: 31000,
       input_cost: 0.045,
       output_cost: 0.075,
-      cache_cost: 0.008,
-      total_cost: 0.128,
+      cache_cost: 0.014,
+      total_cost: 0.134,
       model: 'claude-sonnet-4-20250514',
       session_id: 'mock-session',
       ...mockUsageData,
@@ -249,7 +261,8 @@ export class UsageComponent extends BaseComponent {
       // 按模型分别累计usage数据 | Accumulate usage data by model
       let totalInputTokens = 0;
       let totalOutputTokens = 0;
-      let totalCacheCreationTokens = 0;
+      let totalCacheCreation5mTokens = 0;
+      let totalCacheCreation1hTokens = 0;
       let totalCacheReadTokens = 0;
       let totalCost = 0;
 
@@ -270,6 +283,10 @@ export class UsageComponent extends BaseComponent {
                 output_tokens?: number;
                 cache_creation_input_tokens?: number;
                 cache_read_input_tokens?: number;
+                cache_creation?: {
+                  ephemeral_5m_input_tokens?: number;
+                  ephemeral_1h_input_tokens?: number;
+                };
                 [key: string]: unknown;
               };
               model?: string;
@@ -315,12 +332,25 @@ export class UsageComponent extends BaseComponent {
               // 累计token数量 | Accumulate token counts
               const inputTokens = usage.input_tokens || 0;
               const outputTokens = usage.output_tokens || 0;
-              const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
               const cacheReadTokens = usage.cache_read_input_tokens || 0;
+
+              // 处理细分的缓存创建数据 | Handle detailed cache creation data
+              let cache5mTokens = 0;
+              let cache1hTokens = 0;
+
+              if (usage.cache_creation) {
+                // 新格式：细分的缓存数据 | New format: detailed cache data
+                cache5mTokens = usage.cache_creation.ephemeral_5m_input_tokens || 0;
+                cache1hTokens = usage.cache_creation.ephemeral_1h_input_tokens || 0;
+              } else if (usage.cache_creation_input_tokens) {
+                // 回退到旧格式：假设全部为5分钟缓存 | Fallback to old format: assume all 5m cache
+                cache5mTokens = usage.cache_creation_input_tokens;
+              }
 
               totalInputTokens += inputTokens;
               totalOutputTokens += outputTokens;
-              totalCacheCreationTokens += cacheCreationTokens;
+              totalCacheCreation5mTokens += cache5mTokens;
+              totalCacheCreation1hTokens += cache1hTokens;
               totalCacheReadTokens += cacheReadTokens;
 
               // 按此消息的实际模型计算成本 | Calculate cost based on actual model of this message
@@ -328,7 +358,8 @@ export class UsageComponent extends BaseComponent {
               const messageCost =
                 this.calculateCost(inputTokens, pricing.input) +
                 this.calculateCost(outputTokens, pricing.output) +
-                this.calculateCost(cacheCreationTokens, pricing.cache_creation) +
+                this.calculateCost(cache5mTokens, pricing.cache_creation_5m) +
+                this.calculateCost(cache1hTokens, pricing.cache_creation_1h) +
                 this.calculateCost(cacheReadTokens, pricing.cache_read);
 
               totalCost += messageCost;
@@ -339,20 +370,26 @@ export class UsageComponent extends BaseComponent {
 
       // 计算总token数 | Calculate total tokens
       const totalTokens =
-        totalInputTokens + totalOutputTokens + totalCacheCreationTokens + totalCacheReadTokens;
+        totalInputTokens +
+        totalOutputTokens +
+        totalCacheCreation5mTokens +
+        totalCacheCreation1hTokens +
+        totalCacheReadTokens;
 
       // 为了向后兼容，计算平均成本组件 | For backward compatibility, calculate average cost components
       const avgPricing = this.getModelPricing(modelId);
       const inputCost = this.calculateCost(totalInputTokens, avgPricing.input);
       const outputCost = this.calculateCost(totalOutputTokens, avgPricing.output);
       const cacheCost =
-        this.calculateCost(totalCacheCreationTokens, avgPricing.cache_creation) +
+        this.calculateCost(totalCacheCreation5mTokens, avgPricing.cache_creation_5m) +
+        this.calculateCost(totalCacheCreation1hTokens, avgPricing.cache_creation_1h) +
         this.calculateCost(totalCacheReadTokens, avgPricing.cache_read);
 
       const result: SessionUsageInfo = {
         input_tokens: totalInputTokens,
         output_tokens: totalOutputTokens,
-        cache_creation_tokens: totalCacheCreationTokens,
+        cache_creation_5m_tokens: totalCacheCreation5mTokens,
+        cache_creation_1h_tokens: totalCacheCreation1hTokens,
         cache_read_tokens: totalCacheReadTokens,
         total_tokens: totalTokens,
         input_cost: inputCost,
@@ -383,7 +420,8 @@ export class UsageComponent extends BaseComponent {
     return {
       input_tokens: 0,
       output_tokens: 0,
-      cache_creation_tokens: 0,
+      cache_creation_5m_tokens: 0,
+      cache_creation_1h_tokens: 0,
       cache_read_tokens: 0,
       total_tokens: 0,
       input_cost: 0,
@@ -496,7 +534,10 @@ export class UsageComponent extends BaseComponent {
       parts.push(`${this.formatTokensShort(usageInfo.output_tokens)}out`);
     }
 
-    const cacheTokens = usageInfo.cache_creation_tokens + usageInfo.cache_read_tokens;
+    const cacheTokens =
+      usageInfo.cache_creation_5m_tokens +
+      usageInfo.cache_creation_1h_tokens +
+      usageInfo.cache_read_tokens;
     if (cacheTokens > 0) {
       parts.push(`${this.formatTokensShort(cacheTokens)}cache`);
     }

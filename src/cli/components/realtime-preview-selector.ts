@@ -12,13 +12,13 @@
 
 import {
   createPrompt,
-  useState,
-  useKeypress,
-  useEffect,
-  isUpKey,
   isDownKey,
   isEnterKey,
   isSpaceKey,
+  isUpKey,
+  useEffect,
+  useKeypress,
+  useState,
 } from '@inquirer/core';
 // 移除chalk依赖，使用ANSI转义序列代替
 // import chalk from 'chalk';
@@ -67,20 +67,6 @@ export interface RealTimePreviewSelectorConfig {
 }
 
 /**
- * 组件状态接口
- */
-interface State {
-  /** 当前选中索引 */
-  selectedIndex: number;
-  /** 当前页面开始索引 */
-  pageStart: number;
-  /** 是否正在预览 */
-  isPreviewing: boolean;
-  /** 错误消息 */
-  error?: string;
-}
-
-/**
  * 创建实时预览选择器
  */
 export const realTimePreviewSelector = createPrompt<string, RealTimePreviewSelectorConfig>(
@@ -102,7 +88,9 @@ export const realTimePreviewSelector = createPrompt<string, RealTimePreviewSelec
 
     // 状态管理
     const [selectedIndex, setSelectedIndex] = useState(initialIndex);
-    const [pageStart, setPageStart] = useState(Math.max(0, Math.floor(initialIndex / pageSize) * pageSize));
+    const [pageStart, setPageStart] = useState(
+      Math.max(0, Math.floor(initialIndex / pageSize) * pageSize)
+    );
     const [isPreviewing, setIsPreviewing] = useState(false);
     const [error, setError] = useState<string | undefined>(undefined);
 
@@ -158,7 +146,7 @@ export const realTimePreviewSelector = createPrompt<string, RealTimePreviewSelec
     };
 
     // 键盘事件处理
-    useKeypress((key, rl) => {
+    useKeypress((key, _rl) => {
       if (isUpKey(key)) {
         updateSelectedIndex(selectedIndex - 1);
       } else if (isDownKey(key)) {
@@ -194,10 +182,10 @@ export const realTimePreviewSelector = createPrompt<string, RealTimePreviewSelec
     /**
      * 渲染选项行
      */
-    const renderChoice = (choice: Choice, index: number, isSelected: boolean) => {
-      const originalIndex = choices.indexOf(choice);
+    const renderChoice = (choice: Choice, _index: number, isSelected: boolean) => {
+      const _originalIndex = choices.indexOf(choice);
       const isDisabled = choice.disabled;
-      
+
       let line = '';
 
       // 选择指示器
@@ -234,7 +222,6 @@ export const realTimePreviewSelector = createPrompt<string, RealTimePreviewSelec
      * 渲染页面
      */
     const renderPage = () => {
-      
       // 计算当前页面的选项
       const pageEnd = Math.min(pageStart + pageSize, validChoices.length);
       const pageChoices = validChoices.slice(pageStart, pageEnd);
@@ -256,7 +243,7 @@ export const realTimePreviewSelector = createPrompt<string, RealTimePreviewSelec
       pageChoices.forEach((choice, pageIndex) => {
         const globalIndex = pageStart + pageIndex;
         const isSelected = globalIndex === selectedIndex;
-        output += renderChoice(choice, globalIndex, isSelected) + '\n';
+        output += `${renderChoice(choice, globalIndex, isSelected)}\n`;
       });
 
       // 分页指示器

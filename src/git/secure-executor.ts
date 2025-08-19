@@ -214,7 +214,7 @@ export class SecureGitExecutor {
 
     for (const pattern of patterns) {
       const match = range.match(pattern);
-      if (match && match[1] && match[2]) {
+      if (match?.[1] && match[2]) {
         const from = match[1];
         const to = match[2];
 
