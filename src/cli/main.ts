@@ -20,9 +20,31 @@ import { initializeI18n, t } from './i18n.js';
 import { formatCliMessage } from './message-icons.js';
 import { MockDataGenerator } from './mock-data.js';
 
-// 版本号 - 构建时注入
-declare const __PACKAGE_VERSION__: string;
-const getVersion = () => __PACKAGE_VERSION__;
+// 声明构建时注入的全局变量
+declare const __PACKAGE_VERSION__: string | undefined;
+
+// 版本号获取函数 - 支持开发和构建模式
+const getVersion = (): string => {
+  try {
+    // 构建模式下的版本号注入
+    if (typeof __PACKAGE_VERSION__ !== 'undefined') {
+      return __PACKAGE_VERSION__;
+    }
+  } catch {
+    // 忽略错误，继续使用package.json
+  }
+
+  // 开发模式从package.json读取
+  try {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const packageJsonPath = path.resolve(process.cwd(), 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    return packageJson.version;
+  } catch {
+    return '2.0.6'; // 备用版本号
+  }
+};
 
 const program = new Command();
 
@@ -49,6 +71,9 @@ program
   .option('--no-colors', 'disable colors output')
   .option('--no-emoji', 'disable emoji output')
   .option('--no-icons', 'disable Nerd Font icons')
+  .option('--force-emoji', 'force enable emoji icons')
+  .option('--force-nerd-font', 'force enable Nerd Font icons')
+  .option('--force-text', 'force text-only mode (no emoji or icons)')
   .option('-c, --config <path>', 'custom config file path')
   .option('-d, --debug', 'debug mode with verbose output')
   .option(
@@ -72,14 +97,34 @@ program
         config = { ...config, theme: options.theme };
       }
 
-      // 内联参数覆盖样式配置
-      if (options.colors === false || options.emoji === false || options.icons === false) {
+      // 内联参数覆盖样式和终端配置
+      if (
+        options.colors === false ||
+        options.emoji === false ||
+        options.icons === false ||
+        options.forceEmoji ||
+        options.forceNerdFont ||
+        options.forceText
+      ) {
         config.style = {
           separator: config.style?.separator || ' | ',
           enable_colors: options.colors === false ? false : config.style?.enable_colors || 'auto',
-          enable_emoji: options.emoji === false ? false : config.style?.enable_emoji || 'auto',
+          enable_emoji:
+            options.emoji === false
+              ? false
+              : options.forceEmoji
+                ? true
+                : options.forceText
+                  ? false
+                  : config.style?.enable_emoji || 'auto',
           enable_nerd_font:
-            options.icons === false ? false : config.style?.enable_nerd_font || 'auto',
+            options.icons === false
+              ? false
+              : options.forceNerdFont
+                ? true
+                : options.forceText
+                  ? false
+                  : config.style?.enable_nerd_font || 'auto',
           separator_color: config.style?.separator_color || 'white',
           separator_before: config.style?.separator_before || ' ',
           separator_after: config.style?.separator_after || ' ',
@@ -95,6 +140,19 @@ program
             force_text: false,
           };
         }
+
+        // 处理强制启用选项
+        if (options.forceEmoji) {
+          config.terminal.force_emoji = true;
+        }
+        if (options.forceNerdFont) {
+          config.terminal.force_nerd_font = true;
+        }
+        if (options.forceText) {
+          config.terminal.force_text = true;
+        }
+
+        // 处理禁用选项
         if (options.emoji === false) {
           config.terminal.force_emoji = false;
         }
