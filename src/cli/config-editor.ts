@@ -28,7 +28,6 @@ import { LivePreviewEngine } from './preview-engine.js';
 
 // 工具管理器导入 | Tool managers import
 import { PreviewManager } from './utils/preview-manager.js';
-import { SuggestionManager } from './utils/suggestion-manager.js';
 import { ValidationManager } from './utils/validation-manager.js';
 
 /**
@@ -59,22 +58,15 @@ export class ConfigEditor {
   private themeEditor!: ThemeEditor;
   private styleEditor!: StyleEditor;
   // TODO: 这些编辑器已初始化但未使用，预留给未来功能
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Reserved for future use
   private branchEditor!: BranchEditor;
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Reserved for future use
   private tokensEditor!: TokensEditor;
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Reserved for future use
   private modelEditor!: ModelEditor;
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Reserved for future use
   private statusEditor!: StatusEditor;
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Reserved for future use
   private usageEditor!: UsageEditor;
 
   // 工具管理器实例 | Tool manager instances
   private previewManager!: PreviewManager;
   private validationManager!: ValidationManager;
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Reserved for future use
-  private suggestionManager!: SuggestionManager;
 
   constructor(options: ConfigEditorOptions = {}) {
     this.options = {
@@ -183,7 +175,6 @@ export class ConfigEditor {
     this.validationManager = new ValidationManager({
       configPath: this.options.configPath,
     });
-    this.suggestionManager = new SuggestionManager();
   }
 
   /**
@@ -322,13 +313,6 @@ export class ConfigEditor {
       ],
       pageSize: 10,
     });
-  }
-
-  /**
-   * 显示配置更新后的预览 | Show preview after configuration update
-   */
-  private async showConfigurationUpdatePreview(updateMessage: string): Promise<void> {
-    await this.previewManager.showConfigPreview(this.currentConfig, updateMessage);
   }
 
   /**

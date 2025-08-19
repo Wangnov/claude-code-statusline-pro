@@ -8,10 +8,10 @@
  * - 终端兼容性配置
  */
 
-import { confirm, input, select } from '@inquirer/prompts';
+import { confirm, input } from '@inquirer/prompts';
 import type { Config } from '../../config/schema.js';
+import { type Choice, type PreviewCallback, realTimePreviewSelector } from '../components/index.js';
 import { getCurrentLanguage, setLanguage, t } from '../i18n.js';
-import { realTimePreviewSelector, type Choice, type PreviewCallback } from '../components/index.js';
 import { createPreviewManager } from '../utils/preview-manager.js';
 
 /**
@@ -119,7 +119,7 @@ export class StyleEditor {
     ];
 
     // 创建语言预览回调函数 | Create language preview callback
-    const languagePreviewCallback: PreviewCallback = async (choice: Choice, index: number) => {
+    const languagePreviewCallback: PreviewCallback = async (choice: Choice, _index: number) => {
       if (choice.value === 'back') {
         // 如果选择返回，显示当前配置预览
         await previewManager.updateLivePreview(this.currentConfig);
@@ -130,20 +130,22 @@ export class StyleEditor {
         try {
           // 临时切换语言进行预览（不保存到配置）
           const tempConfig = { ...this.currentConfig, language: choice.value as 'zh' | 'en' };
-          
+
           // 显示语言切换预览效果
           console.clear();
-          console.log(`🔄 ${choice.value === 'zh' ? '预览中文界面效果' : 'Previewing English interface'}...\n`);
-          
+          console.log(
+            `🔄 ${choice.value === 'zh' ? '预览中文界面效果' : 'Previewing English interface'}...\n`
+          );
+
           // 显示配置预览
           await previewManager.renderLivePreviewInterface(tempConfig);
-          
+
           // 显示语言预览信息
-          const previewMsg = choice.value === 'zh' 
-            ? '✨ 中文界面预览 - 所有菜单和消息将使用中文显示'
-            : '✨ English Interface Preview - All menus and messages will be displayed in English';
+          const previewMsg =
+            choice.value === 'zh'
+              ? '✨ 中文界面预览 - 所有菜单和消息将使用中文显示'
+              : '✨ English Interface Preview - All menus and messages will be displayed in English';
           console.log(`\n${previewMsg}`);
-          
         } catch (error) {
           console.log(`❌ 语言预览失败: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -154,7 +156,7 @@ export class StyleEditor {
     const selectedLang = await realTimePreviewSelector({
       message: t('editor.language.select'),
       choices,
-      default: choices.findIndex(c => c.value === currentLang),
+      default: choices.findIndex((c) => c.value === currentLang),
       onPreview: languagePreviewCallback,
       previewDelay: 150,
       showDescription: true,
@@ -178,10 +180,9 @@ export class StyleEditor {
         const newLangDisplay = selectedLang === 'zh' ? '简体中文' : 'English';
         console.log(`${t('editor.language.updated')}: ${newLangDisplay}`);
         console.log(`${t('editor.language.immediate')}`);
-        
+
         // 显示应用后的配置预览
         await previewManager.updateLivePreview(this.currentConfig);
-        
       } catch (error) {
         console.error(`${t('editor.language.failed')}:`, error);
         await previewManager.updateLivePreview(this.currentConfig);
