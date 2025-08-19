@@ -42,7 +42,7 @@ const getVersion = (): string => {
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
     return packageJson.version;
   } catch {
-    return '2.0.6'; // 备用版本号
+    return '2.1.0'; // 备用版本号
   }
 };
 
