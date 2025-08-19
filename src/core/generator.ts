@@ -282,6 +282,11 @@ export class StatuslineGenerator {
    * 检查是否需要添加fake组件 | Check if fake component should be added
    */
   private shouldAddFakeComponent(componentOrder: string[]): boolean {
+    // 检查强制非Nerd Font参数：如果强制使用emoji或text模式，则不需要fake组件
+    if (this.config.terminal?.force_emoji || this.config.terminal?.force_text) {
+      return false;
+    }
+
     // 检查终端能力：只有支持Nerd Font的终端才需要fake组件
     const capabilities = detect(
       this.config.style?.enable_colors,
