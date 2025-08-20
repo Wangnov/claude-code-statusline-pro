@@ -92,5 +92,8 @@
     "darwin",
     "win32"
   ],
-  "preferGlobal": false
+  "preferGlobal": false,
+  "overrides": {
+    "source-map": "^0.7.4"
+  }
 }
