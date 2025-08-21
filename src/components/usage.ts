@@ -315,36 +315,26 @@ export class UsageComponent extends BaseComponent {
               processedMessageIds.add(messageId);
             }
 
-            // 验证usage数据完整性 | Validate usage data completeness
-            const requiredKeys = [
-              'input_tokens',
-              'cache_creation_input_tokens',
-              'cache_read_input_tokens',
-              'output_tokens',
-            ];
-
-            if (
-              usage &&
-              requiredKeys.every(
-                (key) => key in usage && typeof (usage as Record<string, unknown>)[key] === 'number'
-              )
-            ) {
-              // 累计token数量 | Accumulate token counts
-              const inputTokens = usage.input_tokens || 0;
-              const outputTokens = usage.output_tokens || 0;
-              const cacheReadTokens = usage.cache_read_input_tokens || 0;
+            // 更加健壮的usage数据验证：只需要有usage对象，字段缺失时默认为0
+            // More robust usage data validation: only requires usage object, defaults to 0 for missing fields
+            if (usage && typeof usage === 'object') {
+              // 累计token数量，使用安全的数值转换 | Accumulate token counts with safe number conversion
+              const inputTokens = Number(usage.input_tokens) || 0;
+              const outputTokens = Number(usage.output_tokens) || 0;
+              const cacheReadTokens = Number(usage.cache_read_input_tokens) || 0;
 
               // 处理细分的缓存创建数据 | Handle detailed cache creation data
               let cache5mTokens = 0;
               let cache1hTokens = 0;
 
-              if (usage.cache_creation) {
+              if (usage.cache_creation && typeof usage.cache_creation === 'object') {
                 // 新格式：细分的缓存数据 | New format: detailed cache data
-                cache5mTokens = usage.cache_creation.ephemeral_5m_input_tokens || 0;
-                cache1hTokens = usage.cache_creation.ephemeral_1h_input_tokens || 0;
-              } else if (usage.cache_creation_input_tokens) {
+                cache5mTokens = Number(usage.cache_creation.ephemeral_5m_input_tokens) || 0;
+                cache1hTokens = Number(usage.cache_creation.ephemeral_1h_input_tokens) || 0;
+              } else {
                 // 回退到旧格式：假设全部为5分钟缓存 | Fallback to old format: assume all 5m cache
-                cache5mTokens = usage.cache_creation_input_tokens;
+                const cacheCreationTokens = Number(usage.cache_creation_input_tokens) || 0;
+                cache5mTokens = cacheCreationTokens;
               }
 
               totalInputTokens += inputTokens;

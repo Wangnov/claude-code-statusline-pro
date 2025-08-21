@@ -164,19 +164,16 @@ export class TokensComponent extends BaseComponent {
           // 查找包含usage信息的assistant消息 | Find assistant message with usage info
           if (entry.type === 'assistant' && entry.message && 'usage' in entry.message) {
             const usage = entry.message.usage;
-            const requiredKeys = [
-              'input_tokens',
-              'cache_creation_input_tokens',
-              'cache_read_input_tokens',
-              'output_tokens',
-            ];
 
-            if (usage && requiredKeys.every((key) => key in usage)) {
-              const currentUsage =
-                usage.input_tokens +
-                usage.cache_creation_input_tokens +
-                usage.cache_read_input_tokens +
-                usage.output_tokens;
+            // 更加健壮的字段验证：只需要有usage对象即可，各字段缺失时默认为0
+            // More robust field validation: only requires usage object, defaults to 0 for missing fields
+            if (usage && typeof usage === 'object') {
+              const inputTokens = Number(usage.input_tokens) || 0;
+              const outputTokens = Number(usage.output_tokens) || 0;
+              const cacheCreationTokens = Number(usage.cache_creation_input_tokens) || 0;
+              const cacheReadTokens = Number(usage.cache_read_input_tokens) || 0;
+
+              const currentUsage = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
 
               // 跳过usage为0的情况，继续查找有效的usage
               // Skip usage of 0, continue searching for valid usage
