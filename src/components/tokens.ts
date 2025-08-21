@@ -152,8 +152,8 @@ export class TokensComponent extends BaseComponent {
       let contextUsedTokens = 0;
       let maxUsageTokens = 0;
 
-      // 从最后开始查找最新的assistant消息，统计所有有效usage以找到最高值
-      // Find latest assistant message from the end, collect all valid usage to find maximum
+      // 从最后开始查找assistant消息，优先使用会话中的最大usage值
+      // Find assistant messages from the end, prioritize maximum usage in session
       for (let i = lines.length - 1; i >= 0; i--) {
         const line = lines[i]?.trim();
         if (!line) continue;
@@ -181,9 +181,11 @@ export class TokensComponent extends BaseComponent {
               // 跳过usage为0的情况，继续查找有效的usage
               // Skip usage of 0, continue searching for valid usage
               if (currentUsage > 0) {
+                // 更新最大值 | Update maximum value
                 maxUsageTokens = Math.max(maxUsageTokens, currentUsage);
-                // 找到第一个非零usage就使用它（最新的有效usage）
-                // Use the first non-zero usage found (latest valid usage)
+                
+                // 记录最后一个非零usage作为备用（从后往前搜索，第一个非零就是最新的）
+                // Record last non-zero usage as backup (first non-zero from end is latest)
                 if (contextUsedTokens === 0) {
                   contextUsedTokens = currentUsage;
                 }
@@ -193,10 +195,12 @@ export class TokensComponent extends BaseComponent {
         } catch (_parseError) {}
       }
 
-      // 如果没有找到有效的usage，使用最高的usage值
-      // If no valid usage found, use the maximum usage value
-      if (contextUsedTokens === 0 && maxUsageTokens > 0) {
+      // 优先使用最大值，备用最后一个非零usage
+      // Prioritize maximum value, fallback to last non-zero usage
+      if (maxUsageTokens > 0) {
         contextUsedTokens = maxUsageTokens;
+      } else if (contextUsedTokens === 0) {
+        contextUsedTokens = 0; // 确保不使用0值 | Ensure no zero value usage
       }
 
       const contextWindow = this.getContextWindow();
