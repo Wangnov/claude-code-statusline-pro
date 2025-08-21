@@ -261,7 +261,7 @@ export class StatuslineGenerator {
     // 优先级：preset参数 > components.order > 默认
     // Priority: preset parameter > components.order > default
     const preset = this.config.preset;
-    
+
     // 如果预设不是默认值（PMBTUS），使用预设系统解析组件顺序
     // If preset is not default (PMBTUS), use preset system to parse component order
     if (preset && preset !== 'PMBTUS') {

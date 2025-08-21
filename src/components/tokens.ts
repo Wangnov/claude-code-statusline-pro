@@ -173,14 +173,15 @@ export class TokensComponent extends BaseComponent {
               const cacheCreationTokens = Number(usage.cache_creation_input_tokens) || 0;
               const cacheReadTokens = Number(usage.cache_read_input_tokens) || 0;
 
-              const currentUsage = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
+              const currentUsage =
+                inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
 
               // 跳过usage为0的情况，继续查找有效的usage
               // Skip usage of 0, continue searching for valid usage
               if (currentUsage > 0) {
                 // 更新最大值 | Update maximum value
                 maxUsageTokens = Math.max(maxUsageTokens, currentUsage);
-                
+
                 // 记录最后一个非零usage作为备用（从后往前搜索，第一个非零就是最新的）
                 // Record last non-zero usage as backup (first non-zero from end is latest)
                 if (contextUsedTokens === 0) {
