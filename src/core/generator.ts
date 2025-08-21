@@ -258,13 +258,20 @@ export class StatuslineGenerator {
     const components = this.config.components;
     let componentOrder: string[] = [];
 
-    // 如果配置了组件顺序，使用配置的顺序 | If component order is configured, use configured order
-    if (components?.order && Array.isArray(components.order)) {
+    // 优先级：preset参数 > components.order > 默认
+    // Priority: preset parameter > components.order > default
+    const preset = this.config.preset;
+    
+    // 如果预设不是默认值（PMBTUS），使用预设系统解析组件顺序
+    // If preset is not default (PMBTUS), use preset system to parse component order
+    if (preset && preset !== 'PMBTUS') {
+      componentOrder = this.parsePreset(preset);
+    } else if (components?.order && Array.isArray(components.order)) {
+      // 否则使用配置的顺序 | Otherwise use configured order
       componentOrder = [...components.order];
     } else {
-      // 使用预设系统解析组件顺序 | Use preset system to parse component order
-      const preset = this.config.preset || 'PMBTS';
-      componentOrder = this.parsePreset(preset);
+      // 使用预设系统解析默认顺序 | Use preset system to parse default order
+      componentOrder = this.parsePreset(preset || 'PMBTUS');
     }
 
     // 检查是否需要在开头添加fake组件 | Check if fake component needs to be added at the beginning
