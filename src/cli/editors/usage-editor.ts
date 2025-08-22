@@ -58,32 +58,37 @@ export class UsageEditor {
     console.log(`\n${t('editor.usage.title')}`);
     console.log('📌 注意：组件启用状态由预设管理，此处仅配置显示属性\n');
 
-    let displayMode = component?.display_mode || 'combined';
-    let showModel = component?.show_model ?? false;
+    let displayMode = component?.display_mode || 'cost_with_lines';
+    let showLinesAdded = component?.show_lines_added ?? true;
+    let showLinesRemoved = component?.show_lines_removed ?? true;
     let precision = component?.precision ?? 2;
     let icon = component?.emoji_icon || '💰';
     let color = component?.icon_color || 'cyan';
 
     // 配置显示模式
     displayMode = await select({
-      message: t('editor.usage.displayMode.title'),
+      message: '选择显示模式',
       choices: [
-        { name: t('editor.usage.displayMode.cost'), value: 'cost' },
-        { name: t('editor.usage.displayMode.tokens'), value: 'tokens' },
-        { name: t('editor.usage.displayMode.combined'), value: 'combined' },
-        { name: t('editor.usage.displayMode.breakdown'), value: 'breakdown' },
+        { name: '仅显示成本 ($1.23)', value: 'cost' },
+        { name: '成本 + 代码行数 ($1.23 +15 -8)', value: 'cost_with_lines' },
       ],
-      default: component?.display_mode || 'combined',
+      default: displayMode,
     });
 
-    // 配置是否显示模型名称
-    showModel = await confirm({
-      message: t('editor.usage.showModel'),
-      default: component?.show_model ?? false,
+    // 配置是否显示添加的代码行数
+    showLinesAdded = await confirm({
+      message: '显示添加的代码行数 (+15)',
+      default: showLinesAdded,
+    });
+
+    // 配置是否显示删除的代码行数
+    showLinesRemoved = await confirm({
+      message: '显示删除的代码行数 (-8)',
+      default: showLinesRemoved,
     });
 
     // 配置精度（仅在成本相关模式下显示）
-    if (displayMode === 'cost' || displayMode === 'combined') {
+    if (displayMode === 'cost' || displayMode === 'cost_with_lines') {
       precision = await select({
         message: t('editor.usage.precision.title'),
         choices: [
@@ -127,8 +132,9 @@ export class UsageEditor {
       text_icon: component?.text_icon || '$',
       icon_color: color,
       text_color: component?.text_color || 'white',
-      display_mode: displayMode as 'cost' | 'tokens' | 'combined' | 'breakdown',
-      show_model: showModel,
+      display_mode: displayMode as 'cost' | 'cost_with_lines',
+      show_lines_added: showLinesAdded,
+      show_lines_removed: showLinesRemoved,
       precision,
     };
 

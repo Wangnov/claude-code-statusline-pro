@@ -452,22 +452,22 @@ export const StatusComponentSchema = BaseComponentSchema.extend({
  */
 export const UsageDisplayMode = z.enum([
   'cost', // "$0.05" - 仅显示成本
-  'tokens', // "1.2K tokens" - 仅显示token数量
-  'combined', // "$0.05 (1.2K)" - 组合显示成本和token
-  'breakdown', // "1.2Kin+0.8Kout+0.3Kcache" - 详细分解显示
+  'cost_with_lines', // "$0.05 +12 -5" - 成本加代码行数
 ]);
 
 /**
  * Usage组件配置 | Usage component config
- * 显示模型使用量信息，支持成本和token统计 | Display model usage info with cost and token statistics
+ * 显示Session成本和代码行数统计 | Display session cost and code line statistics
  */
 export const UsageComponentSchema = BaseComponentSchema.extend({
   /** 显示模式 | Display mode */
-  display_mode: UsageDisplayMode.default('combined'),
-  /** 显示模型名称 | Show model name */
-  show_model: z.boolean().default(false),
+  display_mode: UsageDisplayMode.default('cost_with_lines'),
   /** 数值精度 | Decimal precision */
   precision: z.number().min(0).max(4).default(2),
+  /** 显示添加的代码行数 | Show lines added */
+  show_lines_added: z.boolean().default(true),
+  /** 显示删除的代码行数 | Show lines removed */
+  show_lines_removed: z.boolean().default(true),
 });
 
 // ==================== 组件配置集合 ====================
@@ -652,6 +652,16 @@ export const InputDataSchema = z
         behind: z.number().optional(),
       })
       .optional(),
+    /** 官方成本数据 | Official cost data */
+    cost: z
+      .object({
+        total_cost_usd: z.number().optional(),
+        total_duration_ms: z.number().optional(),
+        total_api_duration_ms: z.number().optional(),
+        total_lines_added: z.number().optional(),
+        total_lines_removed: z.number().optional(),
+      })
+      .optional(),
   })
   .passthrough() // 允许额外字段 | Allow additional fields
   .transform((data) => ({
@@ -669,6 +679,8 @@ export const InputDataSchema = z
     workspace: data.workspace || {},
     /** 统一的Git分支 | Unified git branch */
     gitBranch: data.gitBranch || data.git?.branch || null,
+    /** 统一的成本数据 | Unified cost data */
+    cost: data.cost || null,
   }));
 
 // ==================== 渲染上下文Schema ====================

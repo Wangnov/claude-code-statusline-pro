@@ -77,6 +77,7 @@ function createDefaultInputData(): InputData {
       project_dir: process.cwd(),
     },
     gitBranch: null,
+    cost: null,
   };
 }
 

@@ -150,9 +150,10 @@ text_color = "white"
 emoji_icon = "💰"
 nerd_icon = ""
 text_icon = "[$]"
-display_mode = "cost"
-show_model = false
 precision = 2
+display_mode = "cost_with_lines"
+show_lines_added = true
+show_lines_removed = false
 
 [components.status]
 enabled = true

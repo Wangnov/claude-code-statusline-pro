@@ -783,6 +783,7 @@ export class GitScenarioGenerator {
       transcriptPath: '/tmp/claude_transcript.json',
       cwd: '/Users/dev/project',
       gitBranch: repoState.currentBranch,
+      cost: null,
       ...overrides,
     };
   }

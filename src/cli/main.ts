@@ -410,6 +410,7 @@ async function readStdinData(): Promise<InputData> {
               model: { id: 'claude-sonnet-4' },
               workspace: { current_dir: process.cwd() },
               gitBranch: null,
+              cost: null,
             });
           }
         } catch (error) {
@@ -431,6 +432,7 @@ async function readStdinData(): Promise<InputData> {
         model: { id: 'claude-sonnet-4' },
         workspace: { current_dir: process.cwd() },
         gitBranch: null,
+        cost: null,
       });
     }
   });
