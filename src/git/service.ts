@@ -373,7 +373,7 @@ export class DefaultGitService implements GitService {
     try {
       // 并行执行提交信息和标签信息命令 | Execute commit info and tag info commands in parallel
       const commands = [
-        this.execGit('log -1 --format="%H|%h|%s|%at|%an"'),
+        this.execGit('log -1 --format=%H|%h|%s|%at|%an'),
         this.execGit('describe --tags --abbrev=0', { ignoreErrors: true }),
         this.execGit('rev-list --count HEAD', { ignoreErrors: true }), // 总提交数 | Total commit count
       ];
@@ -388,7 +388,6 @@ export class DefaultGitService implements GitService {
 
       const parts = (commitResult as PromiseFulfilledResult<GitExecResult>).value.stdout
         .trim()
-        .replace(/^"|"$/g, '') // 移除引号 | Remove quotes
         .split('|');
 
       const sha = parts[0] || '';
@@ -575,12 +574,17 @@ export class DefaultGitService implements GitService {
 
     // 处理管道命令（如 "ls-files | wc -l"）
     if (trimmed.includes('|')) {
-      // 拆分为多个安全命令执行
-      if (trimmed === 'ls-files | wc -l') {
-        // 特殊处理这个常见模式，转换为安全的单命令
-        return ['ls-files'];
+      // 检查是否为允许的格式字符串
+      const hasFormatArg = trimmed.split(/\s+/).some(part => part.startsWith('--format='));
+      if (!hasFormatArg) {
+        // 拆分为多个安全命令执行
+        if (trimmed === 'ls-files | wc -l') {
+          // 特殊处理这个常见模式，转换为安全的单命令
+          return ['ls-files'];
+        }
+        throw new GitSecurityError('Pipe operations not allowed', command);
       }
-      throw new GitSecurityError('Pipe operations not allowed', command);
+      // 如果是格式字符串，允许继续处理
     }
 
     // 简单的空格分割（对于复杂引号处理可以后续改进）

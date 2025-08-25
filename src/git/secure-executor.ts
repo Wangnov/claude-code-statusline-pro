@@ -42,7 +42,7 @@ const SAFE_GIT_COMMANDS = new Set([
 const DANGEROUS_PATTERNS = [
   /[;&|`$(){}[\]]/, // Shell metacharacters
   /\.\./, // Path traversal
-  /^-/, // Leading dashes (potential flag injection)
+  /^-[^-]/, // Single dash options (potential flag injection), but allow double dash
   /\s/, // Whitespace (should be separate args)
 ];
 
@@ -117,16 +117,57 @@ export class SecureGitExecutor {
         throw new GitSecurityError('Invalid argument type', String(arg));
       }
 
-      // 检查危险模式
-      if (DANGEROUS_PATTERNS.some((pattern) => pattern.test(arg))) {
-        throw new GitSecurityError('Argument contains dangerous patterns', arg);
-      }
-
       // 检查参数长度（防止DoS）
       if (arg.length > 1000) {
         throw new GitSecurityError('Argument too long', `${arg.substring(0, 50)}...`);
       }
+      
+      // 检查危险模式，但允许 Git 的合法引用语法
+      if (this.isDangerousArgument(arg)) {
+        throw new GitSecurityError('Argument contains dangerous patterns', arg);
+      }
     }
+  }
+  
+  /**
+   * 检查参数是否危险，但允许 Git 的合法语法
+   */
+  private isDangerousArgument(arg: string): boolean {
+    // 允许 Git 的合法引用语法
+    if (/^@\{[a-zA-Z0-9._/-]+\}$/.test(arg)) {
+      return false; // @{upstream}, @{origin}, @{1} 等都是合法的
+    }
+    
+    // 允许 Git 的范围语法
+    if (/^[a-zA-Z0-9._/-]+\.\.\.[a-zA-Z0-9._/-]+$/.test(arg) || /^[a-zA-Z0-9._/-]+\.\.[a-zA-Z0-9._/-]+$/.test(arg)) {
+      return false; // commit1..commit2, commit1...commit2
+    }
+    
+    // 允许 Git 的数字参数
+    if (/^-\d+$/.test(arg)) {
+      return false; // -1, -10, -100 等数字参数
+    }
+    
+    // 允许 Git 的常见短选项
+    const allowedShortOptions = ['-n', '-p', '-s', '-v', '-q', '-f', '-r', '-t', '-u', '-z'];
+    if (allowedShortOptions.includes(arg)) {
+      return false;
+    }
+    
+    // 允许 Git 的格式字符串（--format=... 或 --pretty=...）
+    if (/^--(format|pretty)=/.test(arg)) {
+      return false; // --format=%H|%h|%s 等格式字符串
+    }
+    
+    // 检查真正的危险模式
+    const dangerousPatterns = [
+      /[;&`$()]/, // Shell metacharacters (移除了管道符和花括号)
+      /\.\.\//, // Path traversal with slash
+      /^-[^-\d]/, // Single dash options except numbers
+      /\s/, // Whitespace (should be separate args)
+    ];
+    
+    return dangerousPatterns.some((pattern) => pattern.test(arg));
   }
 
   /**
