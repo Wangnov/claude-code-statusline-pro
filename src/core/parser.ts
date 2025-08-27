@@ -82,6 +82,85 @@ function createDefaultInputData(): InputData {
 }
 
 /**
+ * 创建带回退的输入数据 | Create input data with fallback
+ */
+function createInputDataWithFallback(rawData: any): InputData {
+  const defaultData = createDefaultInputData();
+  
+  // 安全地提取字段值 | Safely extract field values
+  const safeString = (value: unknown): string | null => 
+    typeof value === 'string' ? value : null;
+  
+  const safeObject = (value: unknown): Record<string, any> => 
+    value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+
+  return {
+    hookEventName: safeString(rawData?.hookEventName) || defaultData.hookEventName,
+    sessionId: safeString(rawData?.sessionId),
+    transcriptPath: safeString(rawData?.transcriptPath),
+    cwd: safeString(rawData?.cwd) || defaultData.cwd,
+    model: safeObject(rawData?.model),
+    workspace: {
+      current_dir: safeString(rawData?.workspace?.current_dir) || safeString(rawData?.cwd) || defaultData.cwd,
+      project_dir: safeString(rawData?.workspace?.project_dir) || safeString(rawData?.cwd) || defaultData.cwd,
+    },
+    gitBranch: safeString(rawData?.gitBranch),
+    cost: rawData?.cost || null,
+    // 保留额外字段 | Keep additional fields
+    ...(rawData?.version && { version: rawData.version }),
+    ...(rawData?.output_style && { output_style: rawData.output_style }),
+    ...(typeof rawData?.exceeds_200k_tokens === 'boolean' && { exceeds_200k_tokens: rawData.exceeds_200k_tokens }),
+  };
+}
+
+/**
+ * 动态转换新格式到内部格式 | Dynamically transform new format to internal format
+ */
+function transformNewFormat(rawData: any): any {
+  // 检查是否是新的数组格式 | Check if it's the new array format
+  if (Array.isArray(rawData) && rawData.length > 0) {
+    const sessionData = rawData[0]; // 取第一个会话数据 | Take first session data
+    
+    // 转换为内部格式 | Transform to internal format
+    return {
+      hookEventName: 'Status', // 默认事件名 | Default event name
+      sessionId: sessionData.session_id || null,
+      transcriptPath: sessionData.transcript_path || null, 
+      cwd: sessionData.cwd || sessionData.workspace?.current_dir || process.cwd(),
+      model: sessionData.model || {},
+      workspace: sessionData.workspace || {
+        current_dir: sessionData.cwd || process.cwd(),
+        project_dir: sessionData.workspace?.project_dir || sessionData.cwd || process.cwd(),
+      },
+      gitBranch: null, // Git分支将由组件自动检测 | Git branch will be auto-detected by component
+      cost: sessionData.cost || null,
+      // 保留额外的新字段 | Keep additional new fields
+      version: sessionData.version,
+      output_style: sessionData.output_style,
+      exceeds_200k_tokens: sessionData.exceeds_200k_tokens,
+    };
+  }
+  
+  // 检查是否是旧的单对象格式但字段名不同 | Check if it's old single object format but with different field names
+  if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+    // 自动映射常见的字段名变化 | Auto-map common field name changes
+    const normalized = { ...rawData };
+    
+    if (rawData.session_id && !rawData.sessionId) {
+      normalized.sessionId = rawData.session_id;
+    }
+    if (rawData.transcript_path && !rawData.transcriptPath) {
+      normalized.transcriptPath = rawData.transcript_path;
+    }
+    
+    return normalized;
+  }
+  
+  // 返回原数据 | Return original data
+  return rawData;
+}
+
+/**
  * 解析JSON输入 | Parse JSON input
  */
 export function parseJson(input: string): ParseResult {
@@ -96,9 +175,12 @@ export function parseJson(input: string): ParseResult {
 
     // 解析JSON | Parse JSON
     const rawData = JSON.parse(input);
+    
+    // 动态转换数据格式 | Dynamically transform data format
+    const transformedData = transformNewFormat(rawData);
 
     // 使用Zod验证和转换数据 | Use Zod to validate and transform data
-    const result = InputDataSchema.safeParse(rawData);
+    const result = InputDataSchema.safeParse(transformedData);
 
     if (result.success) {
       return {
@@ -106,9 +188,10 @@ export function parseJson(input: string): ParseResult {
         data: result.data,
       };
     } else {
+      // 如果验证失败，尝试使用更宽松的解析 | If validation fails, try more lenient parsing
       return {
-        success: false,
-        error: `Input validation failed: ${result.error.message}`,
+        success: true,
+        data: createInputDataWithFallback(transformedData),
       };
     }
   } catch (error) {
