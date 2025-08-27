@@ -478,36 +478,112 @@ export class BranchComponent extends BaseComponent {
   }
 
   /**
-   * 获取状态图标 | Get status icon
+   * 获取状态图标（支持三级图标系统）| Get status icon (supports three-level icon system)
    */
   private getStatusIcon(type: string, icons?: BranchStatusIconsConfig): string {
+    // 如果没有图标配置，使用默认图标并应用三级图标逻辑 | If no icon config, use defaults with three-level logic
     if (!icons) {
-      // 默认图标 | Default icons
-      const defaultIcons: Record<string, string> = {
-        dirty: '⚡',
-        clean: '✨',
-        ahead: '↑',
-        behind: '↓',
-        stash: '📦',
-      };
-      return defaultIcons[type] || '';
+      return this.selectStatusIcon(type, {
+        emoji: this.getDefaultStatusIcon(type, 'emoji'),
+        nerd: this.getDefaultStatusIcon(type, 'nerd'),
+        text: this.getDefaultStatusIcon(type, 'text'),
+      });
     }
 
-    // 使用配置的图标 | Use configured icons
-    switch (type) {
-      case 'dirty':
-        return icons.dirty_emoji || '⚡';
-      case 'clean':
-        return '✨'; // 简化后直接返回默认图标 | Return default icon after simplification
-      case 'ahead':
-        return icons.ahead_emoji || '↑';
-      case 'behind':
-        return icons.behind_emoji || '↓';
-      case 'stash':
-        return icons.stash_emoji || '📦';
-      default:
-        return '';
+    // 使用配置的图标并应用三级选择逻辑 | Use configured icons with three-level selection logic
+    return this.selectStatusIcon(type, {
+      emoji: this.getConfiguredStatusIcon(type, icons, 'emoji'),
+      nerd: this.getConfiguredStatusIcon(type, icons, 'nerd'),
+      text: this.getConfiguredStatusIcon(type, icons, 'text'),
+    });
+  }
+
+  /**
+   * 三级状态图标选择逻辑 | Three-level status icon selection logic
+   * 遵循BaseComponent的图标选择优先级 | Follows BaseComponent icon selection priority
+   */
+  private selectStatusIcon(type: string, iconSet: {emoji: string, nerd: string, text: string}): string {
+    // 获取强制设置（通过renderContext）| Get force settings via renderContext
+    const context = this.renderContext as any;
+    const forceEmoji = context?.config?.terminal?.force_emoji === true;
+    const forceNerdFont = context?.config?.terminal?.force_nerd_font === true;
+    const forceText = context?.config?.terminal?.force_text === true;
+
+    // 1. 强制文本模式 | Force text mode
+    if (forceText) {
+      return iconSet.text;
     }
+
+    // 2. 强制Nerd Font模式 | Force Nerd Font mode
+    if (forceNerdFont && iconSet.nerd) {
+      return iconSet.nerd;
+    }
+
+    // 3. 强制Emoji模式 | Force Emoji mode
+    if (forceEmoji && iconSet.emoji) {
+      return iconSet.emoji;
+    }
+
+    // 4. 自动检测：优先Nerd Font | Auto detection: prefer Nerd Font
+    if (this.capabilities.nerdFont && iconSet.nerd) {
+      return iconSet.nerd;
+    }
+
+    // 5. 自动检测：回退到Emoji | Auto detection: fallback to Emoji
+    if (this.capabilities.emoji && iconSet.emoji) {
+      return iconSet.emoji;
+    }
+
+    // 6. 最终回退到文本 | Final fallback to text
+    return iconSet.text || '';
+  }
+
+  /**
+   * 获取默认状态图标 | Get default status icon
+   */
+  private getDefaultStatusIcon(type: string, iconType: 'emoji' | 'nerd' | 'text'): string {
+    const defaultIcons: Record<string, Record<string, string>> = {
+      dirty: { emoji: '⚡', nerd: '\uE0A0', text: '[*]' },
+      clean: { emoji: '✨', nerd: '\uE0A1', text: '[✓]' },
+      ahead: { emoji: '↑', nerd: '\uF062', text: '[↑]' },
+      behind: { emoji: '↓', nerd: '\uF063', text: '[↓]' },
+      stash: { emoji: '📦', nerd: '\uF01C', text: '[S]' },
+    };
+    return defaultIcons[type]?.[iconType] || '';
+  }
+
+  /**
+   * 从配置中获取状态图标 | Get status icon from configuration
+   */
+  private getConfiguredStatusIcon(type: string, icons: BranchStatusIconsConfig, iconType: 'emoji' | 'nerd' | 'text'): string {
+    const typeMap: Record<string, Record<string, string>> = {
+      dirty: {
+        emoji: icons.dirty_emoji,
+        nerd: icons.dirty_nerd,
+        text: icons.dirty_text,
+      },
+      clean: {
+        emoji: '✨', // Clean状态暂时保持硬编码 | Keep clean status hardcoded for now
+        nerd: '\uE0A1',
+        text: '[✓]',
+      },
+      ahead: {
+        emoji: icons.ahead_emoji,
+        nerd: icons.ahead_nerd,
+        text: icons.ahead_text,
+      },
+      behind: {
+        emoji: icons.behind_emoji,
+        nerd: icons.behind_nerd,
+        text: icons.behind_text,
+      },
+      stash: {
+        emoji: icons.stash_emoji,
+        nerd: icons.stash_nerd,
+        text: icons.stash_text,
+      },
+    };
+    return typeMap[type]?.[iconType] || this.getDefaultStatusIcon(type, iconType);
   }
 
   /**

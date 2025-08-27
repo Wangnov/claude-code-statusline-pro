@@ -78,6 +78,27 @@ show_dirty = true
 show_ahead_behind = true
 show_stash_count = true
 
+[components.branch.status_icons]
+dirty_emoji = "⚡"
+ahead_emoji = "🔼"
+behind_emoji = "🔽"
+stash_emoji = "📦"
+dirty_nerd = "\uE0A0"
+ahead_nerd = "\uF062"
+behind_nerd = "\uF063"
+stash_nerd = "\uF01C"
+dirty_text = "[*]"
+ahead_text = "[↑]"
+behind_text = "[↓]"
+stash_text = "[S]"
+
+[components.branch.status_colors]
+clean = "green"
+dirty = "yellow"
+ahead = "cyan"
+behind = "magenta"
+operation = "red"
+
 [components.tokens]
 enabled = true
 icon_color = "yellow"
