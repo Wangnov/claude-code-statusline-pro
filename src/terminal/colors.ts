@@ -243,7 +243,7 @@ export class TerminalRenderer {
     const nerdFontIcons: IconMap = {
       project: components?.project?.nerd_icon || '\uf07b', // fa-folder
       model: components?.model?.nerd_icon || '\uf085', // fa-cogs (机器/模型)
-      branch: components?.branch?.nerd_icon || '\uf126', // fa-code-branch (git分支)
+      branch: components?.branch?.nerd_icon || '\ue702', // nf-dev-git (git分支)
       token: components?.tokens?.nerd_icon || '\uf080', // fa-bar-chart
       ready: components?.status?.icons?.nerd?.ready || '\uf00c', // fa-check
       thinking: components?.status?.icons?.nerd?.thinking || '\uf110', // fa-spinner
