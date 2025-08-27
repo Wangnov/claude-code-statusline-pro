@@ -13,11 +13,7 @@ import type {
   GitVersionInfo,
   GitWorkingStatus,
 } from '../git/index.js';
-import {
-  createConfiguredGitService,
-  createLightweightGitService,
-  GitOperationType,
-} from '../git/index.js';
+import { createConfiguredGitService, createLightweightGitService } from '../git/index.js';
 import { safeExecGit } from '../git/secure-executor.js';
 import { BaseComponent, type ComponentFactory } from './base.js';
 
@@ -122,7 +118,7 @@ export class BranchComponent extends BaseComponent {
 
   protected async renderContent(context: RenderContext): Promise<string | null> {
     // 解构context但不使用所有变量 | Destructure context but don't use all variables
-    const { inputData, config: _config } = context;
+    const { inputData: _inputData, config: _config } = context;
 
     try {
       // 优先使用简单的.git/HEAD读取方式（官方推荐）| Prefer simple .git/HEAD reading (officially recommended)
@@ -156,16 +152,16 @@ export class BranchComponent extends BaseComponent {
   private async renderWithSimpleGitRead(context: RenderContext): Promise<string | null> {
     const { inputData } = context;
     const cwd = inputData.workspace?.current_dir || inputData.cwd || process.cwd();
-    
+
     try {
       // 导入fs模块 | Import fs module
       const fs = await import('node:fs');
       const path = await import('node:path');
-      
+
       // 检查.git/HEAD文件 | Check .git/HEAD file
       const gitHeadPath = path.join(cwd, '.git', 'HEAD');
       const headContent = fs.readFileSync(gitHeadPath, 'utf8').trim();
-      
+
       let branchName = '';
       if (headContent.startsWith('ref: refs/heads/')) {
         // 标准分支引用 | Standard branch reference
@@ -178,21 +174,21 @@ export class BranchComponent extends BaseComponent {
         const parts = headContent.split('/');
         branchName = parts[parts.length - 1] || headContent.substring(0, 8);
       }
-      
+
       if (!branchName) {
         return null;
       }
-      
+
       // 应用最大长度限制 | Apply max length limit
       let displayBranch = branchName;
       const maxLength = this.branchConfig.max_length;
       if (maxLength && displayBranch.length > maxLength) {
         displayBranch = `${displayBranch.substring(0, maxLength - 3)}...`;
       }
-      
+
       // 基础分支名显示 | Basic branch name display
       let result = this.formatOutput(displayBranch);
-      
+
       // 如果启用了状态功能，添加状态信息 | If status features are enabled, add status info
       if (this.hasStatusFeatures()) {
         const statusInfo = await this.getSimpleGitStatus(cwd);
@@ -200,10 +196,9 @@ export class BranchComponent extends BaseComponent {
           result += statusInfo;
         }
       }
-      
+
       return result;
-      
-    } catch (error) {
+    } catch (_error) {
       // .git/HEAD读取失败，检查是否需要显示no-git | .git/HEAD read failed, check if should show no-git
       if (this.branchConfig.show_when_no_git) {
         return this.formatOutput('no-git');
@@ -217,7 +212,7 @@ export class BranchComponent extends BaseComponent {
    */
   private async getSimpleGitStatus(cwd: string): Promise<string> {
     const statusParts: string[] = [];
-    
+
     try {
       // 检查Git工作区是否脏 | Check if Git working directory is dirty
       if (this.branchConfig.status?.show_dirty) {
@@ -255,7 +250,7 @@ export class BranchComponent extends BaseComponent {
             const [aheadStr, behindStr] = result.stdout.trim().split('\t');
             const ahead = Number(aheadStr);
             const behind = Number(behindStr);
-            
+
             if (!Number.isNaN(ahead) && ahead > 0) {
               const aheadIcon = this.getStatusIcon('ahead');
               const colorName = this.branchConfig.status_colors?.ahead || 'cyan';
@@ -294,11 +289,10 @@ export class BranchComponent extends BaseComponent {
           // 静默处理错误 | Silently handle errors
         }
       }
-      
     } catch (_error) {
       // 静默处理错误 | Silently handle errors
     }
-    
+
     return statusParts.join('');
   }
 
@@ -466,14 +460,14 @@ export class BranchComponent extends BaseComponent {
   /**
    * 渲染操作状态信息 | Render operation status information
    */
-  private renderOperationInfo(operation: GitOperationStatus): string {
+  private renderOperationInfo(_operation: GitOperationStatus): string {
     return ''; // 操作功能已简化移除 | Operation features have been simplified and removed
   }
 
   /**
    * 渲染版本信息 | Render version information
    */
-  private renderVersionInfo(version: GitVersionInfo): string {
+  private renderVersionInfo(_version: GitVersionInfo): string {
     return ''; // 版本功能已简化移除 | Version features have been simplified and removed
   }
 
@@ -502,7 +496,10 @@ export class BranchComponent extends BaseComponent {
    * 三级状态图标选择逻辑 | Three-level status icon selection logic
    * 遵循BaseComponent的图标选择优先级 | Follows BaseComponent icon selection priority
    */
-  private selectStatusIcon(type: string, iconSet: {emoji: string, nerd: string, text: string}): string {
+  private selectStatusIcon(
+    _type: string,
+    iconSet: { emoji: string; nerd: string; text: string }
+  ): string {
     // 获取强制设置（通过renderContext）| Get force settings via renderContext
     const context = this.renderContext as any;
     const forceEmoji = context?.config?.terminal?.force_emoji === true;
@@ -555,7 +552,11 @@ export class BranchComponent extends BaseComponent {
   /**
    * 从配置中获取状态图标 | Get status icon from configuration
    */
-  private getConfiguredStatusIcon(type: string, icons: BranchStatusIconsConfig, iconType: 'emoji' | 'nerd' | 'text'): string {
+  private getConfiguredStatusIcon(
+    type: string,
+    icons: BranchStatusIconsConfig,
+    iconType: 'emoji' | 'nerd' | 'text'
+  ): string {
     const typeMap: Record<string, Record<string, string>> = {
       dirty: {
         emoji: icons.dirty_emoji,
@@ -584,24 +585,6 @@ export class BranchComponent extends BaseComponent {
       },
     };
     return typeMap[type]?.[iconType] || this.getDefaultStatusIcon(type, iconType);
-  }
-
-  /**
-   * 格式化相对时间 | Format relative time
-   */
-  private formatRelativeTime(timestamp: Date): string {
-    const now = new Date();
-    const diffMs = now.getTime() - timestamp.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffDays > 0) {
-      return `${diffDays}d`;
-    } else if (diffHours > 0) {
-      return `${diffHours}h`;
-    } else {
-      return '<1h';
-    }
   }
 
   /**

@@ -161,8 +161,6 @@ const BranchStatusSchema = z.object({
   show_stash_count: z.boolean().default(false),
 });
 
-
-
 /**
  * 分支状态图标配置 | Branch status icons config
  * 定义各种Git状态的图标 | Defines icons for various Git statuses

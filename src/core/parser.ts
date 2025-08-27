@@ -86,12 +86,11 @@ function createDefaultInputData(): InputData {
  */
 function createInputDataWithFallback(rawData: any): InputData {
   const defaultData = createDefaultInputData();
-  
+
   // 安全地提取字段值 | Safely extract field values
-  const safeString = (value: unknown): string | null => 
-    typeof value === 'string' ? value : null;
-  
-  const safeObject = (value: unknown): Record<string, any> => 
+  const safeString = (value: unknown): string | null => (typeof value === 'string' ? value : null);
+
+  const safeObject = (value: unknown): Record<string, any> =>
     value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 
   return {
@@ -101,15 +100,19 @@ function createInputDataWithFallback(rawData: any): InputData {
     cwd: safeString(rawData?.cwd) || defaultData.cwd,
     model: safeObject(rawData?.model),
     workspace: {
-      current_dir: safeString(rawData?.workspace?.current_dir) || safeString(rawData?.cwd) || defaultData.cwd,
-      project_dir: safeString(rawData?.workspace?.project_dir) || safeString(rawData?.cwd) || defaultData.cwd,
+      current_dir:
+        safeString(rawData?.workspace?.current_dir) || safeString(rawData?.cwd) || defaultData.cwd,
+      project_dir:
+        safeString(rawData?.workspace?.project_dir) || safeString(rawData?.cwd) || defaultData.cwd,
     },
     gitBranch: safeString(rawData?.gitBranch),
     cost: rawData?.cost || null,
     // 保留额外字段 | Keep additional fields
     ...(rawData?.version && { version: rawData.version }),
     ...(rawData?.output_style && { output_style: rawData.output_style }),
-    ...(typeof rawData?.exceeds_200k_tokens === 'boolean' && { exceeds_200k_tokens: rawData.exceeds_200k_tokens }),
+    ...(typeof rawData?.exceeds_200k_tokens === 'boolean' && {
+      exceeds_200k_tokens: rawData.exceeds_200k_tokens,
+    }),
   };
 }
 
@@ -120,12 +123,12 @@ function transformNewFormat(rawData: any): any {
   // 检查是否是新的数组格式 | Check if it's the new array format
   if (Array.isArray(rawData) && rawData.length > 0) {
     const sessionData = rawData[0]; // 取第一个会话数据 | Take first session data
-    
+
     // 转换为内部格式 | Transform to internal format
     return {
       hookEventName: 'Status', // 默认事件名 | Default event name
       sessionId: sessionData.session_id || null,
-      transcriptPath: sessionData.transcript_path || null, 
+      transcriptPath: sessionData.transcript_path || null,
       cwd: sessionData.cwd || sessionData.workspace?.current_dir || process.cwd(),
       model: sessionData.model || {},
       workspace: sessionData.workspace || {
@@ -140,22 +143,22 @@ function transformNewFormat(rawData: any): any {
       exceeds_200k_tokens: sessionData.exceeds_200k_tokens,
     };
   }
-  
+
   // 检查是否是旧的单对象格式但字段名不同 | Check if it's old single object format but with different field names
   if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
     // 自动映射常见的字段名变化 | Auto-map common field name changes
     const normalized = { ...rawData };
-    
+
     if (rawData.session_id && !rawData.sessionId) {
       normalized.sessionId = rawData.session_id;
     }
     if (rawData.transcript_path && !rawData.transcriptPath) {
       normalized.transcriptPath = rawData.transcript_path;
     }
-    
+
     return normalized;
   }
-  
+
   // 返回原数据 | Return original data
   return rawData;
 }
@@ -175,7 +178,7 @@ export function parseJson(input: string): ParseResult {
 
     // 解析JSON | Parse JSON
     const rawData = JSON.parse(input);
-    
+
     // 动态转换数据格式 | Dynamically transform data format
     const transformedData = transformNewFormat(rawData);
 

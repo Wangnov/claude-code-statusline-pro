@@ -101,38 +101,20 @@ describe('Branch Configuration Schema', () => {
           show_dirty: true,
           show_ahead_behind: true,
           show_stash_count: true,
-          show_staged_count: true,
-          show_unstaged_count: true,
-          show_untracked_count: true,
         },
         status_icons: {
           dirty_emoji: '⚡',
-          clean_emoji: '✨',
           ahead_emoji: '↑',
           behind_emoji: '↓',
           stash_emoji: '📦',
-          merge_emoji: '🔀',
-          rebase_emoji: '🔄',
-          cherry_pick_emoji: '🍒',
-          bisect_emoji: '🔍',
           dirty_nerd: '',
-          clean_nerd: '',
           ahead_nerd: '',
           behind_nerd: '',
           stash_nerd: '',
-          merge_nerd: '',
-          rebase_nerd: '',
-          cherry_pick_nerd: '',
-          bisect_nerd: '',
           dirty_text: '[*]',
-          clean_text: '[✓]',
           ahead_text: '[↑]',
           behind_text: '[↓]',
           stash_text: '[S]',
-          merge_text: '[M]',
-          rebase_text: '[R]',
-          cherry_pick_text: '[C]',
-          bisect_text: '[B]',
         },
         status_colors: {
           clean: 'green',
@@ -168,14 +150,7 @@ describe('Branch Configuration Schema', () => {
     });
 
     it('should validate status boolean flags', () => {
-      const booleanFields = [
-        'show_dirty',
-        'show_ahead_behind',
-        'show_stash_count',
-        'show_staged_count',
-        'show_unstaged_count',
-        'show_untracked_count',
-      ];
+      const booleanFields = ['show_dirty', 'show_ahead_behind', 'show_stash_count'];
 
       booleanFields.forEach((field) => {
         const config = {
@@ -199,94 +174,6 @@ describe('Branch Configuration Schema', () => {
       });
 
       console.log('✓ Status boolean flags validated');
-    });
-  });
-
-  describe('Operations Configuration Extension', () => {
-    it('should validate operations configuration', () => {
-      const operationsConfig = {
-        emoji_icon: '🌿',
-        operations: {
-          show_merge: true,
-          show_rebase: true,
-          show_cherry_pick: true,
-          show_bisect: true,
-        },
-      };
-
-      const result = BranchComponentSchema.parse(operationsConfig);
-      expect(result.operations).toEqual(operationsConfig.operations);
-
-      console.log('✓ Operations configuration validated');
-    });
-
-    it('should default operations to false', () => {
-      const configWithoutOperations = {
-        emoji_icon: '🌿',
-      };
-
-      const result = BranchComponentSchema.parse(configWithoutOperations);
-
-      // operations是可选的，应该为undefined或者默认值
-      if (result.operations) {
-        expect(result.operations.show_merge).toBe(false);
-        expect(result.operations.show_rebase).toBe(false);
-        expect(result.operations.show_cherry_pick).toBe(false);
-        expect(result.operations.show_bisect).toBe(false);
-      }
-
-      console.log('✓ Operations default to false');
-    });
-  });
-
-  describe('Version Configuration Extension', () => {
-    it('should validate version configuration', () => {
-      const versionConfig = {
-        emoji_icon: '🌿',
-        version: {
-          show_commit_hash: true,
-          show_tag: true,
-          show_commit_time: true,
-          hash_length: 7,
-        },
-      };
-
-      const result = BranchComponentSchema.parse(versionConfig);
-      expect(result.version).toEqual(versionConfig.version);
-
-      console.log('✓ Version configuration validated');
-    });
-
-    it('should validate hash length constraints', () => {
-      // 有效的hash长度
-      const validLengths = [4, 7, 8, 12, 20, 40];
-
-      validLengths.forEach((length) => {
-        const config = {
-          emoji_icon: '🌿',
-          version: {
-            hash_length: length,
-          },
-        };
-
-        expect(() => BranchComponentSchema.parse(config)).not.toThrow();
-      });
-
-      // 无效的hash长度
-      const invalidLengths = [3, 41, 0, -1];
-
-      invalidLengths.forEach((length) => {
-        const config = {
-          emoji_icon: '🌿',
-          version: {
-            hash_length: length,
-          },
-        };
-
-        expect(() => BranchComponentSchema.parse(config)).toThrow();
-      });
-
-      console.log('✓ Hash length constraints validated');
     });
   });
 
@@ -423,50 +310,20 @@ describe('Branch Configuration Schema', () => {
           show_dirty: true,
           show_ahead_behind: true,
           show_stash_count: true,
-          show_staged_count: false,
-          show_unstaged_count: false,
-          show_untracked_count: false,
-        },
-        operations: {
-          show_merge: true,
-          show_rebase: true,
-          show_cherry_pick: false,
-          show_bisect: false,
-        },
-        version: {
-          show_commit_hash: true,
-          show_tag: true,
-          show_commit_time: false,
-          hash_length: 8,
         },
         status_icons: {
           dirty_emoji: '⚡',
-          clean_emoji: '✨',
           ahead_emoji: '↑',
           behind_emoji: '↓',
           stash_emoji: '📦',
-          merge_emoji: '🔀',
-          rebase_emoji: '🔄',
-          cherry_pick_emoji: '🍒',
-          bisect_emoji: '🔍',
           dirty_nerd: '',
-          clean_nerd: '',
           ahead_nerd: '',
           behind_nerd: '',
           stash_nerd: '',
-          merge_nerd: '',
-          rebase_nerd: '',
-          cherry_pick_nerd: '',
-          bisect_nerd: '',
           dirty_text: '[*]',
-          clean_text: '[✓]',
           ahead_text: '[↑]',
           behind_text: '[↓]',
           stash_text: '[S]',
-          merge_text: '[M]',
-          rebase_text: '[R]',
-          cherry_pick_text: '[C]',
-          bisect_text: '[B]',
         },
         status_colors: {
           clean: 'green',
@@ -619,8 +476,6 @@ describe('Branch Configuration Schema', () => {
 
       // 新字段应该是可选的或有默认值
       expect(result.status).toBeUndefined();
-      expect(result.operations).toBeUndefined();
-      expect(result.version).toBeUndefined();
       expect(result.status_icons).toBeUndefined();
       expect(result.status_colors).toBeUndefined();
       expect(result.performance).toBeUndefined();

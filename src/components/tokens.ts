@@ -114,7 +114,7 @@ export class TokensComponent extends BaseComponent {
   }
 
   /**
-   * 解析transcript文件 | Parse transcript file  
+   * 解析transcript文件 | Parse transcript file
    * 简化版：检测压缩并调整计算区间 | Simplified: detect compression and adjust calculation range
    */
   private parseTranscriptFile(
@@ -150,7 +150,7 @@ export class TokensComponent extends BaseComponent {
       const transcript = readFileSync(transcriptPath, 'utf8');
       const lines = transcript.trim().split('\n');
 
-      // *** 简单压缩检测：检查第一行是否包含 "type":"summary" *** 
+      // *** 简单压缩检测：检查第一行是否包含 "type":"summary" ***
       // *** Simple compression detection: check if first line contains "type":"summary" ***
       let startLine = 0;
       if (lines.length > 0 && lines[0]?.includes('"type":"summary"')) {
@@ -180,7 +180,8 @@ export class TokensComponent extends BaseComponent {
               const cacheCreationTokens = Number(usage.cache_creation_input_tokens) || 0;
               const cacheReadTokens = Number(usage.cache_read_input_tokens) || 0;
 
-              const currentUsage = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
+              const currentUsage =
+                inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
 
               if (currentUsage > 0) {
                 contextUsedTokens = Math.max(contextUsedTokens, currentUsage);
@@ -465,7 +466,6 @@ export class TokensComponent extends BaseComponent {
     // 最后的回退：硬编码默认值 | Final fallback: hardcoded defaults
     return critical ? '[X]' : '[!]';
   }
-
 }
 
 /**

@@ -183,7 +183,7 @@ export class SecureGitExecutor {
         if (this.isValidGitReference(arg)) {
           continue; // 跳过危险模式检查，因为这是合法的Git引用
         }
-        
+
         // 对于非Git引用的参数，检查危险模式
         if (DANGEROUS_PATTERNS.some((pattern) => pattern.test(arg))) {
           throw new GitSecurityError('Argument contains dangerous patterns', arg);
@@ -210,21 +210,21 @@ export class SecureGitExecutor {
 
     // 常见的Git引用特殊格式
     const gitReferencePatterns = [
-      /^HEAD$/,                                    // HEAD
-      /^HEAD~\d+$/,                               // HEAD~1, HEAD~2, etc.
-      /^HEAD\^\d*$/,                              // HEAD^, HEAD^1, HEAD^2, etc.
-      /^@\{upstream\}$/,                          // @{upstream}
-      /^@\{u\}$/,                                 // @{u} (shorthand)
-      /^HEAD\.{2,3}@\{upstream\}$/,               // HEAD..@{upstream}, HEAD...@{upstream}
-      /^HEAD\.{2,3}@\{u\}$/,                      // HEAD..@{u}, HEAD...@{u}
-      /^[a-zA-Z0-9._/-]+\.{2,3}@\{upstream\}$/,   // branch..@{upstream}, branch...@{upstream}
-      /^[a-zA-Z0-9._/-]+\.{2,3}@\{u\}$/,         // branch..@{u}, branch...@{u}
-      /^@\{-\d+\}$/,                              // @{-1}, @{-2}, etc. (previous branches)
+      /^HEAD$/, // HEAD
+      /^HEAD~\d+$/, // HEAD~1, HEAD~2, etc.
+      /^HEAD\^\d*$/, // HEAD^, HEAD^1, HEAD^2, etc.
+      /^@\{upstream\}$/, // @{upstream}
+      /^@\{u\}$/, // @{u} (shorthand)
+      /^HEAD\.{2,3}@\{upstream\}$/, // HEAD..@{upstream}, HEAD...@{upstream}
+      /^HEAD\.{2,3}@\{u\}$/, // HEAD..@{u}, HEAD...@{u}
+      /^[a-zA-Z0-9._/-]+\.{2,3}@\{upstream\}$/, // branch..@{upstream}, branch...@{upstream}
+      /^[a-zA-Z0-9._/-]+\.{2,3}@\{u\}$/, // branch..@{u}, branch...@{u}
+      /^@\{-\d+\}$/, // @{-1}, @{-2}, etc. (previous branches)
       /^[a-zA-Z0-9._/-]+@\{\d{4}-\d{2}-\d{2}\}$/, // branch@{2023-01-01}
-      /^\d+\t\d+$/,                               // "2	0" format from rev-list --count
+      /^\d+\t\d+$/, // "2	0" format from rev-list --count
     ];
 
-    return gitReferencePatterns.some(pattern => pattern.test(arg));
+    return gitReferencePatterns.some((pattern) => pattern.test(arg));
   }
 
   /**

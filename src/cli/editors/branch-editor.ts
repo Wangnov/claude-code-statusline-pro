@@ -40,7 +40,7 @@ export class BranchEditor {
    * Branch组件高级配置主界面 | Branch Component Advanced Configuration
    */
   async configureBranchComponentAdvanced(): Promise<void> {
-    const branchConfig = this.currentConfig.components?.branch;
+    const _branchConfig = this.currentConfig.components?.branch;
 
     if (!branchConfig) {
       console.log(t('errors.componentNotFound', { component: 'Branch' }));
@@ -110,10 +110,14 @@ export class BranchEditor {
         await this.configureBranchStatus();
         break;
       case 'operations':
-        await this.configureBranchOperations();
+        // TODO: Remove in CLI refactor - operations feature deprecated
+        // await this.configureBranchOperations();
+        console.log('Operations configuration is deprecated and will be removed.');
         break;
       case 'version':
-        await this.configureBranchVersion();
+        // TODO: Remove in CLI refactor - version feature deprecated
+        // await this.configureBranchVersion();
+        console.log('Version configuration is deprecated and will be removed.');
         break;
       case 'icons':
         await this.configureBranchIcons();
@@ -133,7 +137,7 @@ export class BranchEditor {
    * Git状态显示配置 | Git Status Display Configuration
    */
   async configureBranchStatus(): Promise<void> {
-    const branchConfig = this.currentConfig.components?.branch;
+    const _branchConfig = this.currentConfig.components?.branch;
     const currentStatus = (branchConfig?.status || {}) as Record<string, boolean>;
 
     console.log(`\n📊 ${t('component.branch.status_display')}`);
@@ -242,8 +246,8 @@ export class BranchEditor {
    * Git操作检测配置 | Git Operations Detection Configuration
    */
   async configureBranchOperations(): Promise<void> {
-    const branchConfig = this.currentConfig.components?.branch;
-    const currentOperations = branchConfig?.operations || ({} as any);
+    const _branchConfig = this.currentConfig.components?.branch;
+    const currentOperations = {} as any; // branchConfig?.operations || ({} as any);
 
     console.log(`\n🔧 ${t('component.branch.operations')}`);
     console.log(`${t('component.config.item_count')}: 4\n`);
@@ -331,8 +335,8 @@ export class BranchEditor {
    * 版本信息配置 | Version Information Configuration
    */
   async configureBranchVersion(): Promise<void> {
-    const branchConfig = this.currentConfig.components?.branch;
-    const currentVersion = branchConfig?.version || ({} as any);
+    const _branchConfig = this.currentConfig.components?.branch;
+    const currentVersion = {} as any; // branchConfig?.version || ({} as any);
 
     console.log(`\n📝 ${t('component.branch.version_info')}`);
     console.log(`${t('component.config.item_count')}: 4\n`);
@@ -433,7 +437,7 @@ export class BranchEditor {
    * 状态图标配置 | Status Icons Configuration
    */
   async configureBranchIcons(): Promise<void> {
-    const branchConfig = this.currentConfig.components?.branch;
+    const _branchConfig = this.currentConfig.components?.branch;
     const currentIcons = branchConfig?.status_icons || ({} as any);
 
     console.log('\n🎨 状态图标配置 | Status Icons Configuration');
@@ -524,7 +528,7 @@ export class BranchEditor {
    * 状态颜色配置 | Status Colors Configuration
    */
   async configureBranchColors(): Promise<void> {
-    const branchConfig = this.currentConfig.components?.branch;
+    const _branchConfig = this.currentConfig.components?.branch;
     const currentColors = branchConfig?.status_colors || ({} as any);
 
     console.log('\n🌈 状态颜色配置 | Status Colors Configuration');
@@ -634,7 +638,7 @@ export class BranchEditor {
    * 性能优化配置 | Performance Optimization Configuration
    */
   async configureBranchPerformance(): Promise<void> {
-    const branchConfig = this.currentConfig.components?.branch;
+    const _branchConfig = this.currentConfig.components?.branch;
     const currentPerformance = branchConfig?.performance || ({} as any);
 
     console.log(`\n⚡ ${t('component.branch.performance')}`);

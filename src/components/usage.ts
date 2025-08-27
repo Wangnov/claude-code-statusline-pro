@@ -1,8 +1,4 @@
-import type {
-  ComponentConfig,
-  RenderContext,
-  UsageComponentConfig,
-} from '../config/schema.js';
+import type { ComponentConfig, RenderContext, UsageComponentConfig } from '../config/schema.js';
 import { BaseComponent, type ComponentFactory } from './base.js';
 
 /**
@@ -34,7 +30,6 @@ interface OfficialSessionData {
   };
   exceeds_200k_tokens: boolean;
 }
-
 
 /**
  * Usage组件 | Usage component
@@ -81,22 +76,22 @@ export class UsageComponent extends BaseComponent {
       cwd: '/mock/cwd',
       model: {
         id: 'claude-sonnet-4-20250514',
-        display_name: 'Sonnet 4'
+        display_name: 'Sonnet 4',
       },
       workspace: {
         current_dir: '/mock/cwd',
-        project_dir: '/mock/cwd'
+        project_dir: '/mock/cwd',
       },
       version: '1.0.88',
       output_style: {
-        name: 'default'
+        name: 'default',
       },
       cost: {
         total_cost_usd: 0.1234,
         total_duration_ms: 120000,
         total_api_duration_ms: 30000,
         total_lines_added: 25,
-        total_lines_removed: 8
+        total_lines_removed: 8,
       },
       exceeds_200k_tokens: false,
       ...mockUsageData,

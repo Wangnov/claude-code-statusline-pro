@@ -75,9 +75,6 @@ export class GitScenarioGenerator {
               show_dirty: true,
               show_ahead_behind: true,
               show_stash_count: false,
-              show_staged_count: false,
-              show_unstaged_count: false,
-              show_untracked_count: false,
             },
             status_colors: {
               clean: 'green',
@@ -125,10 +122,7 @@ export class GitScenarioGenerator {
             max_length: 20,
             status: {
               show_dirty: true,
-              show_staged_count: true,
-              show_unstaged_count: true,
-              show_untracked_count: true,
-              show_stash_count: false,
+              show_stash_count: true,
               show_ahead_behind: true,
             },
             status_colors: {
@@ -175,19 +169,10 @@ export class GitScenarioGenerator {
             emoji_icon: '🌿',
             show_when_no_git: false,
             max_length: 20,
-            operations: {
-              show_merge: true,
-              show_rebase: true,
-              show_cherry_pick: false,
-              show_bisect: false,
-            },
             status: {
               show_dirty: true,
               show_ahead_behind: true,
               show_stash_count: false,
-              show_staged_count: false,
-              show_unstaged_count: false,
-              show_untracked_count: false,
             },
             status_colors: {
               operation: 'red',
@@ -237,9 +222,6 @@ export class GitScenarioGenerator {
               show_dirty: true,
               show_ahead_behind: true,
               show_stash_count: false,
-              show_staged_count: false,
-              show_unstaged_count: false,
-              show_untracked_count: false,
             },
             status_colors: {
               operation: 'magenta',
@@ -289,9 +271,6 @@ export class GitScenarioGenerator {
               show_ahead_behind: true,
               show_dirty: true,
               show_stash_count: false,
-              show_staged_count: false,
-              show_unstaged_count: false,
-              show_untracked_count: false,
             },
             status_colors: {
               clean: 'green',
@@ -341,9 +320,6 @@ export class GitScenarioGenerator {
               show_ahead_behind: true,
               show_dirty: true,
               show_stash_count: false,
-              show_staged_count: false,
-              show_unstaged_count: false,
-              show_untracked_count: false,
             },
             status_colors: {
               ahead: 'cyan',
@@ -390,12 +366,9 @@ export class GitScenarioGenerator {
             show_when_no_git: false,
             max_length: 20,
             status: {
-              show_stash_count: true,
               show_dirty: true,
               show_ahead_behind: true,
-              show_staged_count: false,
-              show_unstaged_count: false,
-              show_untracked_count: false,
+              show_stash_count: true,
             },
             status_colors: {
               clean: 'green',
@@ -445,9 +418,6 @@ export class GitScenarioGenerator {
               show_dirty: true,
               show_ahead_behind: true,
               show_stash_count: true,
-              show_staged_count: true,
-              show_unstaged_count: true,
-              show_untracked_count: true,
             },
             status_colors: {
               clean: 'green',
@@ -506,9 +476,6 @@ export class GitScenarioGenerator {
               show_dirty: true,
               show_ahead_behind: true,
               show_stash_count: false,
-              show_staged_count: false,
-              show_unstaged_count: false,
-              show_untracked_count: false,
             },
             status_colors: {
               clean: 'green',
@@ -516,12 +483,6 @@ export class GitScenarioGenerator {
               ahead: 'cyan',
               behind: 'magenta',
               operation: 'red',
-            },
-            version: {
-              show_tag: true,
-              show_commit_hash: true,
-              show_commit_time: false,
-              hash_length: 7,
             },
           },
         },
@@ -583,9 +544,6 @@ export class GitScenarioGenerator {
               show_dirty: true,
               show_ahead_behind: true,
               show_stash_count: false,
-              show_staged_count: false,
-              show_unstaged_count: false,
-              show_untracked_count: false,
             },
             status_colors: {
               dirty: 'red',
@@ -593,12 +551,6 @@ export class GitScenarioGenerator {
               clean: 'green',
               ahead: 'cyan',
               behind: 'magenta',
-            },
-            version: {
-              show_commit_hash: true,
-              show_tag: false,
-              show_commit_time: false,
-              hash_length: 7,
             },
           },
         },
@@ -641,9 +593,6 @@ export class GitScenarioGenerator {
               show_dirty: true,
               show_ahead_behind: true,
               show_stash_count: false,
-              show_staged_count: false,
-              show_unstaged_count: false,
-              show_untracked_count: false,
             },
             status_colors: {
               clean: 'green',
@@ -693,9 +642,6 @@ export class GitScenarioGenerator {
               show_dirty: true,
               show_ahead_behind: true,
               show_stash_count: false,
-              show_staged_count: false,
-              show_unstaged_count: false,
-              show_untracked_count: false,
             },
             status_colors: {
               operation: 'red',
@@ -745,9 +691,6 @@ export class GitScenarioGenerator {
               show_dirty: true,
               show_ahead_behind: true,
               show_stash_count: false,
-              show_staged_count: false,
-              show_unstaged_count: false,
-              show_untracked_count: false,
             },
             status_colors: {
               operation: 'red',
