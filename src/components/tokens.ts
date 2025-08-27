@@ -114,7 +114,8 @@ export class TokensComponent extends BaseComponent {
   }
 
   /**
-   * 解析transcript文件 | Parse transcript file
+   * 解析transcript文件 | Parse transcript file  
+   * 简化版：检测压缩并调整计算区间 | Simplified: detect compression and adjust calculation range
    */
   private parseTranscriptFile(
     transcriptPath: string,
@@ -149,12 +150,20 @@ export class TokensComponent extends BaseComponent {
       const transcript = readFileSync(transcriptPath, 'utf8');
       const lines = transcript.trim().split('\n');
 
-      let contextUsedTokens = 0;
-      let maxUsageTokens = 0;
+      // *** 简单压缩检测：检查第一行是否包含 "type":"summary" *** 
+      // *** Simple compression detection: check if first line contains "type":"summary" ***
+      let startLine = 0;
+      if (lines.length > 0 && lines[0]?.includes('"type":"summary"')) {
+        startLine = 1; // 从第二行开始计算
+        if (context.config.debug) {
+          console.error('检测到会话压缩，从第', startLine + 1, '行开始计算token');
+        }
+      }
 
-      // 从最后开始查找assistant消息，优先使用会话中的最大usage值
-      // Find assistant messages from the end, prioritize maximum usage in session
-      for (let i = lines.length - 1; i >= 0; i--) {
+      let contextUsedTokens = 0;
+
+      // 在指定范围内查找最大usage值 | Find maximum usage value in specified range
+      for (let i = lines.length - 1; i >= startLine; i--) {
         const line = lines[i]?.trim();
         if (!line) continue;
 
@@ -165,40 +174,20 @@ export class TokensComponent extends BaseComponent {
           if (entry.type === 'assistant' && entry.message && 'usage' in entry.message) {
             const usage = entry.message.usage;
 
-            // 更加健壮的字段验证：只需要有usage对象即可，各字段缺失时默认为0
-            // More robust field validation: only requires usage object, defaults to 0 for missing fields
             if (usage && typeof usage === 'object') {
               const inputTokens = Number(usage.input_tokens) || 0;
               const outputTokens = Number(usage.output_tokens) || 0;
               const cacheCreationTokens = Number(usage.cache_creation_input_tokens) || 0;
               const cacheReadTokens = Number(usage.cache_read_input_tokens) || 0;
 
-              const currentUsage =
-                inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
+              const currentUsage = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
 
-              // 跳过usage为0的情况，继续查找有效的usage
-              // Skip usage of 0, continue searching for valid usage
               if (currentUsage > 0) {
-                // 更新最大值 | Update maximum value
-                maxUsageTokens = Math.max(maxUsageTokens, currentUsage);
-
-                // 记录最后一个非零usage作为备用（从后往前搜索，第一个非零就是最新的）
-                // Record last non-zero usage as backup (first non-zero from end is latest)
-                if (contextUsedTokens === 0) {
-                  contextUsedTokens = currentUsage;
-                }
+                contextUsedTokens = Math.max(contextUsedTokens, currentUsage);
               }
             }
           }
         } catch (_parseError) {}
-      }
-
-      // 优先使用最大值，备用最后一个非零usage
-      // Prioritize maximum value, fallback to last non-zero usage
-      if (maxUsageTokens > 0) {
-        contextUsedTokens = maxUsageTokens;
-      } else if (contextUsedTokens === 0) {
-        contextUsedTokens = 0; // 确保不使用0值 | Ensure no zero value usage
       }
 
       const contextWindow = this.getContextWindow();
@@ -476,6 +465,7 @@ export class TokensComponent extends BaseComponent {
     // 最后的回退：硬编码默认值 | Final fallback: hardcoded defaults
     return critical ? '[X]' : '[!]';
   }
+
 }
 
 /**
