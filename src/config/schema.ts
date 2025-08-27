@@ -159,43 +159,9 @@ const BranchStatusSchema = z.object({
   show_ahead_behind: z.boolean().default(false),
   /** 显示stash数量 | Show stash count */
   show_stash_count: z.boolean().default(false),
-  /** 显示暂存文件数 | Show staged file count */
-  show_staged_count: z.boolean().default(false),
-  /** 显示未暂存文件数 | Show unstaged file count */
-  show_unstaged_count: z.boolean().default(false),
-  /** 显示未跟踪文件数 | Show untracked file count */
-  show_untracked_count: z.boolean().default(false),
 });
 
-/**
- * 分支操作状态配置 | Branch operations config
- * 控制Git操作状态的显示选项 | Controls Git operation status display options
- */
-const BranchOperationsSchema = z.object({
-  /** 显示合并状态 | Show merge status */
-  show_merge: z.boolean().default(false),
-  /** 显示变基状态 | Show rebase status */
-  show_rebase: z.boolean().default(false),
-  /** 显示cherry-pick状态 | Show cherry-pick status */
-  show_cherry_pick: z.boolean().default(false),
-  /** 显示bisect状态 | Show bisect status */
-  show_bisect: z.boolean().default(false),
-});
 
-/**
- * 分支版本信息配置 | Branch version info config
- * 控制Git版本信息的显示选项 | Controls Git version information display options
- */
-const BranchVersionSchema = z.object({
-  /** 显示提交SHA（短） | Show commit hash (short) */
-  show_commit_hash: z.boolean().default(false),
-  /** 显示最近标签 | Show latest tag */
-  show_tag: z.boolean().default(false),
-  /** 显示最后提交时间 | Show last commit time */
-  show_commit_time: z.boolean().default(false),
-  /** SHA显示长度 | Hash display length */
-  hash_length: z.number().min(4).max(40).default(7),
-});
 
 /**
  * 分支状态图标配置 | Branch status icons config
@@ -204,42 +170,22 @@ const BranchVersionSchema = z.object({
 const BranchStatusIconsSchema = z.object({
   /** 脏工作区图标 | Dirty workspace icon */
   dirty_emoji: z.string().default('⚡'),
-  /** 清洁工作区图标 | Clean workspace icon */
-  clean_emoji: z.string().default('✨'),
   /** ahead提交图标 | Ahead commits icon */
-  ahead_emoji: z.string().default('↑'),
+  ahead_emoji: z.string().default('🔼'),
   /** behind提交图标 | Behind commits icon */
-  behind_emoji: z.string().default('↓'),
+  behind_emoji: z.string().default('🔽'),
   /** stash存储图标 | Stash storage icon */
   stash_emoji: z.string().default('📦'),
-  /** 合并中图标 | Merge in progress icon */
-  merge_emoji: z.string().default('🔀'),
-  /** 变基中图标 | Rebase in progress icon */
-  rebase_emoji: z.string().default('🔄'),
-  /** cherry-pick中图标 | Cherry-pick in progress icon */
-  cherry_pick_emoji: z.string().default('🍒'),
-  /** bisect中图标 | Bisect in progress icon */
-  bisect_emoji: z.string().default('🔍'),
   /** Nerd Font图标配置 | Nerd Font icons config */
-  dirty_nerd: z.string().default(''),
-  clean_nerd: z.string().default(''),
-  ahead_nerd: z.string().default(''),
-  behind_nerd: z.string().default(''),
-  stash_nerd: z.string().default(''),
-  merge_nerd: z.string().default(''),
-  rebase_nerd: z.string().default(''),
-  cherry_pick_nerd: z.string().default(''),
-  bisect_nerd: z.string().default(''),
+  dirty_nerd: z.string().default('\uE0A0'),
+  ahead_nerd: z.string().default('\uF062'),
+  behind_nerd: z.string().default('\uF063'),
+  stash_nerd: z.string().default('\uF01C'),
   /** 文本图标配置 | Text icons config */
   dirty_text: z.string().default('[*]'),
-  clean_text: z.string().default('[✓]'),
   ahead_text: z.string().default('[↑]'),
   behind_text: z.string().default('[↓]'),
   stash_text: z.string().default('[S]'),
-  merge_text: z.string().default('[M]'),
-  rebase_text: z.string().default('[R]'),
-  cherry_pick_text: z.string().default('[C]'),
-  bisect_text: z.string().default('[B]'),
 });
 
 /**
@@ -291,10 +237,6 @@ export const BranchComponentSchema = BaseComponentSchema.extend({
   max_length: z.number().min(1).default(20),
   /** 工作区状态配置 | Workspace status config */
   status: BranchStatusSchema.optional(),
-  /** 操作状态配置 | Operation status config */
-  operations: BranchOperationsSchema.optional(),
-  /** 版本信息配置 | Version information config */
-  version: BranchVersionSchema.optional(),
   /** 状态图标配置 | Status icons config */
   status_icons: BranchStatusIconsSchema.optional(),
   /** 状态颜色配置 | Status colors config */
@@ -881,15 +823,7 @@ export type BranchComponentConfig = z.infer<typeof BranchComponentSchema>;
  */
 export type BranchStatusConfig = z.infer<typeof BranchStatusSchema>;
 
-/**
- * 分支操作状态配置类型 | Branch operations config type
- */
-export type BranchOperationsConfig = z.infer<typeof BranchOperationsSchema>;
-
-/**
- * 分支版本信息配置类型 | Branch version info config type
- */
-export type BranchVersionConfig = z.infer<typeof BranchVersionSchema>;
+// 分支操作和版本配置类型已简化移除 | Branch operations and version config types have been simplified and removed
 
 /**
  * 分支状态图标配置类型 | Branch status icons config type

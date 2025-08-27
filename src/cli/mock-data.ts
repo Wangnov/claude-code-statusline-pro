@@ -90,11 +90,11 @@ export class MockDataGenerator {
         sessionId: 'basic_session_001',
         model: { id: 'claude-sonnet-4', display_name: 'Claude Sonnet 4' },
         workspace: {
-          current_dir: '/Users/developer/basic-project',
-          project_dir: '/Users/developer/basic-project',
+          current_dir: process.cwd(),
+          project_dir: process.cwd(),
         },
         transcriptPath: '/tmp/claude_transcript_basic.json',
-        cwd: '/Users/developer/basic-project',
+        cwd: process.cwd(),
         gitBranch: 'main',
         cost: {
           total_cost_usd: 0.0567,

@@ -56,17 +56,7 @@ export class BranchComponent extends BaseComponent {
     const hasEnhancedFeatures =
       this.branchConfig.status?.show_dirty ||
       this.branchConfig.status?.show_ahead_behind ||
-      this.branchConfig.status?.show_stash_count ||
-      this.branchConfig.status?.show_staged_count ||
-      this.branchConfig.status?.show_unstaged_count ||
-      this.branchConfig.status?.show_untracked_count ||
-      this.branchConfig.operations?.show_merge ||
-      this.branchConfig.operations?.show_rebase ||
-      this.branchConfig.operations?.show_cherry_pick ||
-      this.branchConfig.operations?.show_bisect ||
-      this.branchConfig.version?.show_commit_hash ||
-      this.branchConfig.version?.show_tag ||
-      this.branchConfig.version?.show_commit_time;
+      this.branchConfig.status?.show_stash_count;
 
     // 只有在启用增强功能时才创建GitService | Only create GitService when enhanced features are enabled
     if (!hasEnhancedFeatures) {
@@ -94,7 +84,7 @@ export class BranchComponent extends BaseComponent {
             cacheTypes: {
               branch: true,
               status: true,
-              version: !!this.branchConfig.version,
+              version: false, // 版本功能已简化移除
               stash: !!this.branchConfig.status?.show_stash_count,
             },
           },
@@ -120,30 +110,27 @@ export class BranchComponent extends BaseComponent {
    * 检查是否启用了操作相关功能 | Check if operation related features are enabled
    */
   private hasOperationFeatures(): boolean {
-    return !!(
-      this.branchConfig.operations?.show_merge ||
-      this.branchConfig.operations?.show_rebase ||
-      this.branchConfig.operations?.show_cherry_pick ||
-      this.branchConfig.operations?.show_bisect
-    );
+    return false; // 操作功能已简化移除 | Operation features have been simplified and removed
   }
 
   /**
    * 检查是否启用了版本相关功能 | Check if version related features are enabled
    */
   private hasVersionFeatures(): boolean {
-    return !!(
-      this.branchConfig.version?.show_commit_hash ||
-      this.branchConfig.version?.show_tag ||
-      this.branchConfig.version?.show_commit_time
-    );
+    return false; // 版本功能已简化移除 | Version features have been simplified and removed
   }
 
   protected async renderContent(context: RenderContext): Promise<string | null> {
     // 解构context但不使用所有变量 | Destructure context but don't use all variables
-    const { inputData: _inputData, config: _config } = context;
+    const { inputData, config: _config } = context;
 
     try {
+      // 优先使用简单的.git/HEAD读取方式（官方推荐）| Prefer simple .git/HEAD reading (officially recommended)
+      const simpleBranch = await this.renderWithSimpleGitRead(context);
+      if (simpleBranch !== null) {
+        return simpleBranch;
+      }
+
       // 如果有GitService且未强制回退，使用GitService | If GitService exists and not forced fallback, use GitService
       if (this.gitService && !this.fallbackToExecSync) {
         try {
@@ -161,6 +148,158 @@ export class BranchComponent extends BaseComponent {
       // 最终回退到基础实现 | Final fallback to basic implementation
       return await this.renderWithExecSync(context);
     }
+  }
+
+  /**
+   * 使用简单的.git/HEAD文件读取（官方推荐方式）| Use simple .git/HEAD file reading (officially recommended)
+   */
+  private async renderWithSimpleGitRead(context: RenderContext): Promise<string | null> {
+    const { inputData } = context;
+    const cwd = inputData.workspace?.current_dir || inputData.cwd || process.cwd();
+    
+    try {
+      // 导入fs模块 | Import fs module
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      
+      // 检查.git/HEAD文件 | Check .git/HEAD file
+      const gitHeadPath = path.join(cwd, '.git', 'HEAD');
+      const headContent = fs.readFileSync(gitHeadPath, 'utf8').trim();
+      
+      let branchName = '';
+      if (headContent.startsWith('ref: refs/heads/')) {
+        // 标准分支引用 | Standard branch reference
+        branchName = headContent.replace('ref: refs/heads/', '');
+      } else if (headContent.match(/^[0-9a-f]{40}$/)) {
+        // 分离HEAD状态，显示commit hash前7位 | Detached HEAD state, show first 7 chars of commit hash
+        branchName = `HEAD@${headContent.substring(0, 7)}`;
+      } else {
+        // 其他情况，尝试解析 | Other cases, try to parse
+        const parts = headContent.split('/');
+        branchName = parts[parts.length - 1] || headContent.substring(0, 8);
+      }
+      
+      if (!branchName) {
+        return null;
+      }
+      
+      // 应用最大长度限制 | Apply max length limit
+      let displayBranch = branchName;
+      const maxLength = this.branchConfig.max_length;
+      if (maxLength && displayBranch.length > maxLength) {
+        displayBranch = `${displayBranch.substring(0, maxLength - 3)}...`;
+      }
+      
+      // 基础分支名显示 | Basic branch name display
+      let result = this.formatOutput(displayBranch);
+      
+      // 如果启用了状态功能，添加状态信息 | If status features are enabled, add status info
+      if (this.hasStatusFeatures()) {
+        const statusInfo = await this.getSimpleGitStatus(cwd);
+        if (statusInfo) {
+          result += statusInfo;
+        }
+      }
+      
+      return result;
+      
+    } catch (error) {
+      // .git/HEAD读取失败，检查是否需要显示no-git | .git/HEAD read failed, check if should show no-git
+      if (this.branchConfig.show_when_no_git) {
+        return this.formatOutput('no-git');
+      }
+      return null;
+    }
+  }
+
+  /**
+   * 获取简单的Git状态信息 | Get simple Git status information
+   */
+  private async getSimpleGitStatus(cwd: string): Promise<string> {
+    const statusParts: string[] = [];
+    
+    try {
+      // 检查Git工作区是否脏 | Check if Git working directory is dirty
+      if (this.branchConfig.status?.show_dirty) {
+        try {
+          const result = await safeExecGit('status', ['--porcelain'], {
+            cwd,
+            timeout: 500, // 短超时
+            ignoreErrors: true,
+          });
+
+          if (result.success && result.stdout.trim()) {
+            const dirtyIcon = this.getStatusIcon('dirty');
+            const colorName = this.branchConfig.status_colors?.dirty || 'yellow';
+            statusParts.push(this.colorize(dirtyIcon, colorName));
+          }
+        } catch (_error) {
+          // 静默处理错误 | Silently handle errors
+        }
+      }
+
+      // 检查ahead/behind状态 | Check ahead/behind status
+      if (this.branchConfig.status?.show_ahead_behind) {
+        try {
+          const result = await safeExecGit(
+            'rev-list',
+            ['--left-right', '--count', 'HEAD...@{upstream}'],
+            {
+              cwd,
+              timeout: 500,
+              ignoreErrors: true,
+            }
+          );
+
+          if (result.success && result.stdout.trim() && result.stdout.trim() !== '0\t0') {
+            const [aheadStr, behindStr] = result.stdout.trim().split('\t');
+            const ahead = Number(aheadStr);
+            const behind = Number(behindStr);
+            
+            if (!Number.isNaN(ahead) && ahead > 0) {
+              const aheadIcon = this.getStatusIcon('ahead');
+              const colorName = this.branchConfig.status_colors?.ahead || 'cyan';
+              statusParts.push(this.colorize(`${aheadIcon}${ahead}`, colorName));
+            }
+            if (!Number.isNaN(behind) && behind > 0) {
+              const behindIcon = this.getStatusIcon('behind');
+              const colorName = this.branchConfig.status_colors?.behind || 'magenta';
+              statusParts.push(this.colorize(`${behindIcon}${behind}`, colorName));
+            }
+          } else {
+          }
+        } catch (_error) {
+          // 静默处理错误 | Silently handle errors
+        }
+      } else {
+      }
+
+      // 检查stash数量 | Check stash count
+      if (this.branchConfig.status?.show_stash_count) {
+        try {
+          const result = await safeExecGit('stash', ['list'], {
+            cwd,
+            timeout: 500,
+            ignoreErrors: true,
+          });
+
+          if (result.success && result.stdout.trim()) {
+            const stashCount = result.stdout.trim().split('\n').length;
+            if (stashCount > 0) {
+              const stashIcon = this.getStatusIcon('stash');
+              statusParts.push(`${stashIcon}${stashCount}`);
+            }
+          }
+        } catch (_error) {
+          // 静默处理错误 | Silently handle errors
+        }
+      }
+      
+    } catch (_error) {
+      // 静默处理错误 | Silently handle errors
+    }
+    
+    return statusParts.join('');
   }
 
   /**
@@ -288,20 +427,7 @@ export class BranchComponent extends BaseComponent {
       statusParts.push(this.colorize(icon, colorName));
     }
 
-    // 暂存文件数 | Staged file count
-    if (statusConfig.show_staged_count && status.staged > 0) {
-      statusParts.push(`S:${status.staged}`);
-    }
-
-    // 未暂存文件数 | Unstaged file count
-    if (statusConfig.show_unstaged_count && status.unstaged > 0) {
-      statusParts.push(`M:${status.unstaged}`);
-    }
-
-    // 未跟踪文件数 | Untracked file count
-    if (statusConfig.show_untracked_count && status.untracked > 0) {
-      statusParts.push(`?:${status.untracked}`);
-    }
+    // 已简化移除计数功能 | Simplified by removing count features
 
     // stash数量 | stash count
     if (statusConfig.show_stash_count && stash.count > 0) {
@@ -341,61 +467,14 @@ export class BranchComponent extends BaseComponent {
    * 渲染操作状态信息 | Render operation status information
    */
   private renderOperationInfo(operation: GitOperationStatus): string {
-    if (!operation.inProgress || !this.branchConfig.operations) return '';
-
-    const operationsConfig = this.branchConfig.operations;
-    const colors = this.branchConfig.status_colors;
-    const colorName = colors?.operation || 'red';
-
-    let icon = '';
-    switch (operation.type) {
-      case GitOperationType.MERGE:
-        if (operationsConfig.show_merge) icon = '🔀';
-        break;
-      case GitOperationType.REBASE:
-        if (operationsConfig.show_rebase) icon = '📋';
-        break;
-      case GitOperationType.CHERRY_PICK:
-        if (operationsConfig.show_cherry_pick) icon = '🍒';
-        break;
-      case GitOperationType.BISECT:
-        if (operationsConfig.show_bisect) icon = '🔍';
-        break;
-      default:
-        return '';
-    }
-
-    return icon ? this.colorize(icon, colorName) : '';
+    return ''; // 操作功能已简化移除 | Operation features have been simplified and removed
   }
 
   /**
    * 渲染版本信息 | Render version information
    */
   private renderVersionInfo(version: GitVersionInfo): string {
-    if (!this.branchConfig.version) return '';
-
-    const versionConfig = this.branchConfig.version;
-    const parts: string[] = [];
-
-    // 提交哈希 | Commit hash
-    if (versionConfig.show_commit_hash && version.shortSha) {
-      const hashLength = versionConfig.hash_length || 7;
-      const displayHash = version.shortSha.substring(0, hashLength);
-      parts.push(`@${displayHash}`);
-    }
-
-    // 标签信息 | Tag information
-    if (versionConfig.show_tag && version.latestTag) {
-      parts.push(`#${version.latestTag}`);
-    }
-
-    // 提交时间 | Commit time
-    if (versionConfig.show_commit_time && version.timestamp) {
-      const timeStr = this.formatRelativeTime(version.timestamp);
-      parts.push(`(${timeStr})`);
-    }
-
-    return parts.length > 0 ? `[${parts.join(' ')}]` : '';
+    return ''; // 版本功能已简化移除 | Version features have been simplified and removed
   }
 
   /**
@@ -419,7 +498,7 @@ export class BranchComponent extends BaseComponent {
       case 'dirty':
         return icons.dirty_emoji || '⚡';
       case 'clean':
-        return icons.clean_emoji || '✨';
+        return '✨'; // 简化后直接返回默认图标 | Return default icon after simplification
       case 'ahead':
         return icons.ahead_emoji || '↑';
       case 'behind':
@@ -571,10 +650,7 @@ export class BranchComponent extends BaseComponent {
     return !!(
       this.branchConfig.status?.show_dirty ||
       this.branchConfig.status?.show_ahead_behind ||
-      this.branchConfig.status?.show_stash_count ||
-      this.branchConfig.status?.show_staged_count ||
-      this.branchConfig.status?.show_unstaged_count ||
-      this.branchConfig.status?.show_untracked_count
+      this.branchConfig.status?.show_stash_count
     );
   }
 
