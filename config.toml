@@ -77,24 +77,6 @@ max_length = 15
 show_dirty = true
 show_ahead_behind = true
 show_stash_count = true
-show_staged_count = false
-show_unstaged_count = false
-show_untracked_count = false
-
-[components.branch.operations]
-show_merge = true
-show_rebase = true
-show_cherry_pick = false
-show_bisect = false
-
-[components.branch.performance]
-enable_cache = true
-cache_ttl = 5_000
-git_timeout = 1_000
-parallel_commands = true
-lazy_load_status = true
-skip_on_large_repo = true
-large_repo_threshold = 10_000
 
 [components.tokens]
 enabled = true
@@ -201,7 +183,6 @@ U = "usage"
 S = "status"
 
 [advanced]
-debug = true
 cache_enabled = true
 recent_error_count = 5
 git_timeout = 1_000
