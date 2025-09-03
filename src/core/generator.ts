@@ -7,6 +7,7 @@ import { StatusComponentFactory } from '../components/status.js';
 import { TokensComponentFactory } from '../components/tokens.js';
 import { UsageComponentFactory } from '../components/usage.js';
 import type { ComponentConfig, Config, InputData, RenderContext } from '../config/schema.js';
+import { initializeStorage } from '../storage/index.js';
 import { TerminalRenderer } from '../terminal/colors.js';
 import { detect, getCapabilityInfo } from '../terminal/detector.js';
 import { createThemeRenderer } from '../themes/index.js';
@@ -37,6 +38,9 @@ export class StatuslineGenerator {
     this.config = config;
     this.componentRegistry = new ComponentRegistry();
     this.initializeComponents();
+
+    // Initialize storage system
+    initializeStorage().catch(console.error);
 
     if (options.updateThrottling !== false) {
       this.updateInterval = 300;

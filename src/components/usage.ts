@@ -1,4 +1,5 @@
 import type { ComponentConfig, RenderContext, UsageComponentConfig } from '../config/schema.js';
+import { getCostDisplay, updateCostFromInput } from '../storage/index.js';
 import { BaseComponent, type ComponentFactory } from './base.js';
 
 /**
@@ -57,7 +58,16 @@ export class UsageComponent extends BaseComponent {
 
     // 如果有官方数据，直接使用 | If official data available, use directly
     if (inputData.cost) {
+      // 异步更新存储的成本数据 | Async update stored cost data
+      updateCostFromInput(inputData).catch(console.error);
       return this.formatOfficialUsageDisplay(inputData);
+    }
+
+    // 尝试从存储系统加载成本 | Try to load cost from storage
+    const sessionId = inputData.sessionId || inputData.session_id;
+    if (sessionId && this.usageConfig.display_mode === 'cost_with_conversation') {
+      // 显示会话链成本（需要异步加载，这里显示缓存值）
+      return this.renderConversationCost(sessionId);
     }
 
     return this.renderNoData();
@@ -171,6 +181,49 @@ export class UsageComponent extends BaseComponent {
       return 'green'; // 低成本 | Low cost
     } else {
       return 'gray'; // 无成本 | No cost
+    }
+  }
+
+  /**
+   * 渲染对话级成本 | Render conversation-level cost
+   * 这是同步方法，使用缓存的值 | This is sync method, uses cached value
+   */
+  private renderConversationCost(sessionId: string): string | null {
+    // 使用缓存的对话成本数据
+    // 实际的异步加载会在后台进行
+    const icon = this.getIcon('usage');
+
+    // 临时显示，实际值会通过异步更新
+    const displayText =
+      this.usageConfig.display_mode === 'cost_with_lines' ? '$-.-- (loading...)' : '$-.--';
+
+    // 启动异步加载（不阻塞渲染）
+    this.loadConversationCostAsync(sessionId);
+
+    return this.formatOutput(icon, displayText, 'gray');
+  }
+
+  /**
+   * 异步加载对话成本 | Async load conversation cost
+   */
+  private async loadConversationCostAsync(sessionId: string): Promise<void> {
+    try {
+      const costData = await getCostDisplay(sessionId);
+
+      // 存储到缓存以供下次渲染使用
+      // 这里需要一个缓存机制，可以在组件级别或全局级别实现
+      if (typeof (globalThis as any).statuslineCostCache === 'undefined') {
+        (globalThis as any).statuslineCostCache = {};
+      }
+
+      (globalThis as any).statuslineCostCache[sessionId] = {
+        cost: costData.cost,
+        mode: costData.mode,
+        sessionCount: costData.sessionCount,
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      console.error('Failed to load conversation cost:', error);
     }
   }
 }

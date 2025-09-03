@@ -393,6 +393,7 @@ export const StatusComponentSchema = BaseComponentSchema.extend({
 export const UsageDisplayMode = z.enum([
   'cost', // "$0.05" - 仅显示成本
   'cost_with_lines', // "$0.05 +12 -5" - 成本加代码行数
+  'cost_with_conversation', // "$0.05 (3 sessions)" - 对话级累加成本
 ]);
 
 /**
@@ -489,6 +490,22 @@ const ExperimentalSchema = z
   })
   .optional();
 
+/**
+ * 存储系统配置 | Storage system config
+ */
+const StorageSchema = z
+  .object({
+    /** 启用对话级成本追踪 | Enable conversation-level cost tracking */
+    enableConversationTracking: z.boolean().default(true),
+    /** 成本显示模式 | Cost display mode */
+    costDisplayMode: z.enum(['session', 'conversation']).default('conversation'),
+    /** 启用成本持久化 | Enable cost persistence */
+    enableCostPersistence: z.boolean().default(true),
+    /** 自动清理旧会话（天数）| Auto-cleanup old sessions (days) */
+    autoCleanupDays: z.number().min(0).default(30),
+  })
+  .optional();
+
 // ==================== 预设映射配置 ====================
 
 /**
@@ -546,6 +563,8 @@ export const ConfigSchema = z
     advanced: AdvancedSchema.optional(),
     /** 实验性配置 | Experimental config (新增) */
     experimental: ExperimentalSchema,
+    /** 存储系统配置 | Storage system config */
+    storage: StorageSchema,
   })
   .passthrough(); // 允许额外字段 | Allow additional fields
 
