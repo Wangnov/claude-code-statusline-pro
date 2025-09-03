@@ -42,7 +42,7 @@ export class BranchEditor {
   async configureBranchComponentAdvanced(): Promise<void> {
     const _branchConfig = this.currentConfig.components?.branch;
 
-    if (!branchConfig) {
+    if (!_branchConfig) {
       console.log(t('errors.componentNotFound', { component: 'Branch' }));
       await this.waitForKeyPress();
       return;
@@ -138,7 +138,7 @@ export class BranchEditor {
    */
   async configureBranchStatus(): Promise<void> {
     const _branchConfig = this.currentConfig.components?.branch;
-    const currentStatus = (branchConfig?.status || {}) as Record<string, boolean>;
+    const currentStatus = (_branchConfig?.status || {}) as Record<string, boolean>;
 
     console.log(`\n📊 ${t('component.branch.status_display')}`);
     console.log(`${t('component.config.item_count')}: 6\n`);
@@ -438,7 +438,7 @@ export class BranchEditor {
    */
   async configureBranchIcons(): Promise<void> {
     const _branchConfig = this.currentConfig.components?.branch;
-    const currentIcons = branchConfig?.status_icons || ({} as any);
+    const currentIcons = _branchConfig?.status_icons || ({} as any);
 
     console.log('\n🎨 状态图标配置 | Status Icons Configuration');
     console.log('配置各种Git状态对应的图标 | Configure icons for various Git statuses\n');
@@ -529,7 +529,7 @@ export class BranchEditor {
    */
   async configureBranchColors(): Promise<void> {
     const _branchConfig = this.currentConfig.components?.branch;
-    const currentColors = branchConfig?.status_colors || ({} as any);
+    const currentColors = _branchConfig?.status_colors || ({} as any);
 
     console.log('\n🌈 状态颜色配置 | Status Colors Configuration');
     console.log('配置各种Git状态对应的颜色 | Configure colors for various Git statuses\n');
@@ -639,7 +639,7 @@ export class BranchEditor {
    */
   async configureBranchPerformance(): Promise<void> {
     const _branchConfig = this.currentConfig.components?.branch;
-    const currentPerformance = branchConfig?.performance || ({} as any);
+    const currentPerformance = _branchConfig?.performance || ({} as any);
 
     console.log(`\n⚡ ${t('component.branch.performance')}`);
     console.log(`${t('component.config.item_count')}: 7\n`);

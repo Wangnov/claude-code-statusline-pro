@@ -150,19 +150,28 @@ export class TokensComponent extends BaseComponent {
       const transcript = readFileSync(transcriptPath, 'utf8');
       const lines = transcript.trim().split('\n');
 
-      // *** 简单压缩检测：检查第一行是否包含 "type":"summary" ***
-      // *** Simple compression detection: check if first line contains "type":"summary" ***
-      let startLine = 0;
-      if (lines.length > 0 && lines[0]?.includes('"type":"summary"')) {
-        startLine = 1; // 从第二行开始计算
-        if (context.config.debug) {
-          console.error('检测到会话压缩，从第', startLine + 1, '行开始计算token');
+      // *** 压缩检测：查找包含 isCompactSummary 标记的行 ***
+      // *** Compression detection: find line with isCompactSummary marker ***
+      let compressionLine = -1;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]?.trim();
+        if (line?.includes('"isCompactSummary":true')) {
+          compressionLine = i;
+          if (context.config.debug) {
+            console.error('检测到会话压缩，从第', compressionLine + 1, '行开始累积计算token');
+          }
+          break;
         }
       }
 
       let contextUsedTokens = 0;
 
-      // 在指定范围内查找最大usage值 | Find maximum usage value in specified range
+      // 确定搜索范围：如果有压缩，从压缩点之后开始；否则从头开始
+      // Determine search range: start after compression point if compressed, otherwise from beginning
+      const startLine = compressionLine >= 0 ? compressionLine + 1 : 0;
+
+      // 从后往前查找最新的包含usage信息的assistant消息
+      // Search backwards for the latest assistant message with usage info
       for (let i = lines.length - 1; i >= startLine; i--) {
         const line = lines[i]?.trim();
         if (!line) continue;
@@ -180,11 +189,16 @@ export class TokensComponent extends BaseComponent {
               const cacheCreationTokens = Number(usage.cache_creation_input_tokens) || 0;
               const cacheReadTokens = Number(usage.cache_read_input_tokens) || 0;
 
-              const currentUsage =
+              // 计算总使用量
+              contextUsedTokens =
                 inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
 
-              if (currentUsage > 0) {
-                contextUsedTokens = Math.max(contextUsedTokens, currentUsage);
+              // 找到最新的usage后立即返回
+              if (contextUsedTokens > 0) {
+                if (context.config.debug) {
+                  console.error('找到最新token使用量:', contextUsedTokens, '(行号:', i + 1, ')');
+                }
+                break;
               }
             }
           }
