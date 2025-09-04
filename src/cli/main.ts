@@ -343,7 +343,8 @@ program
 
       console.log(formatCliMessage('info', '交互式配置编辑器功能已被移除'));
       console.log(formatCliMessage('info', '请直接编辑 config.toml 文件进行配置'));
-      console.log(formatCliMessage('folder', `配置文件路径: ${configLoader.getConfigSource()}`));
+      const configSource = configLoader.getConfigSource();
+      console.log(formatCliMessage('folder', `配置文件路径: ${configSource.path || '默认配置'}`));
     } catch (error) {
       console.error(
         formatCliMessage('error', 'Configuration error:'),
@@ -571,7 +572,8 @@ async function startThemeSelector(): Promise<void> {
     console.log(formatCliMessage('info', '自定义主题编辑器已被移除'));
     console.log(formatCliMessage('info', '请直接编辑 config.toml 文件来自定义主题'));
     const configLoader = new ConfigLoader();
-    console.log(formatCliMessage('folder', `配置文件路径: ${configLoader.getConfigSource()}`));
+    const configSource = configLoader.getConfigSource();
+    console.log(formatCliMessage('folder', `配置文件路径: ${configSource.path || '默认配置'}`));
   } else {
     await applyTheme(theme);
   }

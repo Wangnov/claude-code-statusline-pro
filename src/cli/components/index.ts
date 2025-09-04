@@ -11,15 +11,6 @@ export {
   exampleWithPreviewEngine,
   runAllExamples,
 } from './example-usage.js';
-// 集成配置类型
-export type { IntegrationConfig } from './integration.js';
-
-// 集成模块
-export {
-  createIntegration,
-  initializeIntegratedSelectors,
-  RealTimePreviewSelectorIntegration,
-} from './integration.js';
 // 类型定义
 export type {
   Choice,

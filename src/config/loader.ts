@@ -239,14 +239,6 @@ export class ConfigLoader {
   }
 
   /**
-   * 哈希项目路径以匹配Claude Code的格式 | Hash project path to match Claude Code's format
-   * @deprecated 使用 projectResolver.hashPath 代替
-   */
-  private hashProjectPath(projectPath: string): string {
-    return projectResolver.hashPath(projectPath);
-  }
-
-  /**
    * 深度合并对象 | Deep merge objects
    * 增强版本，更好地处理配置合并 | Enhanced version for better config merging
    */

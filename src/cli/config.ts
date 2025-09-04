@@ -15,7 +15,6 @@
 import { Command } from 'commander';
 import { ConfigLoader } from '../config/loader.js';
 import { detect as detectTerminalCapabilities } from '../terminal/detector.js';
-import { ConfigEditor } from './config-editor.js';
 import { initializeI18n, t } from './i18n.js';
 import { formatCliMessage } from './message-icons.js';
 
@@ -188,11 +187,11 @@ function registerEditCommand(program: Command): void {
           console.log();
         }
 
-        // 启动交互式编辑器 | Start interactive editor
-        const editor = new ConfigEditor({
-          configPath: options.file,
-        });
-        await editor.startInteractiveMode();
+        // 交互式编辑器已被移除 | Interactive editor has been removed
+        console.log(formatCliMessage('info', '交互式配置编辑器功能已被移除'));
+        console.log(formatCliMessage('info', '请直接编辑 config.toml 文件进行配置'));
+        const configSource = configLoader.getConfigSource();
+        console.log(formatCliMessage('folder', `配置文件路径: ${configSource.path || '默认配置'}`));
       } catch (error) {
         console.error(formatCliMessage('error', `${t('errors.configLoadFailed')}:`), error);
         process.exit(1);

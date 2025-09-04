@@ -755,15 +755,6 @@ export interface LivePreviewOptions {
 }
 
 /**
- * 配置编辑器选项接口 | Config editor options interface
- */
-export interface ConfigEditorOptions {
-  configPath?: string;
-  enableLivePreview?: boolean;
-  autoSave?: boolean;
-}
-
-/**
  * 模拟场景接口 | Mock scenario interface
  */
 export interface MockScenario {

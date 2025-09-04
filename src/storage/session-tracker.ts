@@ -64,7 +64,6 @@ export class SessionTracker {
     this.claudeBasePath = claudeBasePath || path.join(os.homedir(), '.claude');
   }
 
-
   /**
    * Find JSONL file for a session
    * 查找会话的JSONL文件

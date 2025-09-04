@@ -9,9 +9,9 @@ import { UsageComponentFactory } from '../components/usage.js';
 import type { ComponentConfig, Config, InputData, RenderContext } from '../config/schema.js';
 import { initializeStorage } from '../storage/index.js';
 import { TerminalRenderer } from '../terminal/colors.js';
-import { projectResolver } from '../utils/project-resolver.js';
 import { detect, getCapabilityInfo } from '../terminal/detector.js';
 import { createThemeRenderer } from '../themes/index.js';
+import { projectResolver } from '../utils/project-resolver.js';
 
 /**
  * 生成器选项 | Generator options
@@ -62,22 +62,6 @@ export class StatuslineGenerator {
     this.componentRegistry.register('tokens', new TokensComponentFactory());
     this.componentRegistry.register('usage', new UsageComponentFactory());
     this.componentRegistry.register('status', new StatusComponentFactory());
-  }
-
-  /**
-   * 从transcriptPath提取项目ID | Extract project ID from transcriptPath
-   * @deprecated 使用 projectResolver 替代
-   */
-  private extractProjectIdFromTranscriptPath(transcriptPath: string | undefined): string | null {
-    if (!transcriptPath) return null;
-
-    try {
-      // 匹配 /projects/ 后面和下一个 / 之间的内容
-      const match = transcriptPath.match(/\/projects\/([^/]+)\//); 
-      return match ? match[1] || null : null;
-    } catch {
-      return null;
-    }
   }
 
   /**

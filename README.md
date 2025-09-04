@@ -16,7 +16,7 @@
 ## ✨ 核心特性
 
 - 🎯 **三大主题系统**: Classic、Powerline、Capsule 主题，自适应终端能力
-- 🛠️ **交互式配置编辑器**: 全屏可视化配置界面，支持实时预览和分类管理
+- 🛠️ **灵活的配置系统**: 支持TOML配置文件和命令行参数覆盖
 - 📊 **精准Token计算**: 与Claude官方API完全一致的token统计，支持渐变可视化进度条
 - 🧠 **智能状态识别**: 基于tokens数量精准识别Thinking vs Ready状态
 - 🚀 **预设系统**: 通过字母组合快速配置组件排布 (`PMBTUS`, `MT`, `BT`)
@@ -326,7 +326,7 @@ echo '{"model":{"id":"claude-sonnet-4"}}' | npx claude-code-statusline-pro@lates
 ## ✨ Core Features
 
 - 🎯 **Three Theme System**: Classic, Powerline, and Capsule themes with adaptive terminal capabilities
-- 🛠️ **Interactive Configuration Editor**: Full-screen visual configuration interface with real-time preview and categorized management
+- 🛠️ **Flexible Configuration System**: Support for TOML configuration files and command-line parameter overrides
 - 📊 **Precise Token Calculation**: Token statistics fully consistent with Claude's official API, supporting gradient visualization progress bar
 - 🧠 **Smart Status Recognition**: Precise identification of Thinking vs Ready status based on token count
 - 🚀 **Preset System**: Quick component configuration through letter combinations (`PMBTUS`, `MT`, `BT`)
@@ -494,20 +494,23 @@ The cost displayed in the status bar represents the **total cost of the current 
 
 ## 🛠️ Advanced Configuration
 
-### Interactive Configuration Editor
+### Configuration Management
 
-Launch the visual configuration interface:
+Create and edit configuration using TOML files:
 
 ```bash
-npx claude-code-statusline-pro@latest config
+# Initialize configuration
+npx claude-code-statusline-pro@latest config --init
+
+# Reset to defaults
+npx claude-code-statusline-pro@latest config --reset
 ```
 
 **Features**:
-- 📱 Full-screen visual interface with intuitive configuration management experience
-- 🔄 Real-time preview, see effects immediately when modifying configurations  
-- 📂 Categorized management with functionally grouped configuration options
-- 💾 Smart save with automatic validation and configuration saving
-- 🌐 Bilingual interface with automatic switching
+- 📂 Simple TOML-based configuration
+- 💾 Project-specific and global configuration support
+- 🔄 Command-line parameter overrides
+- ✅ Automatic configuration validation
 
 ### TOML Configuration File
 

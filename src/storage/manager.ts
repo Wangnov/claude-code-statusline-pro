@@ -53,7 +53,6 @@ export class StorageManager {
     };
   }
 
-
   /**
    * Ensure all required directories exist
    * 确保所有必需的目录存在

@@ -16,7 +16,6 @@ export {
   getComponentConfigItemCount,
   isValidComponent,
 } from './cli/component-config-mapper.js';
-export { ConfigEditor, createConfigEditor } from './cli/config-editor.js';
 // 国际化系统导出 (I18n system exports)
 export {
   getCurrentLanguage,
@@ -37,7 +36,6 @@ export {
   initializeCliIconManager,
 } from './cli/message-icons.js';
 export { MockDataGenerator, mockDataGenerator } from './cli/mock-data.js';
-export { createLivePreviewEngine, LivePreviewEngine } from './cli/preview-engine.js';
 // 组件系统导出
 export { Component, ComponentFactory, ComponentRegistry } from './components/base.js';
 export { BranchComponent, BranchComponentFactory } from './components/branch.js';
@@ -100,7 +98,6 @@ export type {
   ComponentOptions,
   // 配置相关类型
   Config,
-  ConfigEditorOptions,
   InputData,
   // CLI相关类型
   LivePreviewOptions,
