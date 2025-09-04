@@ -9,6 +9,8 @@
  * - 三层用户体验: settings.json内联参数 > CLI交互配置 > 手动TOML编辑
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { confirm, select } from '@inquirer/prompts';
 import { Command } from 'commander';
 import { ConfigLoader } from '../config/loader.js';
@@ -83,9 +85,30 @@ program
   .action(async (preset, options) => {
     await initializeApp();
     try {
+      // 从stdin读取输入数据以获取projectId
+      const inputData = await readStdinData();
+
+      // 从transcriptPath提取项目ID
+      const projectId = extractProjectIdFromTranscriptPath(inputData.transcriptPath);
+
+      if (options.debug && projectId) {
+        console.error(`Extracted project ID: ${projectId}`);
+      }
+
       // 加载配置，内联参数具有最高优先级
       const configLoader = new ConfigLoader();
       let config = await configLoader.load(options.config);
+
+      // 如果有projectId，重新加载配置
+      if (projectId) {
+        if (options.debug) {
+          console.error(`Reloading config with projectId: ${projectId}`);
+        }
+        config = await configLoader.loadConfig({
+          customPath: options.config,
+          projectId,
+        });
+      }
 
       // 内联参数覆盖配置
       if (preset || options.preset) {
@@ -173,8 +196,7 @@ program
         return;
       }
 
-      // 标准模式 - 从stdin读取数据
-      const inputData = await readStdinData();
+      // inputData已经在前面读取了
 
       if (options.debug) {
         console.error('Config:', JSON.stringify(config, null, 2));
@@ -203,68 +225,112 @@ program
   .description('interactive configuration with live preview')
   .option('-f, --file <path>', 'config file path')
   .option('-r, --reset', 'reset to default configuration')
-  .option('-i, --init', 'initialize new configuration with intelligent terminal detection')
+  .option(
+    '-i, --init [project-path]',
+    'initialize configuration for project (current directory if not specified)'
+  )
+  .option('-g, --global', 'create global user-level configuration (use with --init)')
   .option('-t, --theme <theme>', 'specify theme for initialization (classic, powerline, capsule)')
   .action(async (options) => {
     await initializeApp();
     try {
       const configLoader = new ConfigLoader();
 
-      if (options.init) {
-        // 初始化配置文件 | Initialize configuration file
-        const exists = await configLoader.configExists(options.file);
+      if (options.init !== undefined) {
+        // 确定目标路径 | Determine target path
+        let targetConfigPath: string;
+        let projectPath: string;
 
-        if (exists) {
-          console.log(formatCliMessage('info', t('config.exists')));
+        if (options.global) {
+          // 全局用户级配置 | Global user-level configuration
+          targetConfigPath = configLoader.getUserConfigPath();
+          projectPath = 'global';
+          console.log(formatCliMessage('info', '创建全局用户级配置文件'));
+        } else {
+          // 项目级配置 | Project-level configuration
+          if (typeof options.init === 'string') {
+            // 指定了项目路径 | Project path specified
+            projectPath = path.resolve(options.init);
+          } else {
+            // 使用当前目录 | Use current directory
+            projectPath = process.cwd();
+          }
+
+          // 验证项目路径是否存在 | Verify project path exists
+          if (!fs.existsSync(projectPath)) {
+            console.log(formatCliMessage('error', `项目路径不存在: ${projectPath}`));
+            process.exit(1);
+          }
+
+          targetConfigPath = configLoader.getProjectConfigPathForPath(projectPath);
+          const projectId = configLoader.generateProjectId(projectPath);
+          console.log(formatCliMessage('info', `为项目创建配置文件: ${projectPath}`));
+          console.log(formatCliMessage('folder', `项目ID: ${projectId}`));
+        }
+
+        console.log(formatCliMessage('folder', `配置文件路径: ${targetConfigPath}`));
+
+        // 检查配置文件是否已存在 | Check if config file already exists
+        if (fs.existsSync(targetConfigPath)) {
+          console.log(formatCliMessage('info', '配置文件已存在'));
           const overwrite = await confirm({
-            message: t('config.overwrite'),
+            message: '是否覆盖现有配置文件?',
             default: false,
           });
 
           if (!overwrite) {
-            console.log(formatCliMessage('info', t('messages.cancelled')));
+            console.log(formatCliMessage('info', '操作已取消'));
             return;
           }
         }
 
+        // 创建目标目录 | Create target directory
+        const targetDir = path.dirname(targetConfigPath);
+        if (!fs.existsSync(targetDir)) {
+          await fs.promises.mkdir(targetDir, { recursive: true });
+          console.log(formatCliMessage('success', `创建目录: ${targetDir}`));
+        }
+
         // 智能终端检测 | Intelligent terminal detection
-        console.log(formatCliMessage('info', t('terminal.detection.title')));
+        console.log(formatCliMessage('info', '检测终端能力...'));
         const capabilities = detectTerminalCapabilities();
 
         // 根据终端能力选择最佳主题 | Select optimal theme based on terminal capabilities
         let selectedTheme: string;
         if (options.theme) {
           selectedTheme = options.theme;
-          console.log(formatCliMessage('theme', t('config.theme', { theme: selectedTheme })));
+          console.log(formatCliMessage('theme', `使用指定主题: ${selectedTheme}`));
         } else {
           if (capabilities.nerdFont) {
             selectedTheme = 'powerline';
             console.log(
-              formatCliMessage(
-                'success',
-                'Nerd Font detected - using Powerline theme for best experience'
-              )
+              formatCliMessage('success', '检测到 Nerd Font - 使用 Powerline 主题获得最佳体验')
             );
           } else if (capabilities.emoji) {
             selectedTheme = 'classic';
-            console.log(formatCliMessage('info', 'Emoji support detected - using Classic theme'));
+            console.log(formatCliMessage('info', '检测到 Emoji 支持 - 使用 Classic 主题'));
           } else {
             selectedTheme = 'classic';
             console.log(
-              formatCliMessage(
-                'warning',
-                'Limited terminal capabilities - using Classic theme with text fallback'
-              )
+              formatCliMessage('warning', '终端能力有限 - 使用 Classic 主题并启用文本回退')
             );
           }
         }
 
-        // 创建带有智能配置的默认文件 | Create default file with intelligent configuration
-        await configLoader.createDefaultConfig(options.file, selectedTheme, capabilities);
+        // 从模板复制配置文件 | Copy configuration from template
+        await configLoader.createDefaultConfig(targetConfigPath, selectedTheme, capabilities);
 
-        console.log(formatCliMessage('success', t('config.initialized')));
-        console.log(formatCliMessage('folder', t('config.theme', { theme: selectedTheme })));
-        console.log(formatCliMessage('info', t('config.customization')));
+        console.log(formatCliMessage('success', '配置文件初始化成功!'));
+        console.log(formatCliMessage('theme', `主题: ${selectedTheme}`));
+        console.log(formatCliMessage('folder', `位置: ${targetConfigPath}`));
+
+        if (!options.global) {
+          console.log(formatCliMessage('info', '该配置仅对当前项目生效'));
+          console.log(formatCliMessage('info', '使用 --global 参数创建全局配置'));
+        } else {
+          console.log(formatCliMessage('info', '该配置对所有项目生效'));
+        }
+
         return;
       }
 
@@ -375,6 +441,24 @@ program
       process.exit(1);
     }
   });
+
+/**
+ * 从transcriptPath提取项目ID | Extract project ID from transcriptPath
+ * 例如：/Users/wangnov/.claude/projects/-Users-wangnov-claude-code-statusline-pro/xxx.jsonl
+ * -> -Users-wangnov-claude-code-statusline-pro
+ */
+function extractProjectIdFromTranscriptPath(transcriptPath: string | null): string | null {
+  if (!transcriptPath) return null;
+
+  try {
+    // 匹配 /projects/ 后面和下一个 / 之间的内容
+    const match = transcriptPath.match(/\/projects\/([^/]+)\//);
+    return match ? match[1] || null : null;
+  } catch (error) {
+    console.warn('Failed to extract project ID from transcriptPath:', error);
+    return null;
+  }
+}
 
 /**
  * 从stdin读取输入数据
