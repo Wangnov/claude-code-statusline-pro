@@ -6,6 +6,7 @@ import TOML from '@iarna/toml';
 import type { ZodError } from 'zod';
 import { detectSystemLanguage } from '../cli/i18n.js';
 import type { TerminalCapabilities } from '../terminal/detector.js';
+import { projectResolver } from '../utils/project-resolver.js';
 import { type ComponentsConfig, type Config, ConfigSchema } from './schema.js';
 
 // ES模块和CommonJS兼容的__dirname处理
@@ -198,9 +199,8 @@ export class ConfigLoader {
       return path.join(basePath, 'projects', projectId, 'statusline-pro', 'config.toml');
     }
 
-    // 回退到自动生成的项目hash
-    const projectPath = process.cwd();
-    const projectHash = this.hashProjectPath(projectPath);
+    // 使用 projectResolver 获取项目ID
+    const projectHash = projectResolver.getProjectId();
     return path.join(basePath, 'projects', projectHash, 'statusline-pro', 'config.toml');
   }
 
@@ -208,7 +208,8 @@ export class ConfigLoader {
    * 从项目路径生成项目ID (公共方法用于CLI命令) | Generate project ID from project path (public method for CLI commands)
    */
   generateProjectId(projectPath: string): string {
-    return this.hashProjectPath(projectPath);
+    // 使用 projectResolver 的统一方法
+    return projectResolver.hashPath(projectPath);
   }
 
   /**
@@ -216,7 +217,8 @@ export class ConfigLoader {
    */
   getProjectConfigPathForPath(projectPath: string): string {
     const basePath = path.join(os.homedir(), '.claude');
-    const projectId = this.generateProjectId(projectPath);
+    // 使用 projectResolver 生成项目ID
+    const projectId = projectResolver.hashPath(projectPath);
     return path.join(basePath, 'projects', projectId, 'statusline-pro', 'config.toml');
   }
 
@@ -238,20 +240,10 @@ export class ConfigLoader {
 
   /**
    * 哈希项目路径以匹配Claude Code的格式 | Hash project path to match Claude Code's format
-   * macOS: /Users/name/project -> -Users-name-project
-   * Windows: C:\User\name\project -> C-User-name-project
+   * @deprecated 使用 projectResolver.hashPath 代替
    */
   private hashProjectPath(projectPath: string): string {
-    // 1. 替换所有路径分隔符为连字符
-    let result = projectPath.replace(/[\\/:]/g, '-');
-
-    // 2. 清理多个连续连字符为单个连字符
-    result = result.replace(/-+/g, '-');
-
-    // 3. 移除结尾的连字符，但保留开头的连字符 (macOS以/开头会产生开头的-)
-    result = result.replace(/-+$/, '');
-
-    return result;
+    return projectResolver.hashPath(projectPath);
   }
 
   /**

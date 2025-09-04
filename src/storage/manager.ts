@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { projectResolver } from '../utils/project-resolver.js';
 import type { ConversationCost, SessionCost, StorageConfig, StoragePaths } from './types.js';
 
 export class StorageManager {
@@ -34,8 +35,8 @@ export class StorageManager {
   private initializePaths(): StoragePaths {
     const basePath = this.config.storagePath!;
 
-    // 使用提供的项目ID，否则回退到自动生成
-    const projectHash = this.projectId || this.hashPath(process.cwd());
+    // 使用统一的 projectResolver 获取项目ID
+    const projectHash = this.projectId || projectResolver.getProjectId();
 
     return {
       userConfigDir: path.join(basePath, 'statusline-pro'),
@@ -52,24 +53,6 @@ export class StorageManager {
     };
   }
 
-  /**
-   * Hash project path to create unique directory name
-   * 哈希项目路径生成唯一目录名
-   * macOS: /Users/name/project -> -Users-name-project
-   * Windows: C:\User\name\project -> C-User-name-project
-   */
-  private hashPath(projectPath: string): string {
-    // 1. 替换所有路径分隔符为连字符
-    let result = projectPath.replace(/[\\/:]/g, '-');
-
-    // 2. 清理多个连续连字符为单个连字符
-    result = result.replace(/-+/g, '-');
-
-    // 3. 移除结尾的连字符，但保留开头的连字符 (macOS以/开头会产生开头的-)
-    result = result.replace(/-+$/, '');
-
-    return result;
-  }
 
   /**
    * Ensure all required directories exist
@@ -130,7 +113,7 @@ export class StorageManager {
    */
   async findParentSession(sessionId: string): Promise<string | null> {
     const projectsDir = path.join(this.config.storagePath!, 'projects');
-    const projectHash = this.projectId || this.hashPath(process.cwd());
+    const projectHash = this.projectId || projectResolver.getProjectId();
     const jsonlDir = path.join(projectsDir, projectHash);
 
     // Look for JSONL file with this sessionId
@@ -379,6 +362,8 @@ export class StorageManager {
    */
   updateProjectId(projectId: string): void {
     this.projectId = projectId;
+    // 同时更新 projectResolver 的缓存
+    projectResolver.setProjectIdFromTranscript(`/projects/${projectId}/`);
     this.paths = this.initializePaths();
     this.ensureDirectories();
   }

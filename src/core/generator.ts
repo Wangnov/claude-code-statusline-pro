@@ -9,6 +9,7 @@ import { UsageComponentFactory } from '../components/usage.js';
 import type { ComponentConfig, Config, InputData, RenderContext } from '../config/schema.js';
 import { initializeStorage } from '../storage/index.js';
 import { TerminalRenderer } from '../terminal/colors.js';
+import { projectResolver } from '../utils/project-resolver.js';
 import { detect, getCapabilityInfo } from '../terminal/detector.js';
 import { createThemeRenderer } from '../themes/index.js';
 
@@ -65,13 +66,14 @@ export class StatuslineGenerator {
 
   /**
    * 从transcriptPath提取项目ID | Extract project ID from transcriptPath
+   * @deprecated 使用 projectResolver 替代
    */
   private extractProjectIdFromTranscriptPath(transcriptPath: string | undefined): string | null {
     if (!transcriptPath) return null;
 
     try {
       // 匹配 /projects/ 后面和下一个 / 之间的内容
-      const match = transcriptPath.match(/\/projects\/([^/]+)\//);
+      const match = transcriptPath.match(/\/projects\/([^/]+)\//); 
       return match ? match[1] || null : null;
     } catch {
       return null;
@@ -85,7 +87,9 @@ export class StatuslineGenerator {
     try {
       // 初始化storage系统(如果有transcriptPath)
       if (inputData.transcriptPath) {
-        const projectId = this.extractProjectIdFromTranscriptPath(inputData.transcriptPath);
+        // 设置项目ID到全局解析器
+        projectResolver.setProjectIdFromTranscript(inputData.transcriptPath);
+        const projectId = projectResolver.getCachedProjectId();
         if (projectId) {
           await initializeStorage(projectId);
         }

@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
+import { projectResolver } from '../utils/project-resolver.js';
 
 /**
  * JSONL entry structure from Claude Code
@@ -63,31 +64,14 @@ export class SessionTracker {
     this.claudeBasePath = claudeBasePath || path.join(os.homedir(), '.claude');
   }
 
-  /**
-   * Hash project path to match Claude Code's format
-   * 哈希项目路径以匹配Claude Code的格式
-   * macOS: /Users/name/project -> -Users-name-project
-   * Windows: C:\User\name\project -> C-User-name-project
-   */
-  private hashProjectPath(projectPath: string): string {
-    // 1. 替换所有路径分隔符为连字符
-    let result = projectPath.replace(/[\\/:]/g, '-');
-
-    // 2. 清理多个连续连字符为单个连字符
-    result = result.replace(/-+/g, '-');
-
-    // 3. 移除结尾的连字符，但保留开头的连字符 (macOS以/开头会产生开头的-)
-    result = result.replace(/-+$/, '');
-
-    return result;
-  }
 
   /**
    * Find JSONL file for a session
    * 查找会话的JSONL文件
    */
   private findJsonlFile(sessionId: string): string | null {
-    const projectHash = this.hashProjectPath(process.cwd());
+    // 使用统一的 projectResolver 获取项目ID
+    const projectHash = projectResolver.getProjectId();
     const projectDir = path.join(this.claudeBasePath, 'projects', projectHash);
     const jsonlPath = path.join(projectDir, `${sessionId}.jsonl`);
 
