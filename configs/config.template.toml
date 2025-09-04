@@ -8,6 +8,19 @@ force_nerd_font = false
 force_emoji = false
 force_text = false
 
+[storage]
+# 启用对话级成本追踪
+# 当启用时，会追踪整个对话链的所有session，为conversation模式提供数据
+enableConversationTracking = true
+
+# 启用成本数据持久化
+# 将每个session的成本数据保存到 ~/.claude/projects/{project}/statusline-pro/sessions/
+enableCostPersistence = true
+
+# 自动清理旧会话数据（天数）
+# 设置为0禁用自动清理
+autoCleanupDays = 30
+
 [style]
 separator = "|"
 enable_colors = true
@@ -154,7 +167,7 @@ emoji_icon = "💰"
 nerd_icon = ""
 text_icon = "[$]"
 precision = 2
-display_mode = "cost_with_lines"
+display_mode = "conversation"
 show_lines_added = true
 show_lines_removed = false
 
