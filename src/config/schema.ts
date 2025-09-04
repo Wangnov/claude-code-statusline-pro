@@ -391,8 +391,8 @@ export const StatusComponentSchema = BaseComponentSchema.extend({
  * 定义使用量的不同显示格式 | Defines different display formats for usage
  */
 export const UsageDisplayMode = z.enum([
-  'cost', // "$0.05" - 仅显示成本
-  'cost_with_lines', // "$0.05 +12 -5" - 成本加代码行数
+  'session', // "$0.05" - 仅显示当前session成本
+  'conversation', // "$6.96 (2 sessions)" - 显示跨session累加成本
 ]);
 
 /**
@@ -401,7 +401,7 @@ export const UsageDisplayMode = z.enum([
  */
 export const UsageComponentSchema = BaseComponentSchema.extend({
   /** 显示模式 | Display mode */
-  display_mode: UsageDisplayMode.default('cost_with_lines'),
+  display_mode: UsageDisplayMode.default('session'),
   /** 数值精度 | Decimal precision */
   precision: z.number().min(0).max(4).default(2),
   /** 显示添加的代码行数 | Show lines added */
@@ -489,6 +489,20 @@ const ExperimentalSchema = z
   })
   .optional();
 
+/**
+ * 存储系统配置 | Storage system config
+ */
+const StorageSchema = z
+  .object({
+    /** 启用对话级成本追踪 | Enable conversation-level cost tracking */
+    enableConversationTracking: z.boolean().default(true),
+    /** 启用成本持久化 | Enable cost persistence */
+    enableCostPersistence: z.boolean().default(true),
+    /** 自动清理旧会话（天数）| Auto-cleanup old sessions (days) */
+    autoCleanupDays: z.number().min(0).default(30),
+  })
+  .optional();
+
 // ==================== 预设映射配置 ====================
 
 /**
@@ -546,6 +560,8 @@ export const ConfigSchema = z
     advanced: AdvancedSchema.optional(),
     /** 实验性配置 | Experimental config (新增) */
     experimental: ExperimentalSchema,
+    /** 存储系统配置 | Storage system config */
+    storage: StorageSchema,
   })
   .passthrough(); // 允许额外字段 | Allow additional fields
 

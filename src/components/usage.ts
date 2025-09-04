@@ -1,4 +1,5 @@
 import type { ComponentConfig, RenderContext, UsageComponentConfig } from '../config/schema.js';
+import { getConversationCostDisplay, updateCostFromInput } from '../storage/index.js';
 import { BaseComponent, type ComponentFactory } from './base.js';
 
 /**
@@ -43,7 +44,7 @@ export class UsageComponent extends BaseComponent {
     this.usageConfig = config;
   }
 
-  protected renderContent(context: RenderContext): string | null {
+  protected async renderContent(context: RenderContext): Promise<string | null> {
     const { inputData } = context;
 
     // 检查是否有Mock数据 | Check for mock data
@@ -55,7 +56,24 @@ export class UsageComponent extends BaseComponent {
       );
     }
 
-    // 如果有官方数据，直接使用 | If official data available, use directly
+    const sessionId = inputData.sessionId;
+
+    // 如果有官方数据，更新存储 | If official data available, update storage
+    if (inputData.cost) {
+      try {
+        await updateCostFromInput(inputData);
+      } catch (error) {
+        console.error('Failed to update cost data:', error);
+      }
+    }
+
+    // 检查是否使用conversation模式 | Check if using conversation mode
+    if (sessionId && this.usageConfig.display_mode === 'conversation') {
+      // 使用conversation模式，显示跨session累加成本 | Use conversation mode, display cross-session cumulative cost
+      return await this.renderConversationCost(sessionId);
+    }
+
+    // 非conversation模式，使用官方数据或无数据 | Non-conversation mode, use official data or no data
     if (inputData.cost) {
       return this.formatOfficialUsageDisplay(inputData);
     }
@@ -131,7 +149,7 @@ export class UsageComponent extends BaseComponent {
     let text = this.formatCost(cost, precision);
 
     // 根据显示模式和配置添加代码行数 | Add code lines based on display mode and config
-    if (display_mode === 'cost_with_lines') {
+    if (display_mode === 'conversation' && (show_lines_added || show_lines_removed)) {
       const lineParts: string[] = [];
 
       if (show_lines_added && linesAdded > 0) {
@@ -172,6 +190,32 @@ export class UsageComponent extends BaseComponent {
     } else {
       return 'gray'; // 无成本 | No cost
     }
+  }
+
+  /**
+   * 渲染对话级成本 | Render conversation-level cost
+   * 这是同步方法，使用缓存的值 | This is sync method, uses cached value
+   */
+  private async renderConversationCost(sessionId: string): Promise<string | null> {
+    const icon = this.getIcon('usage');
+
+    try {
+      // 使用新的conversation cost API
+      const costData = await getConversationCostDisplay(sessionId);
+
+      if (costData.cost > 0) {
+        const formattedCost = `$${costData.cost.toFixed(this.usageConfig.precision)}`;
+        const sessionInfo = costData.sessionCount > 1 ? ` (${costData.sessionCount} sessions)` : '';
+        const displayText = `${formattedCost}${sessionInfo}`;
+
+        return this.formatOutput(icon, displayText, 'cyan');
+      }
+    } catch (error) {
+      console.error('Failed to load conversation cost:', error);
+    }
+
+    // 如果加载失败或没有数据，显示占位符
+    return this.formatOutput(icon, '$0.00', 'gray');
   }
 }
 

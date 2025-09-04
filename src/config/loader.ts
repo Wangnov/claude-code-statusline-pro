@@ -68,6 +68,7 @@ const ALLOWED_CONFIG_EXTENSIONS = new Set(['.toml']);
 export interface ConfigLoadOptions {
   customPath?: string | undefined;
   overridePreset?: string | undefined;
+  projectId?: string | undefined;
 }
 
 export class ConfigLoader {
@@ -158,14 +159,17 @@ export class ConfigLoader {
 
   /**
    * 查找配置文件 | Find config file
-   * 只支持新格式 config.toml | Only support new format config.toml
+   * 支持存储系统的分层配置 | Support storage system's hierarchical configuration
    */
-  private findConfigFile(): string | null {
+  private findConfigFile(projectId?: string): string | null {
     const possiblePaths = [
-      // 当前目录 | Current directory
-      path.join(process.cwd(), 'config.toml'),
+      // 项目级配置 - 存储系统路径 | Project-level config - storage system path
+      this.getProjectConfigPath(projectId),
 
-      // 用户配置目录 | User config directory
+      // 用户级配置 - 存储系统路径 | User-level config - storage system path
+      this.getUserConfigPathInternal(),
+
+      // 兼容旧版本配置路径 | Backward compatibility config path
       path.join(
         process.env.HOME || process.env.USERPROFILE || '',
         '.config',
@@ -180,9 +184,74 @@ export class ConfigLoader {
       }
     }
 
-    // 如果没找到配置文件，检查是否需要创建默认配置
-    // 但不返回模板路径，而是返回null让系统使用内联默认配置
     return null;
+  }
+
+  /**
+   * 获取项目级配置路径 | Get project-level config path
+   */
+  private getProjectConfigPath(projectId?: string): string {
+    const basePath = path.join(os.homedir(), '.claude');
+
+    if (projectId) {
+      // 使用提供的项目ID (从transcriptPath提取) - 保持原样
+      return path.join(basePath, 'projects', projectId, 'statusline-pro', 'config.toml');
+    }
+
+    // 回退到自动生成的项目hash
+    const projectPath = process.cwd();
+    const projectHash = this.hashProjectPath(projectPath);
+    return path.join(basePath, 'projects', projectHash, 'statusline-pro', 'config.toml');
+  }
+
+  /**
+   * 从项目路径生成项目ID (公共方法用于CLI命令) | Generate project ID from project path (public method for CLI commands)
+   */
+  generateProjectId(projectPath: string): string {
+    return this.hashProjectPath(projectPath);
+  }
+
+  /**
+   * 获取指定项目路径的配置路径 | Get config path for specified project path
+   */
+  getProjectConfigPathForPath(projectPath: string): string {
+    const basePath = path.join(os.homedir(), '.claude');
+    const projectId = this.generateProjectId(projectPath);
+    return path.join(basePath, 'projects', projectId, 'statusline-pro', 'config.toml');
+  }
+
+  /**
+   * 获取用户级配置路径 | Get user-level config path
+   */
+  private getUserConfigPathInternal(): string {
+    const basePath = path.join(os.homedir(), '.claude');
+    return path.join(basePath, 'statusline-pro', 'config.toml');
+  }
+
+  /**
+   * 获取用户级配置路径 (公共方法用于CLI命令) | Get user-level config path (public method for CLI commands)
+   */
+  getUserConfigPath(): string {
+    const basePath = path.join(os.homedir(), '.claude');
+    return path.join(basePath, 'statusline-pro', 'config.toml');
+  }
+
+  /**
+   * 哈希项目路径以匹配Claude Code的格式 | Hash project path to match Claude Code's format
+   * macOS: /Users/name/project -> -Users-name-project
+   * Windows: C:\User\name\project -> C-User-name-project
+   */
+  private hashProjectPath(projectPath: string): string {
+    // 1. 替换所有路径分隔符为连字符
+    let result = projectPath.replace(/[\\/:]/g, '-');
+
+    // 2. 清理多个连续连字符为单个连字符
+    result = result.replace(/-+/g, '-');
+
+    // 3. 移除结尾的连字符，但保留开头的连字符 (macOS以/开头会产生开头的-)
+    result = result.replace(/-+$/, '');
+
+    return result;
   }
 
   /**
@@ -408,67 +477,87 @@ export class ConfigLoader {
   async loadConfig(options: ConfigLoadOptions = {}): Promise<Config> {
     try {
       // 使用缓存 | Use cache if available
-      if (this.cachedConfig && !options.customPath && !options.overridePreset) {
+      if (
+        this.cachedConfig &&
+        !options.customPath &&
+        !options.overridePreset &&
+        !options.projectId
+      ) {
         return this.cachedConfig;
       }
 
-      // 查找配置文件 | Find config file
+      let finalConfig = this.getDefaultConfig();
+
       if (options.customPath) {
+        // 自定义路径模式 - 只加载指定文件 | Custom path mode - only load specified file
         this.configPath = this.validateConfigPath(options.customPath);
-      } else {
-        this.configPath = this.findConfigFile();
-      }
-
-      let userConfig: Partial<Config> = {};
-
-      if (this.configPath && fs.existsSync(this.configPath)) {
-        try {
-          const configContent = await this.readConfigFileSafely(this.configPath);
-          const parsedToml = TOML.parse(configContent);
-          // 深度清理 TOML 解析后的 Symbol 属性
-          const cleanedConfig = this.cleanSymbols(parsedToml);
-
-          // 与默认配置深度合并以确保完整性 | Deep merge with defaults to ensure completeness
-          const defaultConfig = this.getDefaultConfig();
-          const mergedConfig = this.deepMerge(defaultConfig, cleanedConfig as Partial<Config>);
-
-          // 验证合并后的完整配置 | Validate merged complete config
-          userConfig = ConfigSchema.parse(mergedConfig);
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          console.warn(`Failed to parse config file ${this.configPath}:`);
-          console.warn(`Error: ${errorMessage}`);
-
-          // 提供恢复建议 | Provide recovery suggestions
-          if (errorMessage.includes('TOML')) {
-            console.warn('Suggestion: Check TOML syntax in your config file');
-            console.warn(`You can run 'npm run config validate' to check the file`);
-          } else if (errorMessage.includes('language')) {
-            console.warn('Suggestion: Check language field (should be "zh" or "en")');
+        if (fs.existsSync(this.configPath)) {
+          try {
+            const configContent = await this.readConfigFileSafely(this.configPath);
+            const parsedToml = TOML.parse(configContent);
+            const cleanedConfig = this.cleanSymbols(parsedToml);
+            finalConfig = this.deepMerge(finalConfig, cleanedConfig as Partial<Config>);
+          } catch (error) {
+            console.warn(`Failed to load custom config from ${this.configPath}:`, error);
           }
-
-          console.warn('Falling back to default configuration...');
-          // 不抛出错误，而是继续使用默认配置 | Don't throw error, continue with default config
-          userConfig = this.getDefaultConfig();
         }
       } else {
-        // 没有找到配置文件，使用完整的默认配置 | No config file found, use complete default config
-        userConfig = this.getDefaultConfig();
+        // 分层配置加载 | Hierarchical config loading
+
+        // 层级1: 用户级配置 (低优先级) | Layer 1: User-level config (lower priority)
+        const userConfigPath = this.getUserConfigPathInternal();
+        if (fs.existsSync(userConfigPath)) {
+          try {
+            const userConfigContent = await this.readConfigFileSafely(userConfigPath);
+            const userConfig = TOML.parse(userConfigContent);
+            const cleanedUserConfig = this.cleanSymbols(userConfig);
+            finalConfig = this.deepMerge(finalConfig, cleanedUserConfig as Partial<Config>);
+          } catch (error) {
+            console.warn(`Failed to load user config from ${userConfigPath}:`, error);
+          }
+        }
+
+        // 层级2: 项目级配置 (高优先级) | Layer 2: Project-level config (higher priority)
+        const projectConfigPath = this.getProjectConfigPath(options.projectId);
+        if (fs.existsSync(projectConfigPath)) {
+          try {
+            const projectConfigContent = await this.readConfigFileSafely(projectConfigPath);
+            const projectConfig = TOML.parse(projectConfigContent);
+            const cleanedProjectConfig = this.cleanSymbols(projectConfig);
+            finalConfig = this.deepMerge(finalConfig, cleanedProjectConfig as Partial<Config>);
+            this.configPath = projectConfigPath; // 记录实际使用的配置路径
+          } catch (error) {
+            console.warn(`Failed to load project config from ${projectConfigPath}:`, error);
+          }
+        }
+
+        // 兼容性检查：查找其他可能的配置文件
+        if (!this.configPath) {
+          this.configPath = this.findConfigFile(options.projectId);
+          if (this.configPath && fs.existsSync(this.configPath)) {
+            try {
+              const configContent = await this.readConfigFileSafely(this.configPath);
+              const parsedToml = TOML.parse(configContent);
+              const cleanedConfig = this.cleanSymbols(parsedToml);
+              finalConfig = this.deepMerge(finalConfig, cleanedConfig as Partial<Config>);
+            } catch (error) {
+              console.warn(`Failed to load fallback config from ${this.configPath}:`, error);
+            }
+          }
+        }
       }
 
       // 命令行预设覆盖 | Command line preset override
       if (options.overridePreset) {
-        userConfig.preset = options.overridePreset;
+        finalConfig.preset = options.overridePreset;
       }
 
-      // 确保配置是完整的Config类型
-      let finalConfig: Config;
-      if ('preset' in userConfig && userConfig.preset) {
-        // 已经是完整配置
-        finalConfig = userConfig as Config;
-      } else {
-        // 使用Schema解析确保完整性
-        finalConfig = ConfigSchema.parse(userConfig);
+      // 使用Schema验证最终配置 | Validate final config with Schema
+      try {
+        finalConfig = ConfigSchema.parse(finalConfig);
+      } catch (error) {
+        console.warn('Configuration validation failed, using defaults:', error);
+        finalConfig = this.getDefaultConfig();
       }
 
       if (process.env.DEBUG) {

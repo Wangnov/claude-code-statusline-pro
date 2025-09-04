@@ -58,7 +58,7 @@ export class UsageEditor {
     console.log(`\n${t('editor.usage.title')}`);
     console.log('📌 注意：组件启用状态由预设管理，此处仅配置显示属性\n');
 
-    let displayMode = component?.display_mode || 'cost_with_lines';
+    let displayMode = component?.display_mode || 'session';
     let showLinesAdded = component?.show_lines_added ?? true;
     let showLinesRemoved = component?.show_lines_removed ?? true;
     let precision = component?.precision ?? 2;
@@ -69,8 +69,8 @@ export class UsageEditor {
     displayMode = await select({
       message: '选择显示模式',
       choices: [
-        { name: '仅显示成本 ($1.23)', value: 'cost' },
-        { name: '成本 + 代码行数 ($1.23 +15 -8)', value: 'cost_with_lines' },
+        { name: '当前会话成本 ($1.23)', value: 'session' },
+        { name: '对话级成本 ($6.96 (2 sessions))', value: 'conversation' },
       ],
       default: displayMode,
     });
@@ -88,7 +88,7 @@ export class UsageEditor {
     });
 
     // 配置精度（仅在成本相关模式下显示）
-    if (displayMode === 'cost' || displayMode === 'cost_with_lines') {
+    if (displayMode === 'session' || displayMode === 'conversation') {
       precision = await select({
         message: t('editor.usage.precision.title'),
         choices: [
@@ -132,7 +132,7 @@ export class UsageEditor {
       text_icon: component?.text_icon || '$',
       icon_color: color,
       text_color: component?.text_color || 'white',
-      display_mode: displayMode as 'cost' | 'cost_with_lines',
+      display_mode: displayMode as 'session' | 'conversation',
       show_lines_added: showLinesAdded,
       show_lines_removed: showLinesRemoved,
       precision,

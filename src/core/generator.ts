@@ -7,6 +7,7 @@ import { StatusComponentFactory } from '../components/status.js';
 import { TokensComponentFactory } from '../components/tokens.js';
 import { UsageComponentFactory } from '../components/usage.js';
 import type { ComponentConfig, Config, InputData, RenderContext } from '../config/schema.js';
+import { initializeStorage } from '../storage/index.js';
 import { TerminalRenderer } from '../terminal/colors.js';
 import { detect, getCapabilityInfo } from '../terminal/detector.js';
 import { createThemeRenderer } from '../themes/index.js';
@@ -38,6 +39,9 @@ export class StatuslineGenerator {
     this.componentRegistry = new ComponentRegistry();
     this.initializeComponents();
 
+    // Initialize storage system
+    initializeStorage().catch(console.error);
+
     if (options.updateThrottling !== false) {
       this.updateInterval = 300;
     }
@@ -60,10 +64,33 @@ export class StatuslineGenerator {
   }
 
   /**
+   * 从transcriptPath提取项目ID | Extract project ID from transcriptPath
+   */
+  private extractProjectIdFromTranscriptPath(transcriptPath: string | undefined): string | null {
+    if (!transcriptPath) return null;
+
+    try {
+      // 匹配 /projects/ 后面和下一个 / 之间的内容
+      const match = transcriptPath.match(/\/projects\/([^/]+)\//);
+      return match ? match[1] || null : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * 生成状态行 | Generate statusline
    */
   public async generate(inputData: InputData): Promise<string> {
     try {
+      // 初始化storage系统(如果有transcriptPath)
+      if (inputData.transcriptPath) {
+        const projectId = this.extractProjectIdFromTranscriptPath(inputData.transcriptPath);
+        if (projectId) {
+          await initializeStorage(projectId);
+        }
+      }
+
       // 检查更新频率限制 | Check update rate limit
       if (!this.shouldUpdate()) {
         return this.lastResult || '';
