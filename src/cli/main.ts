@@ -17,7 +17,7 @@ import { ConfigLoader } from '../config/loader.js';
 import type { InputData } from '../config/schema.js';
 import { StatuslineGenerator } from '../core/generator.js';
 import { detect as detectTerminalCapabilities } from '../terminal/detector.js';
-import { ConfigEditor } from './config-editor.js';
+import { projectResolver } from '../utils/project-resolver.js';
 import { initializeI18n, t } from './i18n.js';
 import { formatCliMessage } from './message-icons.js';
 import { MockDataGenerator } from './mock-data.js';
@@ -250,7 +250,8 @@ program
           // 项目级配置 | Project-level configuration
           if (typeof options.init === 'string') {
             // 指定了项目路径 | Project path specified
-            projectPath = path.resolve(options.init);
+            // 如果是绝对路径，直接使用；否则基于当前目录解析
+            projectPath = path.isAbsolute(options.init) ? options.init : path.resolve(options.init);
           } else {
             // 使用当前目录 | Use current directory
             projectPath = process.cwd();
@@ -263,7 +264,8 @@ program
           }
 
           targetConfigPath = configLoader.getProjectConfigPathForPath(projectPath);
-          const projectId = configLoader.generateProjectId(projectPath);
+          // 使用 projectResolver 生成项目ID
+          const projectId = projectResolver.hashPath(projectPath);
           console.log(formatCliMessage('info', `为项目创建配置文件: ${projectPath}`));
           console.log(formatCliMessage('folder', `项目ID: ${projectId}`));
         }
@@ -339,10 +341,9 @@ program
         return;
       }
 
-      const configEditor = new ConfigEditor({
-        configPath: options.file,
-      });
-      await configEditor.startInteractiveMode();
+      console.log(formatCliMessage('info', '交互式配置编辑器功能已被移除'));
+      console.log(formatCliMessage('info', '请直接编辑 config.toml 文件进行配置'));
+      console.log(formatCliMessage('folder', `配置文件路径: ${configLoader.getConfigSource()}`));
     } catch (error) {
       console.error(
         formatCliMessage('error', 'Configuration error:'),
@@ -567,8 +568,10 @@ async function startThemeSelector(): Promise<void> {
   });
 
   if (theme === 'custom') {
-    const configEditor = new ConfigEditor();
-    await configEditor.startInteractiveMode();
+    console.log(formatCliMessage('info', '自定义主题编辑器已被移除'));
+    console.log(formatCliMessage('info', '请直接编辑 config.toml 文件来自定义主题'));
+    const configLoader = new ConfigLoader();
+    console.log(formatCliMessage('folder', `配置文件路径: ${configLoader.getConfigSource()}`));
   } else {
     await applyTheme(theme);
   }
