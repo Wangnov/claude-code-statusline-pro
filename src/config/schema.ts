@@ -391,9 +391,8 @@ export const StatusComponentSchema = BaseComponentSchema.extend({
  * 定义使用量的不同显示格式 | Defines different display formats for usage
  */
 export const UsageDisplayMode = z.enum([
-  'cost', // "$0.05" - 仅显示成本
-  'cost_with_lines', // "$0.05 +12 -5" - 成本加代码行数
-  'cost_with_conversation', // "$0.05 (3 sessions)" - 对话级累加成本
+  'session', // "$0.05" - 仅显示当前session成本
+  'conversation', // "$6.96 (2 sessions)" - 显示跨session累加成本
 ]);
 
 /**
@@ -402,7 +401,7 @@ export const UsageDisplayMode = z.enum([
  */
 export const UsageComponentSchema = BaseComponentSchema.extend({
   /** 显示模式 | Display mode */
-  display_mode: UsageDisplayMode.default('cost_with_lines'),
+  display_mode: UsageDisplayMode.default('session'),
   /** 数值精度 | Decimal precision */
   precision: z.number().min(0).max(4).default(2),
   /** 显示添加的代码行数 | Show lines added */
@@ -497,8 +496,6 @@ const StorageSchema = z
   .object({
     /** 启用对话级成本追踪 | Enable conversation-level cost tracking */
     enableConversationTracking: z.boolean().default(true),
-    /** 成本显示模式 | Cost display mode */
-    costDisplayMode: z.enum(['session', 'conversation']).default('conversation'),
     /** 启用成本持久化 | Enable cost persistence */
     enableCostPersistence: z.boolean().default(true),
     /** 自动清理旧会话（天数）| Auto-cleanup old sessions (days) */
