@@ -52,8 +52,8 @@ export interface SessionChainInfo {
   parentSessionIds: string[];
   tokenUsage: TokenUsage;
   messageCount: number;
-  startTime?: string;
-  lastUpdateTime?: string;
+  startTime?: string | undefined;
+  lastUpdateTime?: string | undefined;
 }
 
 export class SessionTracker {
@@ -66,9 +66,20 @@ export class SessionTracker {
   /**
    * Hash project path to match Claude Code's format
    * 哈希项目路径以匹配Claude Code的格式
+   * macOS: /Users/name/project -> -Users-name-project
+   * Windows: C:\User\name\project -> C-User-name-project
    */
   private hashProjectPath(projectPath: string): string {
-    return projectPath.replace(/[\\/:]/g, '-').replace(/^-+|-+$/g, '');
+    // 1. 替换所有路径分隔符为连字符
+    let result = projectPath.replace(/[\\/:]/g, '-');
+
+    // 2. 清理多个连续连字符为单个连字符
+    result = result.replace(/-+/g, '-');
+
+    // 3. 移除结尾的连字符，但保留开头的连字符 (macOS以/开头会产生开头的-)
+    result = result.replace(/-+$/, '');
+
+    return result;
   }
 
   /**
@@ -191,6 +202,9 @@ export class SessionTracker {
     };
 
     const modelPricing = pricing[modelId] || pricing.default;
+    if (!modelPricing) {
+      throw new Error(`Invalid model pricing configuration for ${modelId}`);
+    }
 
     // Calculate cost in USD
     const inputCost = (tokenUsage.inputTokens / 1_000_000) * modelPricing.input;

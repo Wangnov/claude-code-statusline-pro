@@ -11,7 +11,7 @@ export interface SessionCost {
   /** Session ID */
   sessionId: string;
   /** Parent session ID for conversation chain tracking */
-  parentSessionId?: string;
+  parentSessionId?: string | undefined;
   /** Project path */
   projectPath: string;
   /** Total cost in USD */
@@ -67,14 +67,12 @@ export interface ConversationCost {
 export interface StorageConfig {
   /** Enable conversation-level cost tracking */
   enableConversationTracking: boolean;
-  /** Cost display mode: 'session' | 'conversation' */
-  costDisplayMode: 'session' | 'conversation';
   /** Storage directory path (default: ~/.claude) */
-  storagePath?: string;
+  storagePath?: string | undefined;
   /** Enable cost persistence */
   enableCostPersistence: boolean;
   /** Auto-cleanup old sessions (days) */
-  autoCleanupDays?: number;
+  autoCleanupDays?: number | undefined;
 }
 
 /**

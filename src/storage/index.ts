@@ -3,22 +3,25 @@
  * 存储系统主模块
  */
 
-export { EnhancedConfigLoader, enhancedConfigLoader } from './config-loader-enhanced.js';
 export { StorageManager, storageManager } from './manager.js';
 export { SessionTracker, sessionTracker } from './session-tracker.js';
 export * from './types.js';
 
-import { enhancedConfigLoader } from './config-loader-enhanced.js';
+import { configLoader } from '../config/loader.js';
 import { storageManager } from './manager.js';
-import { sessionTracker } from './session-tracker.js';
 
 /**
  * Initialize storage system
  * 初始化存储系统
  */
-export async function initializeStorage(): Promise<void> {
+export async function initializeStorage(projectId?: string): Promise<void> {
+  // Update project ID if provided
+  if (projectId) {
+    storageManager.updateProjectId(projectId);
+  }
+
   // Load configuration
-  const config = await enhancedConfigLoader.loadConfig();
+  const config = await configLoader.loadConfig();
 
   // Initialize storage manager with config
   if (config && typeof config === 'object' && 'storage' in config) {
@@ -33,35 +36,26 @@ export async function initializeStorage(): Promise<void> {
 }
 
 /**
- * Get cost display for current session
- * 获取当前会话的成本显示
+ * Get session cost display (单session模式)
+ * 获取当前session的成本显示
  */
-export async function getCostDisplay(sessionId: string): Promise<{
+export async function getSessionCostDisplay(sessionId: string): Promise<number> {
+  return await storageManager.getSessionCost(sessionId);
+}
+
+/**
+ * Get conversation cost display (对话级模式)
+ * 获取跨session累加的成本显示
+ */
+export async function getConversationCostDisplay(sessionId: string): Promise<{
   cost: number;
-  mode: 'session' | 'conversation';
-  sessionCount?: number;
+  sessionCount: number;
 }> {
-  const config = storageManager.getConfig();
+  const conversationCost = await storageManager.getConversationCost(sessionId);
 
-  if (config.costDisplayMode === 'conversation' && config.enableConversationTracking) {
-    // Get conversation chain
-    const chainInfo = await sessionTracker.getCompleteConversationChain(sessionId);
-
-    // Calculate cost from token usage
-    const cost = sessionTracker.calculateTokenCost(chainInfo.tokenUsage);
-
-    return {
-      cost,
-      mode: 'conversation',
-      sessionCount: chainInfo.sessionIds.length,
-    };
-  }
-
-  // Fall back to session mode
-  const result = await storageManager.getCost(sessionId);
   return {
-    ...result,
-    sessionCount: 1,
+    cost: conversationCost.totalCostUsd,
+    sessionCount: conversationCost.sessionCount,
   };
 }
 

@@ -11,17 +11,18 @@ import type { ConversationCost, SessionCost, StorageConfig, StoragePaths } from 
 export class StorageManager {
   private config: StorageConfig;
   private paths: StoragePaths;
+  private projectId?: string | undefined;
 
-  constructor(config?: Partial<StorageConfig>) {
+  constructor(config?: Partial<StorageConfig>, projectId?: string) {
     this.config = {
       enableConversationTracking: true,
-      costDisplayMode: 'conversation',
       enableCostPersistence: true,
       storagePath: path.join(os.homedir(), '.claude'),
       autoCleanupDays: 30,
       ...config,
     };
 
+    this.projectId = projectId;
     this.paths = this.initializePaths();
     this.ensureDirectories();
   }
@@ -32,8 +33,9 @@ export class StorageManager {
    */
   private initializePaths(): StoragePaths {
     const basePath = this.config.storagePath!;
-    const projectPath = process.cwd();
-    const projectHash = this.hashPath(projectPath);
+
+    // 使用提供的项目ID，否则回退到自动生成
+    const projectHash = this.projectId || this.hashPath(process.cwd());
 
     return {
       userConfigDir: path.join(basePath, 'statusline-pro'),
@@ -53,11 +55,20 @@ export class StorageManager {
   /**
    * Hash project path to create unique directory name
    * 哈希项目路径生成唯一目录名
+   * macOS: /Users/name/project -> -Users-name-project
+   * Windows: C:\User\name\project -> C-User-name-project
    */
   private hashPath(projectPath: string): string {
-    // Use the same format as Claude Code
-    // Replace path separators and special characters
-    return projectPath.replace(/[\\/:]/g, '-').replace(/^-+|-+$/g, '');
+    // 1. 替换所有路径分隔符为连字符
+    let result = projectPath.replace(/[\\/:]/g, '-');
+
+    // 2. 清理多个连续连字符为单个连字符
+    result = result.replace(/-+/g, '-');
+
+    // 3. 移除结尾的连字符，但保留开头的连字符 (macOS以/开头会产生开头的-)
+    result = result.replace(/-+$/, '');
+
+    return result;
   }
 
   /**
@@ -93,6 +104,8 @@ export class StorageManager {
    */
   async loadSessionCost(sessionId: string): Promise<SessionCost | null> {
     const sessionPath = path.join(this.paths.sessionsDir, `${sessionId}.json`);
+    console.error(`DEBUG: loadSessionCost looking for: ${sessionPath}`);
+    console.error(`DEBUG: File exists: ${fs.existsSync(sessionPath)}`);
 
     if (!fs.existsSync(sessionPath)) {
       return null;
@@ -100,8 +113,13 @@ export class StorageManager {
 
     try {
       const data = await fs.promises.readFile(sessionPath, 'utf-8');
-      return JSON.parse(data) as SessionCost;
-    } catch {
+      const sessionCost = JSON.parse(data) as SessionCost;
+      console.error(
+        `DEBUG: Successfully loaded sessionCost for ${sessionId}, cost: ${sessionCost.totalCostUsd}`
+      );
+      return sessionCost;
+    } catch (error) {
+      console.error(`DEBUG: Failed to parse session file: ${error}`);
       return null;
     }
   }
@@ -112,11 +130,13 @@ export class StorageManager {
    */
   async findParentSession(sessionId: string): Promise<string | null> {
     const projectsDir = path.join(this.config.storagePath!, 'projects');
-    const projectHash = this.hashPath(process.cwd());
+    const projectHash = this.projectId || this.hashPath(process.cwd());
     const jsonlDir = path.join(projectsDir, projectHash);
 
     // Look for JSONL file with this sessionId
     const jsonlPath = path.join(jsonlDir, `${sessionId}.jsonl`);
+    console.error(`DEBUG: Looking for JSONL file at: ${jsonlPath}`);
+    console.error(`DEBUG: File exists: ${fs.existsSync(jsonlPath)}`);
 
     if (!fs.existsSync(jsonlPath)) {
       return null;
@@ -128,6 +148,7 @@ export class StorageManager {
 
       // Parse each line to find different sessionIds
       const sessionIds = new Set<string>();
+      console.error(`DEBUG: Parsing ${lines.length} lines from JSONL`);
       for (const line of lines) {
         try {
           const entry = JSON.parse(line);
@@ -139,9 +160,16 @@ export class StorageManager {
         }
       }
 
+      console.error(
+        `DEBUG: Found ${sessionIds.size} different session IDs:`,
+        Array.from(sessionIds)
+      );
+
       // Return the first different sessionId as parent
       if (sessionIds.size > 0) {
-        return Array.from(sessionIds)[0];
+        const parentId = Array.from(sessionIds)[0];
+        console.error(`DEBUG: Using parent session ID: ${parentId}`);
+        return parentId || null;
       }
     } catch {
       // Error reading file
@@ -157,23 +185,40 @@ export class StorageManager {
   async loadConversationCost(currentSessionId: string): Promise<ConversationCost> {
     const sessionChain: SessionCost[] = [];
     const visitedSessions = new Set<string>();
+    console.error(`DEBUG: loadConversationCost starting with sessionId: ${currentSessionId}`);
 
     // Trace back through session chain
     let sessionId: string | null = currentSessionId;
 
     while (sessionId && !visitedSessions.has(sessionId)) {
       visitedSessions.add(sessionId);
+      console.error(`DEBUG: Processing session: ${sessionId}`);
 
       // Load this session's cost
       const sessionCost = await this.loadSessionCost(sessionId);
       if (sessionCost) {
+        console.error(`DEBUG: Found sessionCost, parentSessionId: ${sessionCost.parentSessionId}`);
         sessionChain.unshift(sessionCost); // Add to beginning for chronological order
-        sessionId = sessionCost.parentSessionId || null;
+
+        if (sessionCost.parentSessionId) {
+          // Use explicit parent session ID
+          sessionId = sessionCost.parentSessionId;
+        } else {
+          // No explicit parent, try to find from JSONL
+          console.error(`DEBUG: No parentSessionId, trying findParentSession`);
+          sessionId = await this.findParentSession(sessionId);
+        }
       } else {
+        console.error(`DEBUG: No sessionCost found, trying findParentSession`);
         // Try to find parent from JSONL
         sessionId = await this.findParentSession(sessionId);
       }
     }
+
+    console.error(`DEBUG: Session chain completed, ${sessionChain.length} sessions found`);
+    sessionChain.forEach((session, i) => {
+      console.error(`DEBUG: Session ${i}: ${session.sessionId}, cost: ${session.totalCostUsd}`);
+    });
 
     // Aggregate costs
     const aggregated: ConversationCost = {
@@ -220,7 +265,7 @@ export class StorageManager {
 
       sessionCost = {
         sessionId,
-        parentSessionId: parentSessionId || undefined,
+        ...(parentSessionId && { parentSessionId }),
         projectPath: process.cwd(),
         totalCostUsd: 0,
         inputTokens: 0,
@@ -232,6 +277,11 @@ export class StorageManager {
       };
     }
 
+    // At this point sessionCost is guaranteed to be non-null
+    if (!sessionCost) {
+      throw new Error('SessionCost should not be null at this point');
+    }
+
     // Update with new data
     if (inputData.cost) {
       sessionCost.totalCostUsd = inputData.cost.total_cost_usd || sessionCost.totalCostUsd;
@@ -239,12 +289,7 @@ export class StorageManager {
       sessionCost.linesRemoved = inputData.cost.total_lines_removed || sessionCost.linesRemoved;
     }
 
-    if (inputData.model) {
-      sessionCost.model = {
-        id: inputData.model.id,
-        displayName: inputData.model.display_name || inputData.model.id,
-      };
-    }
+    // Model信息不再存储 | Model info no longer stored
 
     sessionCost.lastUpdateTime = new Date().toISOString();
 
@@ -253,23 +298,20 @@ export class StorageManager {
   }
 
   /**
-   * Get cost based on configured display mode
-   * 根据配置的显示模式获取成本
+   * Get session cost (单session成本)
+   * 只返回当前session的成本，不做聚合判断
    */
-  async getCost(sessionId: string): Promise<{ cost: number; mode: 'session' | 'conversation' }> {
-    if (this.config.costDisplayMode === 'conversation' && this.config.enableConversationTracking) {
-      const conversationCost = await this.loadConversationCost(sessionId);
-      return {
-        cost: conversationCost.totalCostUsd,
-        mode: 'conversation',
-      };
-    }
-
+  async getSessionCost(sessionId: string): Promise<number> {
     const sessionCost = await this.loadSessionCost(sessionId);
-    return {
-      cost: sessionCost?.totalCostUsd || 0,
-      mode: 'session',
-    };
+    return sessionCost?.totalCostUsd || 0;
+  }
+
+  /**
+   * Get conversation cost (对话级成本)
+   * 返回跨session累加的成本，由usage组件决定是否调用
+   */
+  async getConversationCost(sessionId: string): Promise<ConversationCost> {
+    return await this.loadConversationCost(sessionId);
   }
 
   /**
@@ -329,6 +371,16 @@ export class StorageManager {
    */
   getConfig(): StorageConfig {
     return { ...this.config };
+  }
+
+  /**
+   * Update project ID and reinitialize paths
+   * 更新项目ID并重新初始化路径
+   */
+  updateProjectId(projectId: string): void {
+    this.projectId = projectId;
+    this.paths = this.initializePaths();
+    this.ensureDirectories();
   }
 }
 
