@@ -1,0 +1,134 @@
+# 时钟组件配置示例 | Clock Component Configuration Example
+# 
+# 使用方法：
+# 1. 将此配置内容添加到 .claude/settings.toml 或 .claude/settings.local.toml
+# 2. 或直接复制相关部分到你的配置文件中
+#
+# 创建日期: 2025-09-04
+
+# ==================== 基础配置示例 ====================
+# 最简单的时钟组件配置
+
+[components.clock]
+enabled = true
+icon_color = "cyan"           # 图标颜色
+text_color = "bright_white"   # 文字颜色
+nerd_icon = "󰅐"              # Nerd Font 时钟图标
+emoji_icon = "🕐"             # Emoji 时钟图标  
+text_icon = "[T]"             # 纯文本图标
+
+# ==================== 完整配置示例 ====================
+# 包含所有可配置选项
+
+[components.clock]
+# 基础配置
+enabled = true
+icon_color = "cyan"
+text_color = "bright_white"
+nerd_icon = "󰥔"              # 另一个时钟图标选项
+emoji_icon = "⏰"             # 闹钟emoji
+text_icon = "[TIME]"
+
+# 时钟特有配置
+format_24h = true             # 使用24小时制
+show_seconds = false          # 显示秒数
+show_date = false            # 显示日期
+date_format = "slash"        # 日期格式: "slash" (2025/09/04), "dash" (2025-09-04), "dot" (2025.09.04)
+timezone_offset = 0          # 时区偏移（小时），例如东八区为 8
+time_separator = ":"         # 时间分隔符
+show_ampm = false           # 显示 AM/PM（仅12小时制有效）
+update_interval = 1000      # 更新间隔（毫秒）
+
+# ==================== 场景配置示例 ====================
+
+# --- 场景1: 12小时制带AM/PM ---
+# [components.clock]
+# enabled = true
+# format_24h = false
+# show_ampm = true
+# emoji_icon = "🕐"
+# text_color = "yellow"
+
+# --- 场景2: 显示日期和时间 ---
+# [components.clock]
+# enabled = true  
+# show_date = true
+# date_format = "dash"    # 2025-09-04 格式
+# emoji_icon = "📅"
+# icon_color = "blue"
+
+# --- 场景3: 精确到秒的时间显示 ---
+# [components.clock]
+# enabled = true
+# show_seconds = true
+# update_interval = 100   # 更频繁的更新
+# emoji_icon = "⏱️"
+# text_color = "green"
+
+# --- 场景4: 东京时间（东九区） ---
+# [components.clock]
+# enabled = true
+# timezone_offset = 9     # UTC+9
+# emoji_icon = "🗾"
+# text_color = "bright_cyan"
+
+# --- 场景5: 纽约时间（西五区） ---
+# [components.clock]
+# enabled = true
+# timezone_offset = -5    # UTC-5
+# emoji_icon = "🗽"
+# text_color = "bright_blue"
+
+# ==================== 预设映射配置 ====================
+# 将时钟组件添加到预设系统
+
+[preset_mapping]
+P = "project"
+M = "model"
+B = "branch"
+T = "tokens"
+U = "usage"
+S = "status"
+C = "clock"     # 新增：C 映射到 clock 组件
+
+# 使用包含时钟的预设
+preset = "PMCBUS"  # 项目-模型-时钟-分支-使用量-状态
+
+# ==================== 主题适配示例 ====================
+
+# Classic 主题
+# [components.clock]
+# enabled = true
+# icon_color = "white"
+# text_color = "white"
+
+# Powerline 主题
+# [components.clock]
+# enabled = true
+# icon_color = "black"      # PowerLine 使用背景色
+# text_color = "black"
+
+# Capsule 主题
+# [components.clock]
+# enabled = true
+# icon_color = "cyan"
+# text_color = "bright_white"
+
+# ==================== 图标选项参考 ====================
+# Nerd Font 时钟图标选项:
+# 󰅐 - 时钟1
+# 󰥔 - 时钟2  
+#  - 时钟3
+#  - 手表
+# 󱑂 - 计时器
+# 󱎫 - 闹钟
+# 󱑊 - 秒表
+
+# Emoji 时钟选项:
+# 🕐 🕑 🕒 🕓 🕔 🕕 🕖 🕗 🕘 🕙 🕚 🕛 - 各个时间点
+# ⏰ - 闹钟
+# ⏱️ - 秒表
+# ⏲️ - 计时器
+# 🕰️ - 座钟
+# ⌚ - 手表
+# 📅 - 日历
