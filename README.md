@@ -173,33 +173,81 @@ contextUsedTokens = usage.input_tokens +
 
 ## 💰 Cost计算说明
 
-### 会话总消耗计算
+### 智能成本追踪系统
 
-cost的消耗计算分两个模式，一个是session，一个是conversation。可以在config.toml中配置。
+状态栏提供两种成本计算模式，可在 `config.toml` 中配置：
 
-session模式的逻辑就是你打开CLAUDE Code，在没有/clear的情况下，开了多长时间产生了多少消耗。
+#### 🔄 Session 模式（会话模式）
+- **计算范围**: 从您打开 Claude Code 开始，到使用 `/clear` 命令或关闭应用为止
+- **计算逻辑**: 基于当前会话的所有 token 消耗
+- **适用场景**: 单次工作会话的成本控制
+- **重置方式**: 使用 `/clear` 命令或重启 Claude Code
 
-conversation模式的逻辑是：
+#### 🔗 Conversation 模式（对话模式）
+- **计算范围**: 跨会话追踪完整对话链的累计消耗
+- **智能追踪**: 即使关闭并重新打开 Claude Code，仍能追踪同一项目的历史消耗
+- **Session ID 无关**: 自动处理会话 ID 变化，保持连续性追踪
+- **适用场景**: 长期项目的完整成本分析
 
-状态栏中的cost显示的是**当前对话的总消耗**，计算逻辑如下：
+#### ⚙️ 配置方式
 
-- **计算范围**: 整个Claude Code对话从开始到当前的累计消耗，而非会话。它会计算这个对话的整个生命周期，例如关闭了ClaudeCode再恢复它，它的session-id会发生变化。我们会跨session-id追踪它。
-- **时间无关**: 不考虑时间因素，只计算token使用量
-- **与/cost命令不同**: `/cost`命令可能有不同的计算逻辑和时间范围
+在 `config.toml` 中设置：
+```toml
+[components.usage]
+mode = "conversation"  # 或 "session"
+```
+
+#### 📊 成本计算公式
+
+```javascript
+cost = (inputTokens * inputPrice + outputTokens * outputPrice + 
+        cacheTokens * cachePrice) / 1_000_000
+```
+
+**注意**: 状态栏的成本计算与 `/cost` 命令采用不同逻辑和时间范围，确保各自场景的准确性。
 
 ## 🛠️ 高级配置
 
-### TOML配置文件
+### 智能配置管理系统
 
-在你的项目下，运行 ```npx claude-code-statusline-pro@latest config --init```来初始化一个配置文件
+#### 📂 配置文件层级
 
-会在你的 ~/.claude/projects/{project-path-name}/statusline-pro/config.toml 这是项目级配置文件
+状态栏采用两级配置系统，支持灵活的配置管理：
 
-如果添加```-g```参数则会初始化到 ~/.claude/statusline-pro/config.toml 这是用户级配置文件（全局）
+**项目级配置** (优先级: 高)
+- 路径: `~/.claude/projects/{project-hash}/statusline-pro/config.toml`
+- 适用: 特定项目的个性化配置
+- 初始化: `npx claude-code-statusline-pro@latest config --init`
 
-项目级>配置级
+**用户级配置** (优先级: 低)
+- 路径: `~/.claude/statusline-pro/config.toml`
+- 适用: 全局默认配置，适用于所有项目
+- 初始化: `npx claude-code-statusline-pro@latest config --init -g`
 
-在 `config.toml` 中进行详细配置：
+#### ⚡ 智能终端检测和配置初始化
+
+运行初始化命令时，系统会自动检测您的终端能力：
+
+```bash
+# 初始化项目级配置（推荐）
+npx claude-code-statusline-pro@latest config --init
+
+# 初始化全局配置
+npx claude-code-statusline-pro@latest config --init -g
+
+# 强制重新初始化（覆盖现有配置）
+npx claude-code-statusline-pro@latest config --init --force
+```
+
+**智能检测功能：**
+- 🎨 **Nerd Font 检测**: 自动识别终端是否支持 Nerd Font 图标
+- 😊 **Emoji 支持检测**: 检测终端的 Emoji 渲染能力
+- 🌈 **颜色支持检测**: 识别终端的颜色显示能力
+- 🎯 **主题自动选择**: 根据终端能力自动选择最佳主题
+
+#### 📝 配置文件详解
+
+系统初始化后会生成完整的 `config.toml` 配置文件：
 
 ```toml
 # 默认预设和主题
@@ -484,37 +532,81 @@ This ensures that the token usage displayed in the status bar is completely cons
 
 ## 💰 Cost Calculation Explanation
 
-### Session Total Cost Calculation
+### Intelligent Cost Tracking System
 
-The cost displayed in the status bar represents the **total cost of the current session**, calculated as follows:
+The status bar provides two cost calculation modes, configurable in `config.toml`:
 
-- **Calculation scope**: Cumulative cost from the beginning of the Claude Code session to the current point
-- **Time-independent**: Only considers token usage, not time factors
-- **Different from /cost command**: The `/cost` command may have different calculation logic and time ranges
+#### 🔄 Session Mode
+- **Calculation scope**: From when you open Claude Code until using `/clear` command or closing the application
+- **Calculation logic**: Based on all token consumption in the current session
+- **Use case**: Cost control for single work sessions
+- **Reset method**: Use `/clear` command or restart Claude Code
+
+#### 🔗 Conversation Mode
+- **Calculation scope**: Cross-session tracking of cumulative consumption for complete conversation chains
+- **Smart tracking**: Continues tracking the same project's historical consumption even after closing and reopening Claude Code
+- **Session ID independent**: Automatically handles session ID changes while maintaining continuity tracking
+- **Use case**: Complete cost analysis for long-term projects
+
+#### ⚙️ Configuration Method
+
+Set in `config.toml`:
+```toml
+[components.usage]
+mode = "conversation"  # or "session"
+```
+
+#### 📊 Cost Calculation Formula
+
+```javascript
+cost = (inputTokens * inputPrice + outputTokens * outputPrice + 
+        cacheTokens * cachePrice) / 1_000_000
+```
+
+**Note**: The status bar's cost calculation uses different logic and time ranges from the `/cost` command, ensuring accuracy for their respective scenarios.
 
 ## 🛠️ Advanced Configuration
 
-### Configuration Management
+### Intelligent Configuration Management System
 
-Create and edit configuration using TOML files:
+#### 📂 Configuration File Hierarchy
+
+The status bar uses a two-level configuration system for flexible configuration management:
+
+**Project-level Configuration** (Priority: High)
+- Path: `~/.claude/projects/{project-hash}/statusline-pro/config.toml`
+- Application: Personalized configuration for specific projects
+- Initialization: `npx claude-code-statusline-pro@latest config --init`
+
+**User-level Configuration** (Priority: Low)
+- Path: `~/.claude/statusline-pro/config.toml`
+- Application: Global default configuration for all projects
+- Initialization: `npx claude-code-statusline-pro@latest config --init -g`
+
+#### ⚡ Smart Terminal Detection and Configuration Initialization
+
+When running initialization commands, the system automatically detects your terminal capabilities:
 
 ```bash
-# Initialize configuration
+# Initialize project-level configuration (recommended)
 npx claude-code-statusline-pro@latest config --init
 
-# Reset to defaults
-npx claude-code-statusline-pro@latest config --reset
+# Initialize global configuration
+npx claude-code-statusline-pro@latest config --init -g
+
+# Force re-initialization (overwrite existing configuration)
+npx claude-code-statusline-pro@latest config --init --force
 ```
 
-**Features**:
-- 📂 Simple TOML-based configuration
-- 💾 Project-specific and global configuration support
-- 🔄 Command-line parameter overrides
-- ✅ Automatic configuration validation
+**Smart Detection Features:**
+- 🎨 **Nerd Font Detection**: Automatically identifies if terminal supports Nerd Font icons
+- 😊 **Emoji Support Detection**: Detects terminal's emoji rendering capability
+- 🌈 **Color Support Detection**: Identifies terminal's color display capability
+- 🎯 **Automatic Theme Selection**: Automatically selects the best theme based on terminal capabilities
 
-### TOML Configuration File
+#### 📝 Configuration File Details
 
-Create `config.toml` for detailed configuration:
+After system initialization, a complete `config.toml` configuration file will be generated:
 
 ```toml
 # Default preset and theme
