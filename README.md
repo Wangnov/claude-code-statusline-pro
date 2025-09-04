@@ -175,32 +175,31 @@ contextUsedTokens = usage.input_tokens +
 
 ### 会话总消耗计算
 
-状态栏中的cost显示的是**当前会话的总消耗**，计算逻辑如下：
+cost的消耗计算分两个模式，一个是session，一个是conversation。可以在config.toml中配置。
 
-- **计算范围**: 整个Claude Code会话从开始到当前的累计消耗
+session模式的逻辑就是你打开CLAUDE Code，在没有/clear的情况下，开了多长时间产生了多少消耗。
+
+conversation模式的逻辑是：
+
+状态栏中的cost显示的是**当前对话的总消耗**，计算逻辑如下：
+
+- **计算范围**: 整个Claude Code对话从开始到当前的累计消耗，而非会话。它会计算这个对话的整个生命周期，例如关闭了ClaudeCode再恢复它，它的session-id会发生变化。我们会跨session-id追踪它。
 - **时间无关**: 不考虑时间因素，只计算token使用量
 - **与/cost命令不同**: `/cost`命令可能有不同的计算逻辑和时间范围
 
 ## 🛠️ 高级配置
 
-### 交互式配置编辑器
-
-启动可视化配置界面：
-
-```bash
-npx claude-code-statusline-pro@latest config
-```
-
-**功能特性**：
-- 📱 全屏可视化界面，直观的配置管理体验
-- 🔄 实时预览，修改配置即时查看效果  
-- 📂 分类管理，按功能分组的配置选项
-- 💾 智能保存，自动验证并保存配置
-- 🌐 中英双语界面自动切换
-
 ### TOML配置文件
 
-创建 `config.toml` 进行详细配置：
+在你的项目下，运行 ```npx claude-code-statusline-pro@latest config --init```来初始化一个配置文件
+
+会在你的 ~/.claude/projects/{project-path-name}/statusline-pro/config.toml 这是项目级配置文件
+
+如果添加```-g```参数则会初始化到 ~/.claude/statusline-pro/config.toml 这是用户级配置文件（全局）
+
+项目级>配置级
+
+在 `config.toml` 中进行详细配置：
 
 ```toml
 # 默认预设和主题
