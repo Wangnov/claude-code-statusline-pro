@@ -167,7 +167,7 @@ emoji_icon = "💰"
 nerd_icon = ""
 text_icon = "[$]"
 precision = 2
-display_mode = "conversation"
+display_mode = "session"
 show_lines_added = true
 show_lines_removed = false
 
