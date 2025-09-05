@@ -7,15 +7,6 @@
  * @license MIT
  */
 
-// 组件配置映射系统导出 (Component configuration mapping system exports)
-export {
-  ComponentConfigMapper,
-  defaultComponentConfigMapper,
-  formatComponentConfigSummary,
-  getComponentConfigCategoriesCount,
-  getComponentConfigItemCount,
-  isValidComponent,
-} from './cli/component-config-mapper.js';
 // 国际化系统导出 (I18n system exports)
 export {
   getCurrentLanguage,
@@ -24,6 +15,7 @@ export {
   initializeI18n,
   setLanguage,
   t,
+  detectSystemLanguage,
 } from './cli/i18n.js';
 // CLI 工具导出 (供高级用户使用)
 export {
