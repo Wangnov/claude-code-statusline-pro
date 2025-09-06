@@ -1,6 +1,6 @@
 /**
  * Claude Code Statusline Pro - 公共API导出
- * Enhanced statusline for Claude Code with TypeScript, live preview, and interactive configuration
+ * Enhanced statusline for Claude Code with TypeScript, live preview, and theme management
  *
  * @version 2.0.0
  * @author wangnov

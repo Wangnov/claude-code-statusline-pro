@@ -1,12 +1,12 @@
 /**
  * Claude Code Statusline Pro - CLI 主入口
- * Enhanced CLI with live preview, interactive configuration, and real-time feedback
+ * Enhanced CLI with live preview, theme management, and real-time feedback
  *
  * 架构设计:
  * - Commander.js 主框架，支持子命令和内联参数
  * - 实时预览引擎，多场景Mock数据展示
- * - 交互式配置界面，Inquirer.js全屏体验
- * - 三层用户体验: settings.json内联参数 > CLI交互配置 > 手动TOML编辑
+ * - 主题选择系统，Inquirer.js用户体验  
+ * - 三层用户体验: settings.json内联参数 > CLI命令行配置 > 手动TOML编辑
  */
 
 import fs from 'node:fs';
@@ -64,7 +64,7 @@ async function initializeApp(): Promise<void> {
 program
   .name('claude-code-statusline-pro')
   .description(
-    'Enhanced statusline for Claude Code with live preview and interactive configuration'
+    'Enhanced statusline for Claude Code with live preview and theme management'
   )
   .version(getVersion())
   .argument('[preset]', 'preset string like PMBT (Project, Model, Branch, Tokens)')
@@ -217,12 +217,12 @@ program
   });
 
 /**
- * 配置子命令 - 交互式配置管理
- * 实时预览系统的核心入口
+ * 配置子命令 - 配置文件管理
+ * 支持配置初始化、重置和文件路径显示
  */
 program
   .command('config')
-  .description('interactive configuration with live preview')
+  .description('configuration file management and initialization')
   .option('-f, --file <path>', 'config file path')
   .option('-r, --reset', 'reset to default configuration')
   .option(
