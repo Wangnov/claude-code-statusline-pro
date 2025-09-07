@@ -1,0 +1,1205 @@
+╭─────────────────────────────────────────────────────╮
+│ ✻ Welcome to Claude Code!                           │
+│                                                     │
+│   /help for help, /status for your current setup    │
+│                                                     │
+│   cwd: C:\Users\wangnov\claude-code-statusline-pro  │
+│                                                     │
+│   ───────────────────────────────────────────────── │
+│                                                     │
+│   Overrides (via env):                              │
+│                                                     │
+│   • API Base URL: https://co.yes.vg/team            │
+╰─────────────────────────────────────────────────────╯
+
+> 我现在有一个新需求：增加Claude Code中转站的计费统计到我的usage组件中。我们先从我用的YesCode开始。我们通过环境变量：ANTHROPIC_BASE_URL=https://co.yes.vg/team来判断我们
+  当前使用的是yescode的Team订阅计划，然后可以从环境变量ANTHROPIC_AUTH_TOKEN中拿到X-API-KEY。YESCODE提供了API文档：Team
+  Get Team Usage info (API Key Required)
+  Usage
+  GET "https://co.yes.vg/team/stats/usage?period=month&limit=100&offset=0" 
+  Query Parameters:
+
+  period: today, week, month (default: all time)
+  limit: Number of records (default: 100, max: 1000)
+  offset: For pagination
+  Returns detailed usage data including:
+
+  Individual API calls with token counts and costs
+  Summary by model with total requests and costs
+  Balance
+  GET "https://co.yes.vg/team/stats/spending"
+  Returns spending limits and current usage:
+
+  daily_spending, monthly_spending, total_spending
+  daily_limit, daily_remaining
+  team_daily_limit, team_daily_spending, team_daily_remaining
+  Both endpoints authenticate using the team API key via either:
+
+  X-API-Key header
+  Authorization: Bearer <team-api-key> header
+  The endpoints only return data for the authenticated team member associated with that specific API key.\
+  你先来试试请求会得到什么结果
+  ⎿  ⧉ Selected 1 lines from ..\.claude\settings.json in Cursor
+  ⎿  Interrupted by user
+
+> /model 
+  ⎿  Set model to opus (claude-opus-4-1-20250805)
+
+> 我现在有一个新需求：增加Claude Code中转站的计费统计到我的usage组件中。我们先从我用的YesCode开始。我们通过环境变量：ANTHROPIC_BASE_URL=https://co.yes.vg/team来判断我们
+  当前使用的是yescode的Team订阅计划，然后可以从环境变量ANTHROPIC_AUTH_TOKEN中拿到X-API-KEY。YESCODE提供了API文档：Team
+  Get Team Usage info (API Key Required)
+  Usage
+  GET "https://co.yes.vg/team/stats/usage?period=month&limit=100&offset=0" 
+  Query Parameters:
+
+  period: today, week, month (default: all time)
+  limit: Number of records (default: 100, max: 1000)
+  offset: For pagination
+  Returns detailed usage data including:
+
+  Individual API calls with token counts and costs
+  Summary by model with total requests and costs
+  Balance
+  GET "https://co.yes.vg/team/stats/spending"
+  Returns spending limits and current usage:
+
+  daily_spending, monthly_spending, total_spending
+  daily_limit, daily_remaining
+  team_daily_limit, team_daily_spending, team_daily_remaining
+  Both endpoints authenticate using the team API key via either:
+
+  X-API-Key header
+  Authorization: Bearer <team-api-key> header
+  The endpoints only return data for the authenticated team member associated with that specific API key.\
+  你先来试试请求会得到什么结果
+
+● 我来帮你实现YesCode中转站的计费统计功能。首先让我测试一下API接口，看看能获取到什么数据。
+
+  ★ Insight ─────────────────────────────────────
+  • 通过环境变量检测中转站类型，实现自动识别
+  • 使用API密钥认证获取团队成员的使用数据
+  • 将中转站统计集成到现有的usage组件架构中
+  ─────────────────────────────────────────────────
+
+  让我先创建一个测试脚本来验证API接口：
+
+● Write(test-yescode-api.js)
+  ⎿  Wrote 1 lines to test-yescode-api.js                                        
+     const https = require('https');
+     // 从环境变量获取API密钥
+     const apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
+     const baseUrl = process.env.ANTHROPIC_BASE_URL;
+     if (!apiKey) {
+       console.error('Error: ANTHROPIC_AUTH_TOKEN environment variable not set');
+       process.exit(1);
+     }
+
+● 现在让我运行测试脚本，看看YesCode API返回的数据结构：
+
+● Bash(node test-yescode-api.js)
+  ⎿  Error: file:///C:/Users/wangnov/claude-code-statusline-pro/test-yescode-api.js:1
+     const https = require('https');
+                   ^
+
+     ReferenceError: require is not defined in ES module scope, you can use import instead
+     This file is being treated as an ES module because it has a '.js' file extension and 'C:\Users\wangnov\claude-code-statusline-pro\package.json' contains "type": 
+     "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+         at file:///C:/Users/wangnov/claude-code-statusline-pro/test-yescode-api.js:1:15
+         at ModuleJob.run (node:internal/modules/esm/module_job:271:25)
+         at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:578:26)
+         at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:116:5)
+     … +2 lines (ctrl+r to see all)
+
+● 让我修改为ES模块格式：
+
+● Update(test-yescode-api.js)
+  ⎿  Updated test-yescode-api.js with 1 addition and 1 removal
+       1 -  const https = require('https');
+       1 +  import https from 'https';
+       2    
+       3    // 从环境变量获取API密钥
+       4    const apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
+
+● Bash(node test-yescode-api.js)
+  ⎿  Base URL: https://co.yes.vg/team
+     API Key: team-cb963...
+     … +961 lines (ctrl+r to expand)
+
+● 很好！API返回了详细的数据。现在让我检查第二个API的响应数据结构：
+
+  ★ Insight ─────────────────────────────────────
+  • YesCode API返回了详细的使用记录和汇总统计
+  • 数据包含了各模型的请求数、token数和成本信息
+  • spending API将提供额度限制和剩余额度信息
+  ─────────────────────────────────────────────────
+
+  从输出中我看到spending API也成功返回了数据。现在让我开始设计并实现YesCode服务类：
+
+● 现在让我创建YesCode服务类。首先查看现有的项目结构：
+
+● Read(src\components\usage.ts)
+  ⎿  Read 234 lines (ctrl+r to expand)
+  ⎿  src\components\CLAUDE.md
+
+● 现在让我创建一个新的proxy服务来处理中转站API：
+
+● Write(src\proxy\types.ts)
+  ⎿  Wrote 1 lines to src\proxy\types.ts   
+     /**
+      * 中转站服务类型定义
+      */
+     /**
+      * YesCode使用统计汇总
+      */
+     export interface YesCodeUsageSummary {
+       model: string;
+       requests: number;
+  ⎿  Interrupted by user
+
+> 停，你先认真思考一下你要怎么实现，然后告诉我。我们不只是会实现yescode一个中转站的计费，我们要适配很多，而且我们要支持在config.toml中自行配置的方式来让用户更自由的选择
+  。你来好好思考一下应该怎么实现。遵循Linus开发精神和KISS原则。
+
+✻ Thinking…
+
+  用户希望我停下来，认真思考设计方案。他们要求：
+  1. 不只是实现YesCode，要支持多个中转站
+  2. 要支持在config.toml中自行配置
+  3. 让用户更自由的选择
+  4. 遵循Linus开发精神和KISS原则
+
+  让我重新思考架构设计：
+
+  KISS原则：
+  - 保持简单，不要过度设计
+  - 使用简单的配置结构
+  - 复用现有的组件架构
+
+  Linus精神：
+  - 代码质量至上
+  - 性能意识
+  - 直接而诚实
+
+  设计思路：
+  1. 在现有的usage组件基础上扩展，而不是创建新的组件
+  2. 通过配置文件让用户定义中转站的API端点和认证方式
+  3. 使用简单的HTTP客户端，不引入复杂的依赖
+  4. 缓存机制复用现有的缓存系统
+  5. 保持向后兼容，不破坏现有功能
+
+  配置结构应该是：
+  [components.usage]
+  # 现有配置...
+  proxy_enabled = true
+  proxy_provider = "yescode"  # 或 "custom"
+
+  [components.usage.proxy_config]
+  # YesCode 配置
+  yescode_team_url = "https://co.yes.vg/team"
+  yescode_api_key_env = "ANTHROPIC_AUTH_TOKEN"
+
+  # 或自定义配置
+  custom_api_url = "https://api.example.com/usage"
+  custom_auth_header = "X-API-Key"
+
+
+  custom_api_key_env = "CUSTOM_API_KEY"
+
+  我意识到需要一个更简单、更灵活的方案。核心是通过环境变量自动检测和配置中转站，同时保持最大的用户灵活性。关键是让配置过程对用户来说尽可能直观和无缝。通过环境变量和最小化
+  配置，可以大大简化用户的使用体验，同时保持系统的可扩展性。
+
+  转站类型的处理将基于相同的环境变量机制，无需额外复杂的配置。通过智能合并官方和中转站的使用统计，用户可以获得更全面的使用情况概览。这种方法确保了开箱即用的体验，同时保持
+  了足够的灵活性。
+
+● 让我停下来认真思考一下整体架构设计。
+
+✻ Thinking…
+
+  现在我需要向用户清晰地说明我的设计思路，遵循KISS原则和Linus精神。
+  
+  关键设计原则：
+  1. 简单优于复杂 - 不要过度设计
+  2. 复用现有架构 - 利用现有的usage组件
+  3. 零配置优先 - 自动检测，开箱即用
+  4. 可扩展性 - 支持添加新的中转站
+  
+  设计方案：
+  1. 自动检测机制：通过ANTHROPIC_BASE_URL识别中转站
+  2. 适配器模式：每个中转站一个简单的适配器类
+  3. 配置可选：默认自动工作，高级用户可自定义
+  4. 缓存复用：使用现有的缓存机制
+
+● ★ Insight ─────────────────────────────────────
+  • 遵循KISS原则：在现有usage组件基础上扩展，避免创建新的复杂系统
+  • 零配置设计：通过环境变量自动检测中转站，用户无需额外配置
+  • 适配器模式：每个中转站一个简单适配器，易于扩展新的中转站
+  ─────────────────────────────────────────────────
+
+  架构设计方案
+
+  基于KISS原则和Linus精神，我的设计思路如下：
+
+  1. 核心设计理念
+
+  - 零配置优先：自动检测中转站，开箱即用
+  - 简单扩展：添加新中转站只需一个适配器文件
+  - 复用现有：在usage组件基础上扩展，不创建新系统
+  - 性能优先：使用缓存避免频繁API调用
+
+  2. 实现架构
+
+  src/
+    components/
+      usage.ts (扩展现有组件)
+    proxy/
+      index.ts       (中转站管理器)
+      detector.ts    (自动检测逻辑)
+      adapters/
+        yescode.ts   (YesCode适配器)
+        openrouter.ts (OpenRouter适配器)
+        custom.ts    (通用自定义适配器)
+
+  3. 自动检测机制
+
+  // 通过环境变量自动识别
+  const PROXY_PATTERNS = {
+    'co.yes.vg/team': 'yescode',
+    'openrouter.ai': 'openrouter',
+    // 更多中转站...
+  };
+
+  function detectProxy(): string | null {
+    const baseUrl = process.env.ANTHROPIC_BASE_URL;
+    if (!baseUrl) return null;
+
+    for (const [pattern, provider] of Object.entries(PROXY_PATTERNS)) {
+      if (baseUrl.includes(pattern)) return provider;
+    }
+    return 'custom'; // 未知中转站使用通用适配器
+  }
+
+  4. 配置设计（可选）
+
+  # config.toml - 大多数用户不需要配置，自动工作
+
+  [components.usage]
+  display_mode = "conversation"
+  precision = 2
+
+  # 可选：高级用户自定义
+  proxy_enabled = true  # 默认 true，自动检测
+  proxy_cache_ttl = 60  # 缓存时间（秒）
+
+  # 可选：自定义中转站配置
+  [components.usage.proxy_custom]
+  api_url = "https://api.example.com/usage"
+  auth_header = "X-API-Key"
+  api_key_env = "CUSTOM_API_KEY"
+  response_path = "data.total_cost"  # JSON路径
+
+  5. 显示效果
+
+  # 同时显示官方统计和中转站统计
+  $0.12 (Claude) | $1.58 (YesCode今日)
+
+  6. 适配器接口（极简）
+
+  interface ProxyAdapter {
+    // 检查是否可用
+    isAvailable(): boolean;
+
+    // 获取统计（带缓存）
+    getStats(): Promise<{ cost: number; label: string } | null>;
+  }
+
+  实现优势
+
+  1. 用户体验：无需配置，自动识别YesCode等主流中转站
+  2. 代码简洁：每个适配器100行以内，易于维护
+  3. 性能优良：缓存机制避免频繁API调用
+  4. 易于扩展：添加新中转站只需新增适配器文件
+
+  这个方案遵循了"做正确的事，保持简单"的原则。你觉得这个设计如何？需要调整哪些部分？
+
+> 我的想法是，我们不预定义任何中转站的数据结构。而是我们要求用户填写好API接口、请求头需要的参数从哪里获取（环境变量或直接自己填写）、返回的数据结构里哪里是我们需要的数
+  据等等。你从这个思路出发，给我一个认真思考过的结果
+
+✻ Thinking…
+
+  用户的想法是完全通用化的设计，不预定义任何中转站的数据结构，而是让用户通过配置来描述：
+  1. API接口地址
+  2. 请求头参数（从环境变量或直接填写）
+  3. 返回数据的解析路径
+  
+  这确实更符合KISS原则，因为：
+  - 一个通用的解析器就能处理所有中转站
+  - 不需要为每个中转站写适配器
+  - 用户完全控制数据获取方式
+  
+  让我重新设计这个方案。
+
+● ★ Insight ─────────────────────────────────────
+  • 完全通用化设计：不预定义任何中转站，一个引擎处理所有情况
+  • 配置驱动：用户通过配置描述API结构，无需修改代码
+  • JSONPath解析：使用标准路径语法提取所需数据
+  ─────────────────────────────────────────────────
+
+  重新设计：完全通用的中转站计费方案
+
+  基于你的思路，我重新设计了一个配置驱动的通用方案：
+
+  1. 核心理念
+
+  - 零代码适配：任何中转站都通过配置文件描述，无需写代码
+  - 通用引擎：一个解析引擎处理所有中转站
+  - 灵活配置：支持多个API端点、复杂数据提取
+
+  2. 配置结构设计
+
+  # config.toml - 用户配置示例
+
+  [components.usage]
+  display_mode = "dual"  # dual = 显示官方+中转站
+  precision = 2
+
+  # 中转站配置 - 完全由用户定义
+  [components.usage.proxy]
+  enabled = true
+  name = "YesCode"  # 显示名称
+  cache_ttl = 60    # 缓存秒数
+
+  # API配置 - 支持多个端点
+  [[components.usage.proxy.endpoints]]
+  name = "daily_usage"
+  url = "https://co.yes.vg/team/stats/usage"
+  method = "GET"
+  params = { period = "today", limit = "10" }
+
+  # 请求头配置
+  [components.usage.proxy.endpoints.headers]
+  "X-API-Key" = { env = "ANTHROPIC_AUTH_TOKEN" }  # 从环境变量
+  "Content-Type" = { value = "application/json" }  # 直接值
+
+  # 数据提取路径 (JSONPath语法)
+  [components.usage.proxy.endpoints.extract]
+  total_cost = "summary[*].total_cost | sum"  # 求和所有模型成本
+  request_count = "summary[*].requests | sum"
+
+  # 第二个API端点（可选）
+  [[components.usage.proxy.endpoints]]
+  name = "spending_limit"
+  url = "https://co.yes.vg/team/stats/spending"
+  method = "GET"
+
+  [components.usage.proxy.endpoints.headers]
+  "X-API-Key" = { env = "ANTHROPIC_AUTH_TOKEN" }
+
+  [components.usage.proxy.endpoints.extract]
+  daily_remaining = "daily_remaining"
+  daily_limit = "daily_limit"
+
+  # 显示格式配置
+  [components.usage.proxy.display]
+  format = "${total_cost:.2f} (${daily_remaining:.0f}/${daily_limit:.0f})"
+  color_thresholds = [
+    { value = 0.1, color = "green" },
+    { value = 1.0, color = "yellow" },
+    { value = 5.0, color = "red" }
+  ]
+
+  3. 实现架构（极简）
+
+  // src/proxy/engine.ts - 通用解析引擎
+  interface ProxyConfig {
+    name: string;
+    endpoints: EndpointConfig[];
+    display: DisplayConfig;
+  }
+
+  interface EndpointConfig {
+    url: string;
+    method: string;
+    headers: Record<string, HeaderValue>;
+    params?: Record<string, string>;
+    extract: Record<string, string>;  // JSONPath表达式
+  }
+
+  class ProxyEngine {
+    async fetchStats(config: ProxyConfig): Promise<ProxyData> {
+      const results = {};
+
+      for (const endpoint of config.endpoints) {
+        // 1. 构建请求头
+        const headers = this.buildHeaders(endpoint.headers);
+
+        // 2. 发送请求
+        const response = await fetch(endpoint.url, {
+          method: endpoint.method,
+          headers,
+          params: endpoint.params
+        });
+
+        // 3. 提取数据
+        const data = await response.json();
+        for (const [key, path] of Object.entries(endpoint.extract)) {
+          results[key] = this.extractValue(data, path);
+        }
+      }
+
+      return results;
+    }
+
+    private extractValue(data: any, path: string): any {
+      // 支持 JSONPath 和简单操作符
+      // "summary[*].cost | sum" = 提取所有cost并求和
+      // "data.total" = 直接路径
+      // "requests | count" = 计数
+    }
+  }
+
+  4. 预设配置（可选提供）
+
+  # presets/yescode.toml - 官方提供的预设
+  [proxy]
+  name = "YesCode Team"
+  [[proxy.endpoints]]
+  url = "https://co.yes.vg/team/stats/usage?period=today"
+  # ... 完整配置
+
+  # presets/openrouter.toml
+  [proxy]
+  name = "OpenRouter"
+  [[proxy.endpoints]]
+  url = "https://openrouter.ai/api/v1/stats"
+  # ... 完整配置
+
+  用户可以：
+  # 使用预设
+  claude-code-statusline --proxy-preset yescode
+
+  # 或在config.toml中引入
+  [components.usage.proxy]
+  preset = "yescode"  # 加载预设
+  # 可以覆盖预设中的任何配置
+  cache_ttl = 120
+
+  5. 数据提取语法设计
+
+  支持简单但强大的提取语法：
+
+  [extract]
+  # 基础路径
+  cost = "data.total_cost"
+
+  # 数组索引
+  first_model = "models[0].name"
+
+  # 聚合操作
+  total = "items[*].cost | sum"
+  count = "items | length"
+  average = "items[*].value | avg"
+
+  # 条件过滤
+  opus_cost = "items[?model=='opus'].cost | sum"
+
+  # 默认值
+  name = "user.name | 'Unknown'"
+
+  6. 实际使用效果
+
+  # 零配置 - 自动检测常见中转站
+  $ claude-code-statusline
+  > $0.12 | YesCode: $1.58
+
+  # 自定义配置
+  $ claude-code-statusline
+  > $0.12 | MyProxy: 158 tokens left
+
+  # 调试模式
+  $ claude-code-statusline --proxy-debug
+  > Fetching: https://co.yes.vg/team/stats/usage
+  > Response: {...}
+  > Extracted: total_cost=1.58
+
+  7. 优势分析
+
+  1. 真正通用：一套代码支持所有中转站
+  2. 用户友好：配置即可使用，无需写代码
+  3. 灵活强大：支持复杂的数据提取和转换
+  4. 易于分享：配置文件可以分享给其他用户
+  5. 渐进增强：简单配置满足基础需求，复杂配置支持高级用法
+
+  这个方案真正做到了"Simple but Powerful"。你觉得这个设计如何？需要调整哪些细节？
+
+> 我们继续探讨。我觉得我需要的是：1. 中转站的配置和主配置文件分离，不要污染主配置文件。中转站的配置文件和主配置文件放在同一目录即可。例如我们都放在用户级~/.claude/statu
+  sline-pro下，然后通过文件名来导入（例如在config.toml中添加 [proxy.config] path=yescode.toml）这样的方式。这样我们可以方便地添加多个中转站。\
+  那么，中转站可配置的东西有什么，你来重申一下。我看看需要修改什么。
+
+● ★ Insight ─────────────────────────────────────
+  • 配置分离：主配置保持清洁，中转站配置独立管理
+  • 模块化设计：每个中转站一个配置文件，易于分享和管理
+  • 灵活导入：支持多中转站切换和同时显示
+  ─────────────────────────────────────────────────
+
+  配置分离架构设计
+
+  1. 文件结构
+
+  ~/.claude/statusline-pro/
+    ├── config.toml           # 主配置（干净简洁）
+    ├── proxy/                # 中转站配置目录
+    │   ├── yescode.toml      # YesCode配置
+    │   ├── openrouter.toml   # OpenRouter配置
+    │   └── custom.toml       # 自定义中转站
+    └── themes/               # 主题文件
+
+  2. 主配置文件引用方式
+
+  # ~/.claude/statusline-pro/config.toml
+  [components.usage]
+  display_mode = "conversation"
+  precision = 2
+
+  # 引入中转站配置
+  [components.usage.proxy]
+  enabled = true
+  config = "yescode"  # 自动查找 proxy/yescode.toml
+  # 或完整路径
+  # config = "~/.claude/statusline-pro/proxy/yescode.toml"
+
+  3. 中转站可配置项详细清单
+
+  # ~/.claude/statusline-pro/proxy/yescode.toml
+
+  # ============ 基础信息 ============
+  [proxy]
+  name = "YesCode"           # 显示名称
+  enabled = true             # 是否启用
+  cache_ttl = 60            # 缓存时间（秒）
+  retry_times = 3           # 失败重试次数
+  timeout = 5000            # 请求超时（毫秒）
+
+  # ============ 触发条件 ============
+  [proxy.trigger]
+  # 何时激活此配置（任一条件满足即可）
+  env_match = [
+    { name = "ANTHROPIC_BASE_URL", pattern = "co.yes.vg" },
+    { name = "PROXY_PROVIDER", value = "yescode" }
+  ]
+  # 或强制启用
+  force = false
+
+  # ============ API端点配置 ============
+  [[proxy.endpoints]]
+  id = "usage"              # 端点标识符
+  url = "https://co.yes.vg/team/stats/usage"
+  method = "GET"
+  timeout = 3000            # 单个请求超时
+
+  # 请求参数（URL参数）
+  [proxy.endpoints.params]
+  period = "today"          # 固定值
+  limit = { value = 100 }   # 显式指定值类型
+  offset = { env = "PROXY_OFFSET", default = "0" }  # 从环境变量
+
+  # 请求头
+  [proxy.endpoints.headers]
+  "X-API-Key" = { env = "ANTHROPIC_AUTH_TOKEN" }      # 从环境变量
+  "Authorization" = { env = "ANTHROPIC_AUTH_TOKEN", prefix = "Bearer " }  # 带前缀
+  "Content-Type" = { value = "application/json" }     # 固定值
+  "User-Agent" = { compute = "statusline-pro/{{version}}" }  # 动态计算
+
+  # 请求体（POST/PUT）
+  [proxy.endpoints.body]
+  type = "json"             # json/form/text
+  content = { user_id = { env = "USER_ID" } }
+
+  # ============ 数据提取 ============
+  [proxy.endpoints.extract]
+  # 基础提取
+  today_cost = { path = "summary[*].total_cost", aggregate = "sum" }
+  request_count = { path = "total_count" }
+
+  # 高级提取
+  models = {
+    path = "summary",
+    transform = "array_to_map",  # 转换为映射
+    key = "model",               # 使用model字段作为key
+    value = "total_cost"          # 使用total_cost作为value
+  }
+
+  # 条件提取
+  opus_cost = {
+    path = "summary",
+    filter = { field = "model", contains = "opus" },
+    extract = "total_cost",
+    aggregate = "sum"
+  }
+
+  # ============ 第二个端点 ============
+  [[proxy.endpoints]]
+  id = "limits"
+  url = "https://co.yes.vg/team/stats/spending"
+  method = "GET"
+
+  [proxy.endpoints.headers]
+  "X-API-Key" = { env = "ANTHROPIC_AUTH_TOKEN" }
+
+  [proxy.endpoints.extract]
+  daily_limit = { path = "daily_limit", default = 0 }
+  daily_remaining = { path = "daily_remaining", default = 0 }
+  monthly_spending = { path = "monthly_spending" }
+
+  # ============ 数据处理 ============
+  [proxy.processing]
+  # 合并多个端点的数据
+  merge_strategy = "combine"  # combine/override/first
+
+  # 计算字段
+  computed_fields = [
+    { name = "daily_used", expr = "daily_limit - daily_remaining" },
+    { name = "usage_percent", expr = "(daily_used / daily_limit) * 100" }
+  ]
+
+  # 数据验证
+  validation = [
+    { field = "today_cost", type = "number", min = 0 },
+    { field = "daily_limit", required = true }
+  ]
+
+  # ============ 显示配置 ============
+  [proxy.display]
+  # 显示格式模板
+  format = {
+    default = "$${today_cost:.2f}",
+    detailed = "$${today_cost:.2f} (${usage_percent:.0f}%)",
+    with_limit = "$${today_cost:.2f}/${daily_limit:.0f}"
+  }
+
+  # 选择显示格式的条件
+  format_selector = [
+    { if = "daily_limit > 0", use = "with_limit" },
+    { if = "verbose_mode", use = "detailed" },
+    { default = true, use = "default" }
+  ]
+
+  # 颜色配置
+  [proxy.display.colors]
+  mode = "threshold"  # threshold/gradient
+  thresholds = [
+    { max = 1.0, color = "green" },
+    { max = 5.0, color = "yellow" },
+    { max = 10.0, color = "orange" },
+    { default = true, color = "red" }
+  ]
+
+  # 图标配置
+  [proxy.display.icons]
+  nerd_icon = ""
+  emoji_icon = "💰"
+  text_icon = "$"
+
+  # ============ 错误处理 ============
+  [proxy.error_handling]
+  on_error = "show_cached"  # show_cached/show_zero/hide/show_error
+  fallback_text = "N/A"
+  log_errors = true
+  silent_fail = false
+
+  # ============ 高级特性 ============
+  [proxy.advanced]
+  # 认证方式
+  auth_type = "header"  # header/query/oauth/custom
+
+  # OAuth配置（如果需要）
+  [proxy.advanced.oauth]
+  token_url = "https://example.com/oauth/token"
+  client_id = { env = "CLIENT_ID" }
+  client_secret = { env = "CLIENT_SECRET" }
+  scope = "read:usage"
+
+  # 自定义脚本（高级用户）
+  [proxy.advanced.hooks]
+  pre_request = """
+    // JavaScript代码，修改请求
+    if (request.params.period === 'today') {
+      request.params.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+  """
+  post_response = """
+    // JavaScript代码，处理响应
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    return data;
+  """
+
+  # 速率限制
+  [proxy.advanced.rate_limit]
+  requests_per_minute = 60
+  burst_size = 10
+
+  4. 核心可配置要素总结
+
+  1. 基础配置
+    - 名称、缓存、超时、重试
+  2. 触发条件
+    - 环境变量匹配
+    - 强制启用
+  3. API配置
+    - URL、方法、超时
+    - 请求参数（支持环境变量）
+    - 请求头（支持环境变量、前缀）
+    - 请求体
+  4. 数据提取
+    - JSONPath路径
+    - 聚合操作（sum/avg/count）
+    - 条件过滤
+    - 数据转换
+  5. 数据处理
+    - 多端点合并
+    - 计算字段
+    - 数据验证
+  6. 显示配置
+    - 格式模板
+    - 条件格式
+    - 颜色阈值
+    - 图标
+  7. 错误处理
+    - 失败策略
+    - 降级显示
+  8. 高级特性（可选）
+    - OAuth认证
+    - 自定义脚本钩子
+    - 速率限制
+
+  这样的设计既保持了主配置的简洁，又提供了极大的灵活性。你觉得还需要调整或添加什么配置项吗？
+
+> 你说的太复杂，我们先来做个MVP。我需要实现：YesCode提供的，本日使用额度这个参数，显示在我的cost旁边，用[D] $52.33 这样的方式来表示。暂时不做三级图标。
+
+● ★ Insight ─────────────────────────────────────
+  • MVP优先：先实现核心功能，避免过度设计
+  • 简单集成：直接在usage组件中添加中转站逻辑
+  • 硬编码YesCode：暂时不做通用配置，先跑通流程
+  ─────────────────────────────────────────────────
+
+  好的，让我们用最简单的方式先实现MVP功能。
+
+● 先创建一个简单的YesCode服务类：
+
+● Write(src\proxy\yescode.ts)
+  ⎿  Wrote 1 lines to src\proxy\yescode.ts                                                      
+     import https from 'https';
+     /**
+      * YesCode中转站服务
+      * 获取今日使用额度
+      */
+     export class YesCodeService {
+       private static instance: YesCodeService | null = null;
+       private cache: { data: number | null; timestamp: number } = { data: null, timestamp: 0 };
+       private readonly CACHE_TTL = 60000; // 60秒缓存
+
+● 现在修改usage组件来集成YesCode数据：
+
+● Update(src\components\usage.ts)
+  ⎿  Updated src\components\usage.ts with 1 addition                                                        
+       1    import type { ComponentConfig, RenderContext, UsageComponentConfig } from '../config/schema.js';
+       2    import { getConversationCostDisplay, updateCostFromInput } from '../storage/index.js';
+       3    import { BaseComponent, type ComponentFactory } from './base.js';
+       4 +  import { YesCodeService } from '../proxy/yescode.js';
+       5    
+       6    /**
+       7     * 官方Session数据接口 | Official session data interface
+
+● Update(src\components\usage.ts)
+  ⎿  Updated src\components\usage.ts with 12 additions and 2 removals                 
+       130      /**
+       131       * 格式化官方使用信息显示 | Format official usage info display
+       132       */
+       133 -    private formatOfficialUsageDisplay(data: any): string {
+       133 +    private async formatOfficialUsageDisplay(data: any): Promise<string> {
+       134        const icon = this.getIcon('usage');
+       135        const displayText = this.buildOfficialDisplayText(data);
+       136        const color = this.getUsageColor(data.cost?.total_cost_usd || 0);
+       137    
+       138 -      return this.formatOutput(icon, displayText, color);
+       138 +      // 获取YesCode今日消费
+       139 +      const yesCodeService = YesCodeService.getInstance();
+       140 +      const todaySpending = await yesCodeService.getTodaySpending();
+       141 +      
+       142 +      let finalText = displayText;
+       143 +      if (todaySpending !== null && todaySpending > 0) {
+       144 +        // 添加YesCode今日消费显示
+       145 +        finalText += ` [D] $${todaySpending.toFixed(2)}`;
+       146 +      }
+       147 +  
+       148 +      return this.formatOutput(icon, finalText, color);
+       149      }
+       150    
+       151      /**
+
+● 现在需要修改调用formatOfficialUsageDisplay的地方，因为它现在是异步的：
+
+● Update(src\components\usage.ts)
+  ⎿  Updated src\components\usage.ts with 1 addition and 1 removal                                                
+       76    
+       77        // 非conversation模式，使用官方数据或无数据 | Non-conversation mode, use official data or no data
+       78        if (inputData.cost) {
+       79 -        return this.formatOfficialUsageDisplay(inputData);
+       79 +        return await this.formatOfficialUsageDisplay(inputData);
+       80        }
+       81    
+       82        return this.renderNoData();
+
+● Update(src\components\usage.ts)
+  ⎿  Error editing file
+  ⎿  Interrupted by user
+
+> 停，我看到你做了缓存。我们不需要做缓存，每次都是直接发请求。
+
+● ★ Insight ─────────────────────────────────────
+  • 移除缓存机制：保持代码简单，每次实时获取数据
+  • MVP原则：先实现功能，后续再考虑优化
+  • 简洁代码：去掉不必要的复杂性
+  ─────────────────────────────────────────────────
+
+  好的，让我移除缓存机制，简化代码：
+
+● Update(src\proxy\yescode.ts)
+  ⎿  Updated src\proxy\yescode.ts with 2 additions and 14 removals                                      
+        6     */
+        7    export class YesCodeService {
+        8      private static instance: YesCodeService | null = null;
+        9 -    private cache: { data: number | null; timestamp: number } = { data: null, timestamp: 0 };
+       10 -    private readonly CACHE_TTL = 60000; // 60秒缓存
+        9    
+       10      /**
+       11       * 获取单例
+     ...
+       36          return null;
+       37        }
+       38    
+       39 -      // 检查缓存
+       40 -      const now = Date.now();
+       41 -      if (this.cache.data !== null && now - this.cache.timestamp < this.CACHE_TTL) {
+       42 -        return this.cache.data;
+       43 -      }
+       44 -  
+       39        const apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
+       40        if (!apiKey) {
+       41          return null;
+     ...
+       49    
+       50        try {
+       51          const data = await this.fetchUsageData(apiKey);
+       52 -        const todaySpending = this.calculateTodaySpending(data);
+       53 -        
+       54 -        // 更新缓存
+       55 -        this.cache = { data: todaySpending, timestamp: now };
+       56 -        return todaySpending;
+       52 +        return this.calculateTodaySpending(data);
+       53        } catch (error) {
+       54          console.error('Failed to fetch YesCode usage:', error);
+       55 -        return this.cache.data; // 返回缓存的数据（如果有）
+       55 +        return null;
+       56        }
+       57      }
+       58    
+
+● 现在让我们测试这个功能：
+
+● Bash(npm run build)
+  ⎿  > claude-code-statusline-pro@2.2.1 build
+     > tsup
+     … +27 lines (ctrl+r to expand)
+
+● 编译成功！现在创建一个测试脚本来验证功能：
+
+● Write(test-yescode-mvp.js)
+  ⎿  Wrote 1 lines to test-yescode-mvp.js                     
+     import { YesCodeService } from './dist/index.js';
+     console.log('Testing YesCode MVP functionality...\n');
+     const service = YesCodeService.getInstance();
+     // 检查是否启用
+     const isEnabled = service.isEnabled();
+     console.log('YesCode Enabled:', isEnabled);
+     console.log('Base URL:', process.env.ANTHROPIC_BASE_URL);
+
+● Bash(node test-yescode-mvp.js)
+  ⎿  Error: file:///C:/Users/wangnov/claude-code-statusline-pro/test-yescode-mvp.js:1
+     import { YesCodeService } from './dist/index.js';
+              ^^^^^^^^^^^^^^
+     SyntaxError: The requested module './dist/index.js' does not provide an export named 'YesCodeService'
+         at ModuleJob._instantiate (node:internal/modules/esm/module_job:180:21)
+         at async ModuleJob.run (node:internal/modules/esm/module_job:263:5)
+         at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:578:26)
+         at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:116:5)
+     
+     Node.js v22.14.0
+
+● 需要导出YesCodeService。让我检查并修复：
+
+● Read(src\index.ts)
+  ⎿  Read 50 lines (ctrl+r to expand)
+
+● Update(src\index.ts)
+  ⎿  Updated src\index.ts with 3 additions                              
+       35    export { ProjectComponent } from './components/project.js';
+       36    export { StatusComponent } from './components/status.js';
+       37    export { TokensComponent } from './components/tokens.js';
+       38 +  
+       39 +  // 中转站服务导出
+       40 +  export { YesCodeService } from './proxy/yescode.js';
+       41    // 配置系统导出
+       42    export { ConfigLoader } from './config/loader.js';
+       43    
+
+● 重新编译：
+
+● Bash(npm run build)
+  ⎿  > claude-code-statusline-pro@2.2.1 build
+     > tsup
+     … +27 lines (ctrl+r to expand)
+
+● 现在再次测试：
+
+● Bash(node test-yescode-mvp.js)
+  ⎿  Testing YesCode MVP functionality...
+
+     YesCode Enabled: true
+     … +6 lines (ctrl+r to expand)
+
+● 太好了！功能正常工作。现在让我们使用实际的statusline命令来测试完整效果：
+
+● Bash(echo '{"sessionId":"test-session","model":{"id":"claude-3-5-sonnet","display_name":"Claude"},"cost":{"total_cost_usd":0.15,"total_lines_added":20,"total_lines_r…)
+  ⎿    test                   
+       S?   [
+     m░░░░
+     … +9 lines (ctrl+r to expand)
+
+● 完美！🎉 MVP功能已经成功实现了！
+
+  实现总结
+
+  我们成功实现了YesCode中转站的今日消费显示功能：
+
+  1. YesCode服务类 (src/proxy/yescode.ts)：
+    - 自动检测是否使用YesCode（通过ANTHROPIC_BASE_URL）
+    - 调用YesCode API获取今日消费数据
+    - 无缓存，每次实时请求
+  2. Usage组件集成：
+    - 在官方成本后面添加 [D] $xx.xx 格式显示
+    - 异步获取YesCode数据
+    - 自动判断是否显示
+  3. 实际效果：
+  $0.15 [D] $76.39
+    - $0.15 是Claude官方统计的单次会话成本
+    - [D] $76.39 是YesCode今日总消费
+
+  现在你的状态栏会同时显示Claude官方统计和YesCode中转站的今日消费，帮助你更好地掌握使用成本！
+
+  后续如果需要：
+  - 添加更多中转站支持
+  - 实现配置文件系统
+  - 添加更多统计维度（月度、限额等）
+
+  都可以在这个基础上扩展。
+
+> 然后我需要实现一个稍微复杂的需求：在独立于statusline的这一行，下面添加一行，这一行展示我最近一个请求的详细情况。
+
+● ★ Insight ─────────────────────────────────────
+  • 独立行显示：在状态栏下方额外输出一行详细信息
+  • 最近请求详情：展示最新API调用的模型、token、成本等
+  • 数据来源：从YesCode API的usage列表中获取第一条记录
+  ─────────────────────────────────────────────────
+
+  我来帮你实现在状态栏下方添加一行显示最近请求详情的功能。
+
+● 首先，让我扩展YesCode服务来获取最近请求的详细信息：
+
+● Update(src\proxy\yescode.ts)
+  ⎿  Updated src\proxy\yescode.ts with 14 additions and 1 removal    
+        1    import https from 'https';
+        2    
+        3    /**
+        4 +   * 最近请求详情
+        5 +   */
+        6 +  export interface RecentRequestDetail {
+        7 +    model: string;
+        8 +    inputTokens: number;
+        9 +    outputTokens: number;
+       10 +    cacheCreationTokens: number;
+       11 +    cacheReadTokens: number;
+       12 +    cost: number;
+       13 +    timestamp: string;
+       14 +  }
+       15 +  
+       16 +  /**
+       17     * YesCode中转站服务
+       18 -   * 获取今日使用额度
+       18 +   * 获取今日使用额度和最近请求详情
+       19     */
+       20    export class YesCodeService {
+       21      private static instance: YesCodeService | null = null;
+
+● Update(src\proxy\yescode.ts)
+  ⎿  Updated src\proxy\yescode.ts with 90 additions                                           
+       120          return total + (item.total_cost || 0);
+       121        }, 0);
+       122      }
+       123 +  
+       124 +    /**
+       125 +     * 获取最近请求详情
+       126 +     */
+       127 +    async getRecentRequest(): Promise<RecentRequestDetail | null> {
+       128 +      // 检查是否启用
+       129 +      if (!this.isEnabled()) {
+       130 +        return null;
+       131 +      }
+       132 +  
+       133 +      const apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
+       134 +      if (!apiKey) {
+       135 +        return null;
+       136 +      }
+       137 +  
+       138 +      try {
+       139 +        // 获取最近1条记录
+       140 +        const data = await this.fetchUsageData(apiKey, 1);
+       141 +        return this.extractRecentRequest(data);
+       142 +      } catch (error) {
+       143 +        console.error('Failed to fetch recent request:', error);
+       144 +        return null;
+       145 +      }
+       146 +    }
+       147 +  
+       148 +    /**
+       149 +     * 请求API数据（支持指定limit）
+       150 +     */
+       151 +    private fetchUsageData(apiKey: string, limit: number = 100): Promise<any> {
+       152 +      return new Promise((resolve, reject) => {
+       153 +        const options = {
+       154 +          hostname: 'co.yes.vg',
+       155 +          path: `/team/stats/usage?period=today&limit=${limit}`,
+       156 +          method: 'GET',
+       157 +          headers: {
+       158 +            'X-API-Key': apiKey,
+       159 +            'Content-Type': 'application/json'
+       160 +          },
+       161 +          timeout: 5000
+       162 +        };
+       163 +  
+       164 +        const req = https.request(options, (res) => {
+       165 +          let data = '';
+       166 +          
+       167 +          res.on('data', (chunk) => {
+       168 +            data += chunk;
+       169 +          });
+       170 +          
+       171 +          res.on('end', () => {
+       172 +            if (res.statusCode === 200) {
+       173 +              try {
+       174 +                resolve(JSON.parse(data));
+       175 +              } catch (e) {
+       176 +                reject(new Error('Invalid JSON response'));
+       177 +              }
+       178 +            } else {
+       179 +              reject(new Error(`HTTP ${res.statusCode}`));
+       180 +            }
+       181 +          });
+       182 +        });
+       183 +        
+       184 +        req.on('error', reject);
+       185 +        req.on('timeout', () => {
+       186 +          req.destroy();
+       187 +          reject(new Error('Request timeout'));
+       188 +        });
+       189 +        
+       190 +        req.end();
+       191 +      });
+       192 +    }
+       193 +  
+       194 +    /**
+       195 +     * 提取最近请求信息
+       196 +     */
+       197 +    private extractRecentRequest(data: any): RecentRequestDetail | null {
+       198 +      if (!data?.usage || !Array.isArray(data.usage) || data.usage.length === 0) {
+       199 +        return null;
+       200 +      }
+       201 +  
+       202 +      const recent = data.usage[0];
+       203 +      return {
+       204 +        model: recent.model || 'unknown',
+       205 +        inputTokens: recent.input_tokens || 0,
+       206 +        outputTokens: recent.output_tokens || 0,
+       207 +        cacheCreationTokens: recent.cache_creation_tokens || 0,
+       208 +        cacheReadTokens: recent.cache_read_tokens || 0,
+       209 +        cost: recent.cost || 0,
+       210 +        timestamp: recent.created_at || new Date().toISOString()
+       211 +      };
+       212 +    }
+       213    }
+       214   \ No newline at end of file
+
+● 但是我注意到需要修复一个问题 - fetchUsageData 现在需要接受 limit 参数：
+
+● Update(src\proxy\yescode.ts)
+  ⎿  Updated src\proxy\yescode.ts with 27 additions and 3 removals                        
+       53        }
+       54    
+       55        try {
+       56 -        const data = await this.fetchUsageData(apiKey);
+       56 +        const data = await this.fetchUsageData(apiKey, 100);
+       57          return this.calculateTodaySpending(data);
+       58        } catch (error) {
+       59          console.error('Failed to fetch YesCode usage:', error);
+     ...
+       62      }
+       63    
+       64      /**
+       65 -     * 请求API数据
+       65 +     * 获取最近请求详情
+       66       */
+       67 -    private fetchUsageData(apiKey: string): Promise<any> {
+       67 +    async getRecentRequest(): Promise<RecentRequestDetail | null> {
+       68 +      // 检查是否启用
+       69 +      if (!this.isEnabled()) {
+       70 +        return null;
+       71 +      }
+       72 +  
+       73 +      const apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
+       74 +      if (!apiKey) {
+       75 +        return null;
+       76 +      }
+       77 +  
+       78 +      try {
+       79 +        // 获取最近1条记录
+       80 +        const data = await this.fetchUsageData(apiKey, 1);
+       81 +        return this.extractRecentRequest(data);
+       82 +      } catch (error) {
+       83 +        console.error('Failed to fetch recent request:', error);
+       84 +        return null;
+       85 +      }
+       86 +    }
+       87 +  
+       88 +    /**
+       89 +     * 请求API数据（支持指定limit）
+       90 +     */
+       91 +    private fetchUsageData(apiKey: string, limit: number = 100): Promise<any> {
+       92        return new Promise((resolve, reject) => {
+       93          const options = {
+       94            hostname: 'co.yes.vg',
+
+● 还需要修复path中的limit：
+
+● Update(src\proxy\yescode.ts)
+  ⎿  Updated src\proxy\yescode.ts with 1 addition and 1 removal            
+       92        return new Promise((resolve, reject) => {
+       93          const options = {
+       94            hostname: 'co.yes.vg',
+       95 -          path: '/team/stats/usage?period=today&limit=100',
+       95 +          path: `/team/stats/usage?period=today&limit=${limit}`,
+       96            method: 'GET',
+       97            headers: {
+       98              'X-API-Key': apiKey,
+  ⎿  API Error: 429 {"detail":{"code":429120,"message":"Claude AI rate limit exceeded. Please try again after 
+     2025-09-08T00:00:00Z.","context":{"resets_at":"2025-09-08T00:00:00Z"}}}
+

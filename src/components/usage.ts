@@ -1,6 +1,7 @@
 import type { ComponentConfig, RenderContext, UsageComponentConfig } from '../config/schema.js';
 import { getConversationCostDisplay, updateCostFromInput } from '../storage/index.js';
 import { BaseComponent, type ComponentFactory } from './base.js';
+import { YesCodeService } from '../proxy/yescode.js';
 
 /**
  * 官方Session数据接口 | Official session data interface
@@ -75,7 +76,7 @@ export class UsageComponent extends BaseComponent {
 
     // 非conversation模式，使用官方数据或无数据 | Non-conversation mode, use official data or no data
     if (inputData.cost) {
-      return this.formatOfficialUsageDisplay(inputData);
+      return await this.formatOfficialUsageDisplay(inputData);
     }
 
     return this.renderNoData();
@@ -129,12 +130,22 @@ export class UsageComponent extends BaseComponent {
   /**
    * 格式化官方使用信息显示 | Format official usage info display
    */
-  private formatOfficialUsageDisplay(data: any): string {
+  private async formatOfficialUsageDisplay(data: any): Promise<string> {
     const icon = this.getIcon('usage');
     const displayText = this.buildOfficialDisplayText(data);
     const color = this.getUsageColor(data.cost?.total_cost_usd || 0);
 
-    return this.formatOutput(icon, displayText, color);
+    // 获取YesCode今日消费
+    const yesCodeService = YesCodeService.getInstance();
+    const todaySpending = await yesCodeService.getTodaySpending();
+    
+    let finalText = displayText;
+    if (todaySpending !== null && todaySpending > 0) {
+      // 添加YesCode今日消费显示
+      finalText += ` [D] $${todaySpending.toFixed(2)}`;
+    }
+
+    return this.formatOutput(icon, finalText, color);
   }
 
   /**

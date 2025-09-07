@@ -35,6 +35,9 @@ export { ModelComponent } from './components/model.js';
 export { ProjectComponent } from './components/project.js';
 export { StatusComponent } from './components/status.js';
 export { TokensComponent } from './components/tokens.js';
+
+// 中转站服务导出
+export { YesCodeService } from './proxy/yescode.js';
 // 配置系统导出
 export { ConfigLoader } from './config/loader.js';
 
