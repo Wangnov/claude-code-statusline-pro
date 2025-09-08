@@ -7,6 +7,7 @@ import { StatusComponentFactory } from '../components/status.js';
 import { TokensComponentFactory } from '../components/tokens.js';
 import { UsageComponentFactory } from '../components/usage.js';
 import type { ComponentConfig, Config, InputData, RenderContext } from '../config/schema.js';
+import { CustomComponentIntegrator } from '../custom-components/integrator.js';
 import { initializeStorage } from '../storage/index.js';
 import { TerminalRenderer } from '../terminal/colors.js';
 import { detect, getCapabilityInfo } from '../terminal/detector.js';
@@ -20,6 +21,7 @@ export interface GeneratorOptions {
   preset?: string;
   updateThrottling?: boolean;
   disableCache?: boolean;
+  customComponentsPath?: string; // 自定义组件路径 | Custom components path
 }
 
 /**
@@ -29,15 +31,21 @@ export interface GeneratorOptions {
 export class StatuslineGenerator {
   private config: Config;
   private componentRegistry: ComponentRegistry;
+  private customComponentIntegrator?: CustomComponentIntegrator;
   private renderer?: TerminalRenderer;
   private lastUpdate: number = 0;
   private lastResult: string | null = null;
   private updateInterval: number = 300; // 官方建议的300ms更新间隔 | Official 300ms update interval
   private disableCache: boolean = false;
+  private customComponentsPath?: string;
+  private customComponentsInitialized: boolean = false;
 
   constructor(config: Config, options: GeneratorOptions = {}) {
     this.config = config;
     this.componentRegistry = new ComponentRegistry();
+    if (options.customComponentsPath) {
+      this.customComponentsPath = options.customComponentsPath;
+    }
     this.initializeComponents();
 
     // Initialize storage system
@@ -70,13 +78,20 @@ export class StatuslineGenerator {
   public async generate(inputData: InputData): Promise<string> {
     try {
       // 初始化storage系统(如果有transcriptPath)
+      let projectId: string | null = null;
       if (inputData.transcriptPath) {
         // 设置项目ID到全局解析器
         projectResolver.setProjectIdFromTranscript(inputData.transcriptPath);
-        const projectId = projectResolver.getCachedProjectId();
+        projectId = projectResolver.getCachedProjectId();
         if (projectId) {
           await initializeStorage(projectId);
         }
+      }
+
+      // 初始化自定义组件（如果还没有初始化）
+      if (!this.customComponentsInitialized) {
+        await this.initializeCustomComponents(projectId);
+        this.customComponentsInitialized = true;
       }
 
       // 检查更新频率限制 | Check update rate limit
@@ -325,7 +340,7 @@ export class StatuslineGenerator {
    * 解析预设字符串 | Parse preset string
    */
   private parsePreset(preset: string): string[] {
-    const mapping = this.config.preset_mapping || {
+    const defaultMapping = this.config.preset_mapping || {
       P: 'project',
       M: 'model',
       B: 'branch',
@@ -334,9 +349,15 @@ export class StatuslineGenerator {
       S: 'status',
     };
 
+    // 如果有自定义组件集成器，使用它来解析
+    if (this.customComponentIntegrator) {
+      return this.customComponentIntegrator.parsePreset(preset, defaultMapping);
+    }
+
+    // 否则使用默认映射
     return preset
       .split('')
-      .map((char) => mapping[char as keyof typeof mapping])
+      .map((char) => defaultMapping[char as keyof typeof defaultMapping])
       .filter(Boolean);
   }
 
@@ -356,6 +377,14 @@ export class StatuslineGenerator {
         emoji_icon: '',
         text_icon: ' ',
       };
+    }
+
+    // 检查是否是自定义组件 | Check if it's a custom component
+    if (this.customComponentIntegrator) {
+      const customComponent = this.customComponentIntegrator.getLoadedComponent(componentName);
+      if (customComponent) {
+        return customComponent.config as Record<string, unknown>;
+      }
     }
 
     if (!components) return null;
@@ -433,6 +462,32 @@ export class StatuslineGenerator {
    */
   public getTerminalCapabilities() {
     return getCapabilityInfo();
+  }
+
+  /**
+   * 初始化自定义组件 | Initialize custom components
+   */
+  private async initializeCustomComponents(projectId: string | null): Promise<void> {
+    try {
+      // 获取自定义组件配置
+      const customConfig = (this.config as any).custom_components;
+      
+      // 创建集成器
+      this.customComponentIntegrator = new CustomComponentIntegrator(
+        this.customComponentsPath,
+        projectId || undefined,
+        customConfig
+      );
+
+      // 初始化并加载组件
+      await this.customComponentIntegrator.initialize();
+
+      // 注册到组件注册表
+      this.customComponentIntegrator.registerComponents(this.componentRegistry);
+    } catch (error) {
+      console.warn('初始化自定义组件失败 | Failed to initialize custom components:', error);
+      // 不抛出错误，允许系统继续运行
+    }
   }
 
   /**

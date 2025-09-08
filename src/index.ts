@@ -35,6 +35,19 @@ export { ModelComponent } from './components/model.js';
 export { ProjectComponent } from './components/project.js';
 export { StatusComponent } from './components/status.js';
 export { TokensComponent } from './components/tokens.js';
+
+// 自定义组件系统导出 | Custom components system exports
+export { ComponentDiscovery } from './custom-components/discovery.js';
+export { ComponentLoader } from './custom-components/loader.js';
+export { CustomComponentIntegrator } from './custom-components/integrator.js';
+export type {
+  CustomComponent,
+  CustomComponentFactory,
+  CustomComponentConfig,
+  LoadedComponent,
+  ComponentSearchPaths,
+  CustomComponentsConfig,
+} from './custom-components/types.js';
 // 配置系统导出
 export { ConfigLoader } from './config/loader.js';
 

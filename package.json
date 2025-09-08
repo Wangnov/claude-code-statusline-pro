@@ -73,6 +73,7 @@
     "@owloops/claude-powerline": "^1.5.3",
     "commander": "^14.0.0",
     "supports-color": "^10.1.0",
+    "toml": "^3.0.0",
     "zod": "^4.0.17"
   },
   "devDependencies": {

@@ -534,6 +534,16 @@ const PresetMappingSchema = z
 const LanguageSchema = z.enum(['zh', 'en']).default('zh');
 
 /**
+ * 自定义组件配置Schema | Custom components config schema
+ */
+const CustomComponentsSchema = z.object({
+  /** 组件代码映射 | Component code mappings */
+  codes: z.record(z.string(), z.string()).optional(),
+  /** 调试模式 | Debug mode */
+  debug: z.boolean().default(false),
+});
+
+/**
  * 主配置Schema | Main config schema
  */
 export const ConfigSchema = z
@@ -554,6 +564,8 @@ export const ConfigSchema = z
     themes: ThemesSchema,
     /** 组件配置 | Components config (重构) */
     components: ComponentsSchema.optional(),
+    /** 自定义组件配置 | Custom components config */
+    custom_components: CustomComponentsSchema.optional(),
     /** 预设映射配置 | Preset mapping config */
     preset_mapping: PresetMappingSchema.optional(),
     /** 高级配置 | Advanced config (简化) */

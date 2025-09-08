@@ -1,0 +1,28 @@
+# Clock Component Configuration
+# 时钟组件配置
+
+# 是否启用组件 | Enable component
+enabled = true
+
+# 图标配置 | Icon configuration
+nerd_icon = "󰥔"    # Nerd Font clock icon
+emoji_icon = "🕐"   # Emoji clock
+text_icon = "[T]"   # Text fallback
+
+# 颜色配置 | Color configuration
+icon_color = "cyan"
+text_color = "white"
+
+# 时钟特定配置 | Clock specific configuration
+# 是否使用24小时制 | Use 24-hour format
+format_24h = true
+
+# 是否显示秒 | Show seconds
+show_seconds = false
+
+# 是否显示日期 | Show date
+show_date = false
+
+# 时区设置 | Timezone setting
+# 可选值 | Options: "local", "UTC", "America/New_York", etc.
+timezone = "local"

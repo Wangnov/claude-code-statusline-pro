@@ -77,6 +77,7 @@ program
   .option('--force-nerd-font', 'force enable Nerd Font icons')
   .option('--force-text', 'force text-only mode (no emoji or icons)')
   .option('-c, --config <path>', 'custom config file path')
+  .option('--custom-components <path>', 'custom components directory path')
   .option('-d, --debug', 'debug mode with verbose output')
   .option(
     '-m, --mock <scenario>',
@@ -184,7 +185,9 @@ program
         }
       }
 
-      const generator = new StatuslineGenerator(config);
+      const generator = new StatuslineGenerator(config, {
+        customComponentsPath: options.customComponents,
+      });
 
       // Mock数据模式 - 用于测试和演示
       if (options.mock) {
