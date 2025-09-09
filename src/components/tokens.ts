@@ -73,7 +73,7 @@ export class TokensComponent extends BaseComponent {
     _status?: string,
     context?: RenderContext
   ): string | null {
-    const contextWindow = this.getContextWindow();
+    const contextWindow = this.getContextWindow(context?.inputData?.model?.id);
     const contextUsedTokens = Math.floor((tokenUsagePercent / 100) * contextWindow);
 
     const tokenUsage: TokenUsageInfo = {
@@ -96,7 +96,7 @@ export class TokensComponent extends BaseComponent {
    * 渲染无transcript文件时的显示 | Render display when no transcript file
    */
   private renderNoTranscript(context: RenderContext): string | null {
-    const contextWindow = this.getContextWindow();
+    const contextWindow = this.getContextWindow(context.inputData?.model?.id);
     const tokenUsage: TokenUsageInfo = {
       contextUsedTokens: 0,
       contextWindow,
@@ -132,7 +132,7 @@ export class TokensComponent extends BaseComponent {
     if (!fileExists) {
       return {
         contextUsedTokens: 0,
-        contextWindow: this.getContextWindow(),
+        contextWindow: this.getContextWindow(context.inputData?.model?.id),
         usagePercentage: 0,
       };
     }
@@ -205,7 +205,7 @@ export class TokensComponent extends BaseComponent {
         } catch (_parseError) {}
       }
 
-      const contextWindow = this.getContextWindow();
+      const contextWindow = this.getContextWindow(context.inputData?.model?.id);
       const usagePercentage = (contextUsedTokens / contextWindow) * 100;
 
       const result: TokenUsageInfo = {
@@ -237,9 +237,15 @@ export class TokensComponent extends BaseComponent {
   /**
    * 获取上下文窗口大小 | Get context window size
    */
-  private getContextWindow(): number {
+  private getContextWindow(modelId?: string): number {
     // 从 context_windows 映射中获取，支持模型特定配置
     const contextWindows = this.tokensConfig.context_windows || { default: 200000 };
+
+    // 如果有模型ID，尝试找到对应的上下文窗口大小
+    if (modelId && contextWindows[modelId]) {
+      return contextWindows[modelId];
+    }
+
     return contextWindows.default || 200000;
   }
 
