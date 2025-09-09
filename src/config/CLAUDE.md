@@ -4,6 +4,9 @@
 - `schema.ts` - Zod配置Schema定义，运行时类型验证
 - `loader.ts` - TOML配置文件加载器，支持分层配置
 
+## 多行配置文件 🆕
+- `component-config-loader.ts` - 组件配置加载器，支持Widget配置 (277行)
+
 ## 主要接口
 
 ### ConfigLoader类 (loader.ts)
@@ -53,6 +56,54 @@ interface ComponentsConfig {
 - 类型安全: TypeScript类型 + 运行时验证统一
 - 默认值: 每个配置项都有合理默认值
 - 错误提示: 详细的验证错误信息
+
+## ComponentConfigLoader类 🆕 (component-config-loader.ts:68)
+
+### 主要接口
+```typescript
+class ComponentConfigLoader {
+  static loadComponentConfig(componentName: string, baseDir?: string): Promise<ComponentConfigLoadResult>
+  static loadAllComponentConfigs(baseDir?: string, enabledComponents?: string[]): Promise<Map<string, ComponentMultilineConfig>>
+  static scanComponentFiles(configDir: string): Promise<string[]>
+  private static processEnvironmentVariables(obj: any): any
+}
+```
+
+### 核心功能
+1. **动态加载**: 根据组件名动态加载对应的.toml配置文件
+2. **选择性加载**: 仅加载启用组件的配置，优化性能
+3. **环境变量处理**: 支持 `${VAR_NAME}` 替换和 `\\$` 转义
+4. **Schema验证**: 使用Zod验证Widget配置结构
+5. **错误处理**: 提供详细的加载错误信息
+
+### 环境变量处理机制
+支持两种环境变量语法：
+- `${VAR_NAME}` - 标准环境变量替换
+- `\\${expression}` - 转义美元符号 + 模板表达式
+
+### 配置文件结构示例
+```toml
+[meta]
+description = "Widget组件配置"
+version = "1.0"
+
+[widgets.widget_name]
+enabled = true
+type = "api"
+row = 1
+col = 0
+nerd_icon = "\\uf085"
+template = "Value: {field}"
+
+[widgets.widget_name.detection]
+env = "ENVIRONMENT_VARIABLE"
+contains = "substring"
+
+[widgets.widget_name.api]
+base_url = "https://api.example.com"
+endpoint = "/data"
+data_path = "$.result"
+```
 
 ## 开发注意事项
 - 修改Schema后必须更新模板文件

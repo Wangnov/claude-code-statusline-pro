@@ -8,12 +8,56 @@
 CLI层 (src/cli/main.ts)
     ↓
 生成器层 (src/core/generator.ts - StatuslineGenerator)
+    ↓ ╔═══════════════════════════════════╗
+      ║      多行渲染系统 (新增)           ║
+      ║ MultiLineRenderer + GridSystem    ║
+      ║ + Widget Framework               ║
+      ╚═══════════════════════════════════╝
     ↓
-组件层 (src/components/ - BaseComponent子类)
+组件层 (src/components/ - BaseComponent子类) + Widget层
     ↓
-服务层 (GitService + StorageManager + TerminalDetector)
+服务层 (GitService + StorageManager + TerminalDetector)  
     ↓
 基础层 (Utils + Config + Themes)
+```
+
+## 多行状态栏系统 🆕
+
+### 架构概览
+多行系统允许在主状态栏下方显示扩展信息行，通过Widget框架提供灵活的内容展示能力。
+
+### 核心组件
+
+**MultiLineRenderer** (`src/core/multi-line-renderer.ts`):
+- 统一管理扩展行渲染
+- 集成GridSystem进行布局
+- 支持组件配置动态加载
+
+**GridSystem** (`src/core/grid-system.ts`):
+- 二维网格布局引擎
+- 支持多行多列组件排列
+- 自动处理行列对齐和空白填充
+
+**Widget框架** (`src/components/widgets/`):
+- `BaseWidget`: Widget基类，提供渲染和检测能力
+- `ApiWidget`: API数据获取和显示
+- `StaticWidget`: 静态内容显示
+- `WidgetFactory`: Widget工厂模式实现
+
+### Detection系统 🔥
+自动检测机制，根据环境变量智能启用Widget：
+
+```typescript
+// 配置示例
+[widgets.example.detection]
+env = "ANTHROPIC_BASE_URL"
+equals = "https://api.example.com"        // 精确匹配
+contains = "example.com"                   // 包含匹配  
+pattern = ".*\\.example\\.(com|org)$"     // 正则表达式匹配
+
+// 强制控制
+force = true   // 强制启用，忽略detection
+force = false  // 强制禁用
 ```
 
 ## 主要执行流程
@@ -159,12 +203,51 @@ async renderContent() {
 }
 ```
 
+### 添加新Widget的步骤 🆕
+1. 继承 `BaseWidget` 或 `ApiWidget`，实现 `renderContent()`
+2. 在 `WidgetFactory` 中注册新的Widget类型
+3. 创建组件配置文件 (如 `components/my-widget.toml`)
+4. 配置 detection 规则或 force 控制
+5. 在主配置中启用对应组件
+
+### Widget配置示例 🆕
+```toml
+[widgets.my_widget]
+enabled = true
+type = "api"
+row = 1
+col = 0
+nerd_icon = "\uf085"
+template = "Value: {field_name}"
+
+[widgets.my_widget.detection]
+env = "MY_ENV_VAR" 
+contains = "expected_value"
+
+[widgets.my_widget.api]
+base_url = "https://api.example.com"
+endpoint = "/data"
+data_path = "$.result"
+```
+
 ## 📁 重要文件路径
+### 核心系统
 - 主入口: `src/index.ts`
 - CLI入口: `src/cli/main.ts:64`
 - 核心生成器: `src/core/generator.ts:29`
 - 组件基类: `src/components/base.ts:34`
 - 配置加载: `src/config/loader.ts`
+
+### 多行系统 🆕
+- 多行渲染器: `src/core/multi-line-renderer.ts`
+- 网格系统: `src/core/grid-system.ts`
+- Widget基类: `src/components/widgets/base-widget.ts`
+- API Widget: `src/components/widgets/api-widget.ts`
+- 静态Widget: `src/components/widgets/static-widget.ts`
+- Widget工厂: `src/components/widgets/widget-factory.ts`
+- 组件配置加载: `src/config/component-config-loader.ts`
+
+### 服务层
 - Git服务: `src/git/service.ts:39`
 - 终端检测: `src/terminal/detector.ts:798`
 - 主题引擎: `src/themes/engine.ts:14`
@@ -184,5 +267,11 @@ async renderContent() {
 - Git操作缓存: 5秒TTL，通过 `cache_enabled` 控制
 - 组件渲染频率: 300ms更新间隔
 
+### Widget系统特性 🆕
+- **嵌套数据访问**: 支持 `{other.field}` 语法访问JSON字符串字段
+- **数学表达式**: 支持 `{quota / 500000:.2f}` 计算和格式化
+- **美元符号转义**: 在TOML中使用 `\\$` 显示美元符号
+- **环境变量**: 配置中的 `${VAR_NAME}` 自动替换
+
 ---
-**版本**: v2.2.1 | **Node.js**: >=18.0.0 | **系统**: macOS/Linux/Windows
+**Node.js**: >=18.0.0 | **系统**: macOS/Linux/Windows

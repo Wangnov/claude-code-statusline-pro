@@ -10,6 +10,12 @@
 - `status.ts` - Claude状态组件 (415行)
 - `fake.ts` - 兼容性组件，修复终端显示问题 (57行)
 
+## Widget子系统 🆕
+- `widgets/base-widget.ts` - Widget基类，支持Detection和Force控制 (367行)
+- `widgets/api-widget.ts` - API数据获取Widget，支持HTTP请求 (274行)
+- `widgets/static-widget.ts` - 静态内容Widget (47行)
+- `widgets/widget-factory.ts` - Widget工厂，负责Widget创建 (94行)
+
 ## BaseComponent基类 (base.ts:34)
 
 ### 核心接口
