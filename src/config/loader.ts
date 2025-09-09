@@ -584,7 +584,7 @@ export class ConfigLoader {
         }
         console.error('\nTo fix validation errors:');
         console.error('1. Check the config file syntax and field types');
-        console.error('2. Run "npm run config validate" to test your changes');
+        console.error('2. Run "npm run  validate" to test your changes');
         console.error('3. Run "npm run config reset" to restore defaults');
       } else {
         const errorMessage = error instanceof Error ? error.message : String(error);

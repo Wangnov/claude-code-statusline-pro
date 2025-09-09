@@ -19,7 +19,7 @@
 #
 # 安全提醒：
 # - 建议将API密钥配置在环境变量中，避免硬编码在配置文件
-# - 可以在 ~/.claude/settings.json 的 envs 字段中配置环境变量
+# - 可以在 ~/.claude/settings.json 的 env 字段中配置环境变量
 #
 # ====================================================================
 
@@ -160,7 +160,7 @@ data_path = "$.balance"            # 不同的数据路径
 #    - DUCKCODING_API_KEY: 系统访问令牌
 #    - DUCKCODING_USER_ID: 你的用户ID
 # 4. 在 ~/.claude/settings.json 中配置：
-#    "envs": {
+#    "env": {
 #      "DUCKCODING_API_KEY": "你的系统访问令牌",
 #      "DUCKCODING_USER_ID": "你的用户ID"
 #    }
