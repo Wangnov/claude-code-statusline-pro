@@ -9,13 +9,13 @@
 
 // 国际化系统导出 (I18n system exports)
 export {
+  detectSystemLanguage,
   getCurrentLanguage,
   getI18nManager,
   I18nManager,
   initializeI18n,
   setLanguage,
   t,
-  detectSystemLanguage,
 } from './cli/i18n.js';
 // CLI 工具导出 (供高级用户使用)
 export {

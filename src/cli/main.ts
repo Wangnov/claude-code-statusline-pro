@@ -5,7 +5,7 @@
  * 架构设计:
  * - Commander.js 主框架，支持子命令和内联参数
  * - 实时预览引擎，多场景Mock数据展示
- * - 主题选择系统，Inquirer.js用户体验  
+ * - 主题选择系统，Inquirer.js用户体验
  * - 三层用户体验: settings.json内联参数 > CLI命令行配置 > 手动TOML编辑
  */
 
@@ -63,9 +63,7 @@ async function initializeApp(): Promise<void> {
  */
 program
   .name('claude-code-statusline-pro')
-  .description(
-    'Enhanced statusline for Claude Code with live preview and theme management'
-  )
+  .description('Enhanced statusline for Claude Code with live preview and theme management')
   .version(getVersion())
   .argument('[preset]', 'preset string like PMBT (Project, Model, Branch, Tokens)')
   .option('-p, --preset <preset>', 'component preset override')
@@ -185,7 +183,7 @@ program
       }
 
       const generator = new StatuslineGenerator(config, {
-        configBaseDir: path.dirname(configLoader.getConfigSource().path || '')
+        configBaseDir: path.dirname(configLoader.getConfigSource().path || ''),
       });
 
       // Mock数据模式 - 用于测试和演示
@@ -232,6 +230,7 @@ program
     'initialize configuration for project (current directory if not specified)'
   )
   .option('-g, --global', 'create global user-level configuration (use with --init)')
+  .option('--with-components', 'copy component configuration files (use with --init)')
   .option('-t, --theme <theme>', 'specify theme for initialization (classic, powerline, capsule)')
   .action(async (options) => {
     await initializeApp();
@@ -322,11 +321,20 @@ program
         }
 
         // 从模板复制配置文件 | Copy configuration from template
-        await configLoader.createDefaultConfig(targetConfigPath, selectedTheme, capabilities);
+        await configLoader.createDefaultConfig(
+          targetConfigPath,
+          selectedTheme,
+          capabilities,
+          options.withComponents
+        );
 
         console.log(formatCliMessage('success', '配置文件初始化成功!'));
         console.log(formatCliMessage('theme', `主题: ${selectedTheme}`));
         console.log(formatCliMessage('folder', `位置: ${targetConfigPath}`));
+
+        if (options.withComponents) {
+          console.log(formatCliMessage('success', '组件配置文件已复制'));
+        }
 
         if (!options.global) {
           console.log(formatCliMessage('info', '该配置仅对当前项目生效'));
@@ -388,7 +396,8 @@ program
       const configLoader = new ConfigLoader();
       const _config = await configLoader.load(file);
       console.log(formatCliMessage('success', 'Configuration is valid'));
-      console.log(formatCliMessage('folder', `Config source: ${configLoader.getConfigSource()}`));
+      const configSource = configLoader.getConfigSource();
+      console.log(formatCliMessage('folder', `Config source: ${configSource.path || '默认配置'}`));
     } catch (error) {
       console.error(formatCliMessage('error', 'Configuration validation failed:'));
       console.error(error instanceof Error ? error.message : String(error));
@@ -433,7 +442,10 @@ program
         console.log(
           `\n${formatCliMessage('config', 'Configuration:')} ${formatCliMessage('success', 'Valid')}`
         );
-        console.log(formatCliMessage('folder', `Config source: ${configLoader.getConfigSource()}`));
+        const configSource = configLoader.getConfigSource();
+        console.log(
+          formatCliMessage('folder', `Config source: ${configSource.path || '默认配置'}`)
+        );
       } catch (error) {
         console.log(
           `\n${formatCliMessage('config', 'Configuration:')} ${formatCliMessage('error', 'Invalid')}`
