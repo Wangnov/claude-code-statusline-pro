@@ -145,19 +145,19 @@ export class StatuslineGenerator {
 
       // 渲染扩展行 | Render extension lines
       const extensionResult = await this.multiLineRenderer.renderExtensionLines(context);
-      
+
       // 组合主行和扩展行 | Combine main line and extension lines
       const lines: string[] = [];
       if (mainLine) {
         lines.push(mainLine);
       }
-      
+
       if (extensionResult.success && extensionResult.lines.length > 0) {
         lines.push(...extensionResult.lines);
       } else if (extensionResult.error) {
         console.warn('多行渲染失败:', extensionResult.error);
       }
-      
+
       const result = lines.join('\n');
 
       // 缓存结果 | Cache result
