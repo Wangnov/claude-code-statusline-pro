@@ -100,27 +100,30 @@ data_path = "$.usage[0]"                       # 提取数组第一个元素
 "X-API-Key" = "${ANTHROPIC_AUTH_TOKEN}"
 
 # ====================================================================
-# YesCode Pay As You Go 和订阅计划配置
+# YesCode Pay As You Go 和订阅计划 混合配置
 # ====================================================================
 # 适用于：https://co.yes.vg 类型的URL（不包含"/team"后缀）
 # 检测方式：精确匹配URL
-# 本示例提供2个小组件：YesCode Pay As You Go 计划名称小组件，YesCode Pay As You Go 计划余额小组件
+# 本示例提供3个小组件：YesCode 名称小组件，YesCode 余额小组件，YesCode 最近请求小组件
+# 目前情况下，YesCode的非Team计划查询接口鉴权需要JWT Token，该Token可通过浏览器检查模式检查网络请求获得。后续会更新为只需要API_KEY
 
-[widgets.yescode_payg_name]
+# 小组件0：YesCode 名称
+[widgets.yescode_name]
 enabled = true
 type = "static"
 row = 1
 col = 0
 nerd_icon = "\uf0c3"
 emoji_icon = "✌️"
-text_icon = "[YP]"
-content = "YesCode PAYG"
+text_icon = "[Y]"
+content = "YesCode"
 
-[widgets.yescode_payg_name.detection]
+[widgets.yescode_name.detection]
 env = "ANTHROPIC_BASE_URL"
 equals = "https://co.yes.vg" # 精确匹配：完全等于指定值时才启用
 
-[widgets.yescode_payg_balance]
+# 小组件1：YesCode 统一余额显示
+[widgets.yescode_balance]
 enabled = true
 type = "api"
 row = 1
@@ -128,22 +131,49 @@ col = 1
 nerd_icon = "\uef8d"
 emoji_icon = "💰"
 text_icon = "[$]"
-template = "余额:\\${balance:.2f}"
+template = "按需:\\${pay_as_you_go_balance:.2f} | 订阅:\\${subscription_balance:.2f}"
 
-[widgets.yescode_payg_balance.detection]
+[widgets.yescode_balance.detection]
 env = "ANTHROPIC_BASE_URL"
 equals = "https://co.yes.vg"
 
-[widgets.yescode_payg_balance.api]
+[widgets.yescode_balance.api]
 base_url = "${ANTHROPIC_BASE_URL}"
-endpoint = "/api/v1/user/balance"  # 不同的API端点
+endpoint = "/api/v1/user/balance"
 method = "GET"
 timeout = 5000
-data_path = "$.balance"            # 不同的数据路径
+data_path = "$"  # 获取整个响应对象
 
-[widgets.yescode_payg_balance.api.headers]
+[widgets.yescode_balance.api.headers]
 "X-API-Key" = "${ANTHROPIC_AUTH_TOKEN}"
+"Authorization" = "Bearer ${YES_JWT_TOKEN}" # 后续随着YesCode接口更新会移除
 
+# 小组件2：YesCode 最近请求
+[widgets.yescode_last_request]
+enabled = true
+type = "api"
+row = 1
+col = 3
+nerd_icon = "\uee0c"
+emoji_icon = "🔄"
+text_icon = "[R]"
+# 复杂模板示例：支持数学表达式、格式化、嵌套字段访问
+template = "{model} ↗{input_tokens} ↘{output_tokens} :{cache_creation_tokens:.0f} +{cache_read_tokens:.0f} \\${cost:.4f}"
+
+[widgets.yescode_last_request.detection]
+env = "ANTHROPIC_BASE_URL"
+equals = "https://co.yes.vg"
+
+[widgets.yescode_last_request.api]
+base_url = "${ANTHROPIC_BASE_URL}"
+endpoint = "/api/v1/user/usage?limit=1"
+method = "GET"
+timeout = 5000
+data_path = "$.usage[0]"                       # 提取数组第一个元素
+
+[widgets.yescode_last_request.api.headers]
+"X-API-Key" = "${ANTHROPIC_AUTH_TOKEN}"
+"Authorization" = "Bearer ${YES_JWT_TOKEN}" # 后续随着YesCode接口更新会移除
 # ====================================================================
 # DuckCoding / InstCopilot 配置（New-API架构中转站）
 # ====================================================================
