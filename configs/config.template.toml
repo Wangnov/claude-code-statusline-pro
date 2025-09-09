@@ -164,7 +164,7 @@ enabled = true
 icon_color = "cyan"
 text_color = "white"
 emoji_icon = "💰"
-nerd_icon = ""
+nerd_icon = " "
 text_icon = "[$]"
 precision = 2
 display_mode = "session"
@@ -221,6 +221,15 @@ cache_enabled = true
 recent_error_count = 5
 git_timeout = 1_000
 custom_color_codes = {}
+
+# 多行显示配置
+[multiline]
+enabled = false
+max_rows = 5
+
+# 各行样式配置
+[multiline.rows]
+row1 = { separator = " | ", max_width = 120 }
 
 [experimental]
 enable_experimental = false
