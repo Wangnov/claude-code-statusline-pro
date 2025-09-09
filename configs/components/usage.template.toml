@@ -1,0 +1,320 @@
+# ====================================================================
+# Usage 组件扩展配置模板 - 多中转站智能切换系统
+# ====================================================================
+#
+# 这个配置文件演示了如何使用 Widget 系统为 usage 组件添加扩展功能
+# 支持根据环境变量自动检测并切换不同的API中转站配置
+#
+# 核心概念说明：
+# - Widget: 可配置的UI小组件，支持静态内容和API数据获取
+# - Detection: 基于环境变量的智能检测系统，自动启用匹配的Widget
+# - Force: 手动覆盖检测结果的强制控制机制
+# - Grid: 二维网格布局，支持多行多列的组件排列
+#
+# 使用说明：
+# 1. 复制此文件到 ~/.claude/statusline-pro/components/usage.toml
+# 2. 在主配置文件中启用 multiline.enabled = true 【重要】
+# 3. 根据你使用的API中转站，配置对应的API请求，环境变量和API密钥
+# 4. 重启Claude Code，系统会自动检测并显示相应的信息
+#
+# 安全提醒：
+# - 建议将API密钥配置在环境变量中，避免硬编码在配置文件
+# - 可以在 ~/.claude/settings.json 的 envs 字段中配置环境变量
+#
+# ====================================================================
+
+[meta]
+description = "Usage组件多中转站智能配置"
+version = "2.0"
+
+[widgets]
+
+# ====================================================================
+# YesCode Team 计划配置 
+# ====================================================================
+# 适用于：https://api.yes.vg/team 类型的URL
+# 检测方式：正则表达式匹配yescode的URL结尾是否包含 "/team"
+# 本示例提供3个小组件：YesCode Team 计划名称小组件，YesCode Team 计划余额小组件，YesCode Team 计划最近请求小组件
+
+[widgets.yescode_team_name]
+enabled = true           # 是否启用此Widget
+type = "static"          # 类型：static=静态内容，api=API数据
+row = 1                  # 网格行位置（从1开始）
+col = 0                  # 网格列位置（从0开始）
+nerd_icon = "\uf0c3"     # Nerd Font 图标（需要支持的终端字体）
+emoji_icon = "✌️"        # Emoji 图标（通用支持）
+text_icon = "[YT]"       # 文本图标（兼容性最好）
+content = "YesCode Team" # 静态显示内容
+
+[widgets.yescode_team_name.detection]
+env = "ANTHROPIC_BASE_URL"   # 检测的环境变量名
+pattern = ".*yes\\.vg/team$" # 正则表达式：匹配URL结尾包含"/team"的情况
+
+[widgets.yescode_team_balance]
+enabled = true
+type = "api"                             # API类型Widget，会发送HTTP请求获取数据
+row = 1
+col = 1
+nerd_icon = "\uef8d"
+emoji_icon = "💰"
+text_icon = "[$]"
+template = "余额:\\${daily_remaining:.2f}" # 模板字符串，\\$表示转义的美元符号
+
+[widgets.yescode_team_balance.detection]
+env = "ANTHROPIC_BASE_URL"
+pattern = ".*yes\\.vg/team$"
+
+[widgets.yescode_team_balance.api]
+base_url = "${ANTHROPIC_BASE_URL}" # API基础URL，使用环境变量
+endpoint = "/stats/spending"       # API端点路径
+method = "GET"                     # HTTP方法
+timeout = 5000                     # 请求超时时间（毫秒）
+data_path = "$.daily_remaining"    # JSONPath表达式，提取响应数据中的字段
+
+[widgets.yescode_team_balance.api.headers]
+"X-API-Key" = "${ANTHROPIC_AUTH_TOKEN}" # API认证头，使用环境变量
+
+[widgets.yescode_team_last_request]
+enabled = true
+type = "api"
+row = 1
+col = 2
+nerd_icon = "\uee0c"
+emoji_icon = "🔄"
+text_icon = "[R]"
+# 复杂模板示例：支持数学表达式、格式化、嵌套字段访问
+template = "{model} ↗{input_tokens} ↘{output_tokens} :{cache_creation_tokens:.0f} +{cache_read_tokens:.0f} \\${cost:.4f}"
+
+[widgets.yescode_team_last_request.detection]
+env = "ANTHROPIC_BASE_URL"
+pattern = ".*yes\\.vg/team$"
+
+[widgets.yescode_team_last_request.api]
+base_url = "${ANTHROPIC_BASE_URL}"
+endpoint = "/stats/usage?period=today&limit=1"
+method = "GET"
+timeout = 5000
+data_path = "$.usage[0]"                       # 提取数组第一个元素
+
+[widgets.yescode_team_last_request.api.headers]
+"X-API-Key" = "${ANTHROPIC_AUTH_TOKEN}"
+
+# ====================================================================
+# YesCode Pay As You Go 和订阅计划配置
+# ====================================================================
+# 适用于：https://co.yes.vg 类型的URL（不包含"/team"后缀）
+# 检测方式：精确匹配URL
+# 本示例提供2个小组件：YesCode Pay As You Go 计划名称小组件，YesCode Pay As You Go 计划余额小组件
+
+[widgets.yescode_payg_name]
+enabled = true
+type = "static"
+row = 1
+col = 0
+nerd_icon = "\uf0c3"
+emoji_icon = "✌️"
+text_icon = "[YP]"
+content = "YesCode PAYG"
+
+[widgets.yescode_payg_name.detection]
+env = "ANTHROPIC_BASE_URL"
+equals = "https://co.yes.vg" # 精确匹配：完全等于指定值时才启用
+
+[widgets.yescode_payg_balance]
+enabled = true
+type = "api"
+row = 1
+col = 1
+nerd_icon = "\uef8d"
+emoji_icon = "💰"
+text_icon = "[$]"
+template = "余额:\\${balance:.2f}"
+
+[widgets.yescode_payg_balance.detection]
+env = "ANTHROPIC_BASE_URL"
+equals = "https://co.yes.vg"
+
+[widgets.yescode_payg_balance.api]
+base_url = "${ANTHROPIC_BASE_URL}"
+endpoint = "/api/v1/user/balance"  # 不同的API端点
+method = "GET"
+timeout = 5000
+data_path = "$.balance"            # 不同的数据路径
+
+[widgets.yescode_payg_balance.api.headers]
+"X-API-Key" = "${ANTHROPIC_AUTH_TOKEN}"
+
+# ====================================================================
+# DuckCoding / InstCopilot 配置（New-API架构中转站）
+# ====================================================================
+# 适用于：包含 "duckcoding.com" 或 "instcopilot-api.com" 的URL
+# 检测方式：正则表达式包含匹配
+#
+# 特殊说明：New-API架构的中转站需要特殊的认证方式
+# 需要同时提供 Authorization 头和 New-Api-User 头
+#
+# 安全配置建议：
+# 1. 登录中转站控制台，在个人设置页面的用户名下方找到用户ID: XXXX
+# 2. 在个人设置-账户管理-安全设置 生成"系统访问令牌"（不是普通的API Key）
+# 3. 将这些信息配置为环境变量：
+#    - DUCKCODING_API_KEY: 系统访问令牌
+#    - DUCKCODING_USER_ID: 你的用户ID
+# 4. 在 ~/.claude/settings.json 中配置：
+#    "envs": {
+#      "DUCKCODING_API_KEY": "你的系统访问令牌",
+#      "DUCKCODING_USER_ID": "你的用户ID"
+#    }
+
+[widgets.duckcoding_name]
+enabled = true
+type = "static"
+row = 1
+col = 0
+nerd_icon = "\uf1c0"   # 数据库图标
+emoji_icon = "🦆"
+text_icon = "[DC]"
+content = "DuckCoding"
+
+[widgets.duckcoding_name.detection]
+env = "ANTHROPIC_BASE_URL"
+pattern = "(duckcoding\\.com|instcopilot-api\\.com)" # 正则表达式：匹配包含这些关键词的URL
+
+[widgets.duckcoding_balance]
+enabled = true
+type = "api"
+row = 1
+col = 1
+nerd_icon = "\uef8d"
+emoji_icon = "💰"
+text_icon = "[$]"
+# 数学表达式示例：将quota除以500000转换为美元金额，保留2位小数
+template = "余额:\\${quota / 500000:.2f}"
+
+[widgets.duckcoding_balance.detection]
+env = "ANTHROPIC_BASE_URL"
+pattern = "(duckcoding\\.com|instcopilot-api\\.com)"
+
+[widgets.duckcoding_balance.api]
+base_url = "https://duckcoding.com" # 硬编码的API基础URL
+endpoint = "/api/user/self"         # 用户信息API端点
+method = "GET"
+timeout = 5000
+data_path = "$.data"                # 提取响应中的data字段
+
+[widgets.duckcoding_balance.api.headers]
+"Authorization" = "Bearer ${DUCKCODING_API_KEY}" # Bearer令牌认证
+"New-Api-User" = "${DUCKCODING_USER_ID}"         # New-API特有的用户ID头
+
+[widgets.duckcoding_last_request]
+enabled = true
+type = "api"
+row = 1
+col = 2
+nerd_icon = "\uee0c"
+emoji_icon = "🔄"
+text_icon = "[R]"
+# 高级模板示例：
+# - {model_name}: 直接字段访问
+# - {other.cache_tokens}: 嵌套JSON字段访问（other是JSON字符串，会自动解析）
+# - {quota / 500000:.4f}: 数学表达式计算并格式化为4位小数
+template = "{model_name} ↗{prompt_tokens} ↘{completion_tokens} :{other.cache_tokens} +{other.cache_creation_tokens} \\${quota / 500000:.4f}"
+
+[widgets.duckcoding_last_request.detection]
+env = "ANTHROPIC_BASE_URL"
+pattern = "(duckcoding\\.com|instcopilot-api\\.com)"
+
+[widgets.duckcoding_last_request.api]
+base_url = "https://duckcoding.com"
+endpoint = "/api/log/self?page_size=1" # 获取最近1条请求记录
+method = "GET"
+timeout = 5000
+data_path = "$.data.items[0]"          # 提取响应中数组的第一个元素
+
+[widgets.duckcoding_last_request.api.headers]
+"Authorization" = "Bearer ${DUCKCODING_API_KEY}"
+"New-Api-User" = "${DUCKCODING_USER_ID}"
+
+# ====================================================================
+# 自定义Widget示例（已注释）
+# ====================================================================
+# 以下是自定义Widget的配置示例，展示了各种高级功能的用法
+
+# [widgets.custom_static_widget]
+# enabled = false                       # 默认禁用，防止干扰
+# type = "static"
+# row = 2                               # 放在第2行
+# col = 0
+# nerd_icon = "\uf085"                 # 齿轮图标
+# emoji_icon = "⚙️"
+# text_icon = "[CUSTOM]"
+# content = "自定义内容"
+# force = true                          # 强制启用，忽略detection规则
+
+# [widgets.custom_api_widget]
+# enabled = false
+# type = "api"
+# row = 2
+# col = 1
+# nerd_icon = "\uf201"
+# emoji_icon = "📊"
+# text_icon = "[API]"
+# template = "状态: {status} | 值: {value:.2f}"
+# 
+# # 可选的force控制
+# # force = false                       # 强制禁用
+# 
+# [widgets.custom_api_widget.detection]
+# env = "CUSTOM_API_ENABLED"           # 自定义环境变量
+# equals = "true"                       # 当值为"true"时启用
+# 
+# [widgets.custom_api_widget.api]
+# base_url = "https://api.example.com"
+# endpoint = "/status"
+# method = "GET"
+# timeout = 3000                        # 较短的超时时间
+# data_path = "$.result"
+# 
+# [widgets.custom_api_widget.api.headers]
+# "Authorization" = "Bearer ${CUSTOM_API_TOKEN}"
+# "User-Agent" = "Claude-Statusline/2.3.0"
+
+# ====================================================================
+# 配置说明和最佳实践
+# ====================================================================
+#
+# Widget类型说明：
+# - static: 静态内容Widget，显示固定文本，轻量高效
+# - api: API数据Widget，发送HTTP请求获取动态数据
+#
+# Detection规则类型：
+# - equals: 精确匹配，env的值完全等于指定值时启用
+# - contains: 包含匹配，env的值包含指定字符串时启用
+# - pattern: 正则表达式匹配，支持复杂的模式识别
+#
+# Force控制优先级：
+# - force = true: 强制启用，忽略所有detection规则
+# - force = false: 强制禁用，忽略所有detection规则
+# - 未设置force: 使用detection规则自动判断
+#
+# Grid布局说明：
+# - row: 行位置，从1开始，决定Widget在哪一行显示
+# - col: 列位置，从0开始，决定Widget在该行的哪一列显示
+# - 相同row的Widget会排列在同一行，按col顺序从左到右排列
+#
+# 模板语法功能：
+# - 基本字段: {field_name} 访问API响应中的字段
+# - 嵌套字段: {parent.child} 访问嵌套JSON字段（自动解析JSON字符串）
+# - 数学表达式: {field1 / field2:.2f} 支持四则运算和格式化
+# - 美元符号: \\$ 转义显示美元符号（避免被当作环境变量）
+#
+# 环境变量配置：
+# - ${VAR_NAME}: 在配置中使用环境变量
+# - 推荐在 ~/.claude/settings.json 的 envs 字段中定义
+# - 避免将敏感信息（API密钥、Token）硬编码在配置文件中
+#
+# 性能优化建议：
+# - 设置合理的timeout值，避免阻塞状态栏渲染
+# - 对于不常变化的数据，可以考虑使用较长的超时时间
+# - 使用detection规则避免不必要的Widget启用，减少资源消耗
+#
+# ====================================================================

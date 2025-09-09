@@ -142,8 +142,10 @@ export const ProjectComponentSchema = BaseComponentSchema.extend({
 export const ModelComponentSchema = BaseComponentSchema.extend({
   /** 显示模型全名 | Show full model name */
   show_full_name: z.boolean().default(false),
-  /** 自定义模型名映射 | Custom model name mapping (重命名，原custom_names) */
+  /** 自定义模型短名称映射 | Custom model short name mapping */
   mapping: z.record(z.string(), z.string()).default({}),
+  /** 自定义模型长名称映射 | Custom model long name mapping */
+  long_name_mapping: z.record(z.string(), z.string()).default({}),
 });
 
 // ==================== 分支组件配置扩展 ====================
