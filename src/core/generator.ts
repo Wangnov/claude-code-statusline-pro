@@ -12,6 +12,7 @@ import { TerminalRenderer } from '../terminal/colors.js';
 import { detect, getCapabilityInfo } from '../terminal/detector.js';
 import { createThemeRenderer } from '../themes/index.js';
 import { projectResolver } from '../utils/project-resolver.js';
+import { MultiLineRenderer } from './multi-line-renderer.js';
 
 /**
  * 生成器选项 | Generator options
@@ -20,6 +21,7 @@ export interface GeneratorOptions {
   preset?: string;
   updateThrottling?: boolean;
   disableCache?: boolean;
+  configBaseDir?: string;
 }
 
 /**
@@ -30,6 +32,7 @@ export class StatuslineGenerator {
   private config: Config;
   private componentRegistry: ComponentRegistry;
   private renderer?: TerminalRenderer;
+  private multiLineRenderer: MultiLineRenderer;
   private lastUpdate: number = 0;
   private lastResult: string | null = null;
   private updateInterval: number = 300; // 官方建议的300ms更新间隔 | Official 300ms update interval
@@ -38,6 +41,7 @@ export class StatuslineGenerator {
   constructor(config: Config, options: GeneratorOptions = {}) {
     this.config = config;
     this.componentRegistry = new ComponentRegistry();
+    this.multiLineRenderer = new MultiLineRenderer(config, options.configBaseDir);
     this.initializeComponents();
 
     // Initialize storage system
@@ -137,7 +141,24 @@ export class StatuslineGenerator {
       }
 
       // 合并组件结果 | Combine component results using theme renderer
-      const result = await this.combineComponentsWithTheme(componentResults, context);
+      const mainLine = await this.combineComponentsWithTheme(componentResults, context);
+
+      // 渲染扩展行 | Render extension lines
+      const extensionResult = await this.multiLineRenderer.renderExtensionLines(context);
+      
+      // 组合主行和扩展行 | Combine main line and extension lines
+      const lines: string[] = [];
+      if (mainLine) {
+        lines.push(mainLine);
+      }
+      
+      if (extensionResult.success && extensionResult.lines.length > 0) {
+        lines.push(...extensionResult.lines);
+      } else if (extensionResult.error) {
+        console.warn('多行渲染失败:', extensionResult.error);
+      }
+      
+      const result = lines.join('\n');
 
       // 缓存结果 | Cache result
       this.lastResult = result;
@@ -416,6 +437,7 @@ export class StatuslineGenerator {
    */
   public updateConfig(newConfig: Config): void {
     this.config = newConfig;
+    this.multiLineRenderer.updateConfig(newConfig);
     // 清除缓存 | Clear cache
     this.lastResult = null;
     this.lastUpdate = 0;

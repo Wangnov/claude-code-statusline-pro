@@ -184,7 +184,9 @@ program
         }
       }
 
-      const generator = new StatuslineGenerator(config);
+      const generator = new StatuslineGenerator(config, {
+        configBaseDir: path.dirname(configLoader.getConfigSource().path || '')
+      });
 
       // Mock数据模式 - 用于测试和演示
       if (options.mock) {
