@@ -503,6 +503,112 @@ const StorageSchema = z
   })
   .optional();
 
+// ==================== 多行系统配置 ====================
+
+/**
+ * 小组件API配置 | Widget API config
+ */
+const WidgetApiConfigSchema = z.object({
+  /** 基础URL | Base URL */
+  base_url: z.string(),
+  /** API端点 | API endpoint */
+  endpoint: z.string(),
+  /** HTTP方法 | HTTP method */
+  method: z.enum(['GET', 'POST', 'PUT', 'DELETE']).default('GET'),
+  /** 超时时间(ms) | Timeout in milliseconds */
+  timeout: z.number().min(1000).max(30000).default(5000),
+  /** 请求头 | Request headers */
+  headers: z.record(z.string(), z.string()).default({}),
+  /** JSONPath数据提取路径 | JSONPath for data extraction */
+  data_path: z.string(),
+});
+
+/**
+ * 小组件检测配置 | Widget detection config
+ */
+const WidgetDetectionSchema = z.object({
+  /** 检测的环境变量名 | Environment variable name to check */
+  env: z.string(),
+  /** 包含匹配 | Contains match */
+  contains: z.string().optional(),
+  /** 精确匹配 | Exact match */
+  equals: z.string().optional(),
+  /** 正则表达式匹配 | Regex pattern match */
+  pattern: z.string().optional(),
+});
+
+/**
+ * 小组件配置 | Widget config
+ */
+const WidgetConfigSchema = z.object({
+  /** 是否启用 | Whether enabled */
+  enabled: z.boolean().default(true),
+  /** 强制启用（优先级高于detection） | Force enable (higher priority than detection) */
+  force: z.boolean().optional(),
+  /** 小组件类型 | Widget type */
+  type: z.enum(['static', 'api']),
+  /** 行位置 | Row position */
+  row: z.number().min(1),
+  /** 列位置 | Column position */
+  col: z.number().min(0),
+  /** Nerd Font图标 | Nerd Font icon */
+  nerd_icon: z.string(),
+  /** Emoji图标 | Emoji icon */
+  emoji_icon: z.string(),
+  /** 文本图标 | Text icon */
+  text_icon: z.string(),
+  /** 静态内容 (type=static时使用) | Static content (used when type=static) */
+  content: z.string().optional(),
+  /** 模板字符串 (type=api时使用) | Template string (used when type=api) */
+  template: z.string().optional(),
+  /** API配置 (type=api时必需) | API config (required when type=api) */
+  api: WidgetApiConfigSchema.optional(),
+  /** 检测配置 | Detection config */
+  detection: WidgetDetectionSchema.optional(),
+});
+
+/**
+ * 组件多行配置元数据 | Component multiline config metadata
+ */
+const ComponentMultilineMetaSchema = z.object({
+  /** 描述信息 | Description */
+  description: z.string().optional(),
+  /** 版本信息 | Version */
+  version: z.string().optional(),
+});
+
+/**
+ * 组件多行配置 | Component multiline config
+ */
+const ComponentMultilineConfigSchema = z.object({
+  /** 元数据 | Metadata */
+  meta: ComponentMultilineMetaSchema.optional(),
+  /** 小组件配置 | Widgets config */
+  widgets: z.record(z.string(), WidgetConfigSchema),
+});
+
+/**
+ * 多行行配置 | Multiline row config
+ */
+const MultilineRowConfigSchema = z.object({
+  /** 分隔符 | Separator */
+  separator: z.string().default(' | '),
+  /** 最大宽度 | Maximum width */
+  max_width: z.number().min(40).max(200).default(120),
+});
+
+/**
+ * 多行系统配置 | Multiline system config
+ */
+const MultilineConfigSchema = z.object({
+  /** 是否启用多行 | Whether multiline is enabled */
+  enabled: z.boolean().default(false),
+  /** 最大行数 | Maximum number of rows */
+  max_rows: z.number().min(1).max(10).default(5),
+  /** 各行配置 | Row configurations */
+  rows: z.record(z.string(), MultilineRowConfigSchema).default({}),
+});
+
 // ==================== 预设映射配置 ====================
 
 /**
@@ -554,6 +660,8 @@ export const ConfigSchema = z
     themes: ThemesSchema,
     /** 组件配置 | Components config (重构) */
     components: ComponentsSchema.optional(),
+    /** 多行系统配置 | Multiline system config (新增) */
+    multiline: MultilineConfigSchema.optional(),
     /** 预设映射配置 | Preset mapping config */
     preset_mapping: PresetMappingSchema.optional(),
     /** 高级配置 | Advanced config (简化) */
@@ -859,3 +967,40 @@ export type StatusComponentConfig = z.infer<typeof StatusComponentSchema>;
  * Usage组件配置类型 | Usage component config type
  */
 export type UsageComponentConfig = z.infer<typeof UsageComponentSchema>;
+
+// ==================== 多行系统类型导出 ====================
+
+/**
+ * 多行系统配置类型 | Multiline system config type
+ */
+export type MultilineConfig = z.infer<typeof MultilineConfigSchema>;
+
+/**
+ * 多行行配置类型 | Multiline row config type
+ */
+export type MultilineRowConfig = z.infer<typeof MultilineRowConfigSchema>;
+
+/**
+ * 小组件配置类型 | Widget config type
+ */
+export type WidgetConfig = z.infer<typeof WidgetConfigSchema>;
+
+/**
+ * 小组件API配置类型 | Widget API config type
+ */
+export type WidgetApiConfig = z.infer<typeof WidgetApiConfigSchema>;
+
+/**
+ * 小组件检测配置类型 | Widget detection config type
+ */
+export type WidgetDetectionConfig = z.infer<typeof WidgetDetectionSchema>;
+
+/**
+ * 组件多行配置类型 | Component multiline config type
+ */
+export type ComponentMultilineConfig = z.infer<typeof ComponentMultilineConfigSchema>;
+
+/**
+ * 组件多行配置元数据类型 | Component multiline config metadata type
+ */
+export type ComponentMultilineMetaConfig = z.infer<typeof ComponentMultilineMetaSchema>;
