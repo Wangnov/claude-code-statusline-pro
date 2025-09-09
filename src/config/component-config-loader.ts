@@ -7,7 +7,7 @@
 
 import { promises as fs } from 'fs';
 import { dirname, join } from 'path';
-import { parse as parseToml } from 'toml';
+import { parse as parseToml } from '@iarna/toml';
 import { z } from 'zod';
 import type { ComponentMultilineConfig } from './schema.js';
 
