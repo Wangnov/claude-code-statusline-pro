@@ -800,11 +800,13 @@ export class ConfigLoader {
    * 创建默认配置文件 | Create default config file
    * 支持智能终端检测和主题选择 | Support intelligent terminal detection and theme selection
    * 使用新格式文件名 config.toml | Use new format filename config.toml
+   * 保留原始注释和格式 | Preserve original comments and formatting
    */
   async createDefaultConfig(
     configPath?: string,
     theme?: string,
-    capabilities?: TerminalCapabilities
+    capabilities?: TerminalCapabilities,
+    copyComponents?: boolean
   ): Promise<void> {
     try {
       // 从外部模板文件读取配置 | Read config from external template file
@@ -833,42 +835,45 @@ debug = false
 order = ["project", "model", "branch", "tokens", "usage", "status"]`;
       }
 
-      // 解析TOML并应用自定义选项 | Parse TOML and apply custom options
-      const parsedConfig = TOML.parse(configContent);
+      // 使用文本替换而不是解析重组，以保留注释和格式 | Use text replacement instead of parse-rebuild to preserve comments and formatting
 
       // 应用主题设置 | Apply theme setting
       if (theme) {
-        (parsedConfig as Record<string, unknown>).theme = theme;
+        configContent = configContent.replace(/^theme = "[^"]*"$/m, `theme = "${theme}"`);
       }
 
       // 智能语言检测 | Intelligent language detection
-      // 只有当配置中没有语言设置时，才使用系统检测
-      if (!(parsedConfig as Record<string, unknown>).language) {
-        const detectedLanguage = detectSystemLanguage();
-        (parsedConfig as Record<string, unknown>).language = detectedLanguage;
+      const detectedLanguage = detectSystemLanguage();
+      if (!configContent.includes('language = ')) {
+        // 如果没有语言设置，在theme行后添加
+        configContent = configContent.replace(
+          /^theme = "[^"]*"$/m,
+          `$&\nlanguage = "${detectedLanguage}"`
+        );
       }
 
       // 根据终端能力调整配置 | Adjust config based on terminal capabilities
       if (capabilities) {
-        const styleSection =
-          ((parsedConfig as Record<string, unknown>).style as Record<string, unknown>) || {};
-
         // 根据终端能力设置显示选项 | Set display options based on terminal capabilities
         if (typeof capabilities.colors === 'boolean') {
-          styleSection.enable_colors = capabilities.colors;
+          configContent = configContent.replace(
+            /^enable_colors = .+$/m,
+            `enable_colors = ${capabilities.colors}`
+          );
         }
         if (typeof capabilities.emoji === 'boolean') {
-          styleSection.enable_emoji = capabilities.emoji;
+          configContent = configContent.replace(
+            /^enable_emoji = .+$/m,
+            `enable_emoji = ${capabilities.emoji}`
+          );
         }
         if (typeof capabilities.nerdFont === 'boolean') {
-          styleSection.enable_nerd_font = capabilities.nerdFont;
+          configContent = configContent.replace(
+            /^enable_nerd_font = .+$/m,
+            `enable_nerd_font = ${capabilities.nerdFont}`
+          );
         }
-
-        (parsedConfig as Record<string, unknown>).style = styleSection;
       }
-
-      // 重新生成TOML内容 | Regenerate TOML content
-      configContent = TOML.stringify(parsedConfig as TOML.JsonMap);
 
       // 写入配置文件 | Write config file
       let targetPath: string;
@@ -878,130 +883,161 @@ order = ["project", "model", "branch", "tokens", "usage", "status"]`;
         targetPath = path.join(process.cwd(), 'config.toml');
       }
 
-      await fs.promises.writeFile(targetPath, configContent, 'utf8');
+      await fs.promises.writeFile(targetPath, configContent, 'utf-8');
 
-      this.configPath = targetPath;
-      // 清除缓存以强制重新加载 | Clear cache to force reload
-      this.cachedConfig = null;
+      // 复制组件配置文件 | Copy component config files
+      if (copyComponents) {
+        await this.copyComponentConfigs(path.dirname(targetPath));
+      }
     } catch (error) {
-      console.error('Failed to create default config from template, using fallback:', error);
+      throw new ConfigSecurityError(
+        `Failed to create default config: ${error instanceof Error ? error.message : String(error)}`,
+        configPath || 'unknown'
+      );
+    }
+  }
 
-      // 最终回退：创建基础配置 | Final fallback: create basic config
-      // 只有在没有其他语言配置时才使用系统检测
-      const fallbackConfig = ConfigSchema.parse({
-        preset: 'PMBTS',
-        theme: theme || 'classic',
-        // 让Schema使用默认值，不强制覆盖
-      });
-      let targetPath: string;
-      if (configPath) {
-        targetPath = this.validateConfigPath(configPath);
-      } else {
-        targetPath = path.join(process.cwd(), 'config.toml');
+  /**
+   * 复制组件配置文件 | Copy component config files
+   * 智能处理文件重命名、冲突检查和选择性复制
+   */
+  private async copyComponentConfigs(targetDir: string): Promise<void> {
+    try {
+      // 查找项目根目录中的 configs/components 目录
+      const projectRoot = this.findProjectRoot();
+      const componentsDir = path.join(projectRoot, 'configs', 'components');
+
+      if (!fs.existsSync(componentsDir)) {
+        console.warn(`Components config directory not found: ${componentsDir}`);
+        return;
       }
 
-      const tomlContent = TOML.stringify(fallbackConfig as TOML.JsonMap);
-      await fs.promises.writeFile(targetPath, tomlContent, 'utf8');
+      // 创建目标 components 目录
+      const targetComponentsDir = path.join(targetDir, 'components');
+      if (!fs.existsSync(targetComponentsDir)) {
+        await fs.promises.mkdir(targetComponentsDir, { recursive: true });
+      }
 
-      this.configPath = targetPath;
-      this.cachedConfig = fallbackConfig;
+      // 读取所有模板文件
+      const files = await fs.promises.readdir(componentsDir);
+      const templateFiles = files.filter((file) => file.endsWith('.template.toml'));
+
+      if (templateFiles.length === 0) {
+        console.warn('No template files found in components directory');
+        return;
+      }
+
+      let copiedCount = 0;
+      let skippedCount = 0;
+
+      for (const templateFile of templateFiles) {
+        // 生成目标文件名：去掉 .template 后缀
+        // 例如：usage.template.toml -> usage.toml
+        const targetFileName = templateFile.replace('.template.toml', '.toml');
+
+        const sourcePath = path.join(componentsDir, templateFile);
+        const targetPath = path.join(targetComponentsDir, targetFileName);
+
+        // 检查目标文件是否已存在
+        if (fs.existsSync(targetPath)) {
+          console.log(`跳过已存在的组件配置: ${targetFileName}`);
+          skippedCount++;
+          continue;
+        }
+
+        // 复制并重命名文件
+        await fs.promises.copyFile(sourcePath, targetPath);
+        console.log(`已复制组件配置: ${templateFile} -> ${targetFileName}`);
+        copiedCount++;
+      }
+
+      // 显示复制统计
+      console.log(`组件配置复制完成: 复制 ${copiedCount} 个，跳过 ${skippedCount} 个`);
+    } catch (error) {
+      console.warn(
+        `Failed to copy component configs: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
   /**
-   * 保存配置到文件 | Save config to file
-   * 保存为新格式 config.toml | Save as new format config.toml
+   * 查找项目根目录 | Find project root directory
    */
-  async save(config: Config, configPath?: string): Promise<void> {
-    let targetPath: string;
-
-    if (configPath) {
-      targetPath = this.validateConfigPath(configPath);
-    } else if (this.configPath) {
-      targetPath = this.configPath;
-    } else {
-      targetPath = path.join(process.cwd(), 'config.toml');
+  private findProjectRoot(): string {
+    let currentDir = __dirname;
+    while (currentDir !== path.dirname(currentDir)) {
+      const packageJsonPath = path.join(currentDir, 'package.json');
+      if (fs.existsSync(packageJsonPath)) {
+        return currentDir;
+      }
+      currentDir = path.dirname(currentDir);
     }
-
-    const tomlContent = TOML.stringify(config as TOML.JsonMap);
-    await fs.promises.writeFile(targetPath, tomlContent, 'utf8');
-    this.cachedConfig = config;
-    this.configPath = targetPath;
-  }
-
-  /**
-   * 重置配置到默认值 | Reset configuration to defaults
-   * 包含智能语言检测 | Includes intelligent language detection
-   */
-  async resetToDefaults(configPath?: string): Promise<void> {
-    let targetPath: string | undefined;
-
-    if (configPath) {
-      targetPath = this.validateConfigPath(configPath);
-    }
-
-    // 使用Schema默认值，不强制设置语言
-    const defaultConfig = ConfigSchema.parse({});
-    await this.save(defaultConfig, targetPath);
-  }
-
-  /**
-   * 应用主题
-   */
-  async applyTheme(themeName: string, configPath?: string): Promise<void> {
-    let targetPath: string | undefined;
-
-    if (configPath) {
-      targetPath = this.validateConfigPath(configPath);
-    }
-
-    const currentConfig = await this.load(targetPath);
-
-    // 这里应该有主题配置逻辑，暂时简化处理
-    const themedConfig = {
-      ...currentConfig,
-      theme: themeName as 'classic' | 'powerline' | 'capsule',
-    };
-
-    await this.save(themedConfig, targetPath);
+    // 如果找不到，回退到当前工作目录
+    return process.cwd();
   }
 
   /**
    * 获取默认配置 | Get default configuration
-   * 包含智能语言检测 | Includes intelligent language detection
+   * 从模板文件读取默认配置
    */
   getDefaultConfig(): Config {
     try {
-      // 从外部模板文件读取配置 | Read config from external template file
       const templatePath = getTemplateFilePath();
 
       if (fs.existsSync(templatePath)) {
         const configContent = fs.readFileSync(templatePath, 'utf8');
         const parsedConfig = TOML.parse(configContent);
-
-        // 清理Symbol属性
         const cleanedConfig = this.cleanSymbols(parsedConfig);
-
-        // 保持默认配置模板中的语言设置，不强制覆盖
-        // 如果模板中没有语言设置，Schema会使用默认值'zh'
         return ConfigSchema.parse(cleanedConfig);
-      } else {
-        console.warn(`Template file not found: ${templatePath}, using schema defaults`);
       }
     } catch (error) {
       console.warn(
         `Failed to read template file: ${error instanceof Error ? error.message : String(error)}`
       );
-      console.warn('Using schema defaults...');
     }
 
-    // 模板文件不存在或读取失败时的fallback - 使用Schema默认值
+    // 回退到基本配置
     return ConfigSchema.parse({
       preset: 'PMBTUS',
       theme: 'classic',
       language: 'zh',
       debug: false,
     });
+  }
+
+  /**
+   * 保存配置到文件 | Save config to file
+   */
+  async save(config: Config, configPath?: string): Promise<void> {
+    const targetPath = configPath || this.configPath || path.join(process.cwd(), 'config.toml');
+    const content = TOML.stringify(config as TOML.JsonMap);
+    await fs.promises.writeFile(targetPath, content, 'utf8');
+    this.configPath = targetPath;
+    this.cachedConfig = null; // 清除缓存
+  }
+
+  /**
+   * 重置配置到默认值 | Reset config to defaults
+   */
+  async resetToDefaults(configPath?: string): Promise<void> {
+    const defaultConfig = this.getDefaultConfig();
+    await this.save(defaultConfig, configPath);
+    this.clearCache();
+  }
+
+  /**
+   * 应用主题 | Apply theme
+   */
+  async applyTheme(themeName: string): Promise<void> {
+    const currentConfig = await this.loadConfig();
+    // 类型安全的主题设置
+    if (themeName === 'classic' || themeName === 'powerline' || themeName === 'capsule') {
+      currentConfig.theme = themeName;
+    } else {
+      console.warn(`Unknown theme: ${themeName}, using classic`);
+      currentConfig.theme = 'classic';
+    }
+    await this.save(currentConfig);
   }
 }
 

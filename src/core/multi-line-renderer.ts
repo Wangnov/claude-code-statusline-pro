@@ -1,17 +1,22 @@
 /**
  * 多行渲染器 | Multi-line renderer
  * 协调单行preset系统和多行小组件系统 | Coordinates single-line preset system and multi-line widget system
- * 
+ *
  * 核心职责：
  * 1. 保持row0的preset系统不变
  * 2. 渲染row1+的小组件系统
  * 3. 组装最终的多行输出
  */
 
-import { GridSystem } from './grid-system.js';
-import { ComponentConfigLoader } from '../config/component-config-loader.js';
 import { WidgetFactory } from '../components/widgets/widget-factory.js';
-import type { Config, RenderContext, MultilineConfig, ComponentMultilineConfig } from '../config/schema.js';
+import { ComponentConfigLoader } from '../config/component-config-loader.js';
+import type {
+  ComponentMultilineConfig,
+  Config,
+  MultilineConfig,
+  RenderContext,
+} from '../config/schema.js';
+import { GridSystem } from './grid-system.js';
 
 /**
  * 多行渲染结果 | Multi-line render result
@@ -39,14 +44,14 @@ export class MultiLineRenderer {
   private multilineConfig: MultilineConfig;
   private gridSystem: GridSystem;
   private configBaseDir?: string;
-  
+
   constructor(config: Config, configBaseDir?: string) {
     this.config = config;
     this.multilineConfig = config.multiline || { enabled: false, max_rows: 5, rows: {} };
     this.gridSystem = new GridSystem(this.multilineConfig);
-    this.configBaseDir = configBaseDir;
+    this.configBaseDir = configBaseDir ?? '';
   }
-  
+
   /**
    * 渲染多行内容 | Render multi-line content
    */
@@ -58,28 +63,29 @@ export class MultiLineRenderer {
         lines: [],
       };
     }
-    
+
     try {
       // 获取启用的组件列表 | Get enabled components list
-      const enabledComponents = this.config.components?.order?.filter(componentName => {
-        const componentConfig = (this.config.components as any)?.[componentName];
-        return componentConfig?.enabled !== false; // 默认启用，除非明确设置为false
-      }) || [];
-      
+      const enabledComponents =
+        this.config.components?.order?.filter((componentName) => {
+          const componentConfig = (this.config.components as any)?.[componentName];
+          return componentConfig?.enabled !== false; // 默认启用，除非明确设置为false
+        }) || [];
+
       // 只加载启用的组件配置 | Load only enabled component configs
       const componentConfigs = await ComponentConfigLoader.loadAllComponentConfigs(
         this.configBaseDir,
         enabledComponents
       );
-      
+
       // 统计信息 | Statistics
       let totalWidgets = 0;
       let renderedWidgets = 0;
       let failedWidgets = 0;
-      
+
       // 清空网格 | Clear grid
       this.gridSystem.clear();
-      
+
       // 渲染所有小组件到网格 | Render all widgets to grid
       for (const [componentName, componentConfig] of componentConfigs) {
         const widgetResults = await this.renderComponentWidgets(
@@ -87,23 +93,23 @@ export class MultiLineRenderer {
           componentConfig,
           context
         );
-        
+
         totalWidgets += widgetResults.total;
         renderedWidgets += widgetResults.rendered;
         failedWidgets += widgetResults.failed;
       }
-      
+
       // 渲染网格为字符串 | Render grid to strings
       const gridResult = this.gridSystem.render();
-      
+
       if (!gridResult.success) {
         return {
           success: false,
           lines: [],
-          error: gridResult.error,
+          error: gridResult.error || 'Grid render failed',
         };
       }
-      
+
       return {
         success: true,
         lines: gridResult.lines,
@@ -121,7 +127,7 @@ export class MultiLineRenderer {
       };
     }
   }
-  
+
   /**
    * 渲染组件的小组件 | Render component widgets
    */
@@ -133,17 +139,17 @@ export class MultiLineRenderer {
     let total = 0;
     let rendered = 0;
     let failed = 0;
-    
+
     for (const [widgetName, widgetConfig] of Object.entries(componentConfig.widgets)) {
       total++;
-      
+
       try {
         // 创建小组件 | Create widget
         const widget = WidgetFactory.createWidget(widgetConfig, context.capabilities);
-        
+
         // 渲染小组件 | Render widget
         const result = await widget.render(context);
-        
+
         if (result.success && result.content) {
           // 添加到网格 | Add to grid
           this.gridSystem.setCell(widgetConfig.row, widgetConfig.col, result.content);
@@ -157,10 +163,10 @@ export class MultiLineRenderer {
         failed++;
       }
     }
-    
+
     return { total, rendered, failed };
   }
-  
+
   /**
    * 更新配置 | Update configuration
    */
@@ -169,14 +175,14 @@ export class MultiLineRenderer {
     this.multilineConfig = config.multiline || { enabled: false, max_rows: 5, rows: {} };
     this.gridSystem = new GridSystem(this.multilineConfig);
   }
-  
+
   /**
    * 获取网格统计信息 | Get grid statistics
    */
   getGridStats() {
     return this.gridSystem.getStats();
   }
-  
+
   /**
    * 检查多行是否启用 | Check if multiline is enabled
    */

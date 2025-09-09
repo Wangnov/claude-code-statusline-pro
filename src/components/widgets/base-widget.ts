@@ -1,12 +1,12 @@
 /**
  * 小组件基类 | Widget base class
  * 提供统一的小组件接口和通用功能 | Provides unified widget interface and common functionality
- * 
+ *
  * 遵循Linus精神：接口清晰、职责单一、错误处理明确
  */
 
+import type { RenderContext, WidgetConfig } from '../../config/schema.js';
 import type { TerminalCapabilities } from '../../terminal/detector.js';
-import type { WidgetConfig, RenderContext } from '../../config/schema.js';
 
 /**
  * 小组件渲染结果 | Widget render result
@@ -26,12 +26,12 @@ export interface WidgetRenderResult {
 export abstract class BaseWidget {
   protected config: WidgetConfig;
   protected capabilities: TerminalCapabilities;
-  
+
   constructor(config: WidgetConfig, capabilities: TerminalCapabilities) {
     this.config = config;
     this.capabilities = capabilities;
   }
-  
+
   /**
    * 渲染小组件 | Render widget
    */
@@ -44,7 +44,7 @@ export abstract class BaseWidget {
           content: null,
         };
       }
-      
+
       // 优先级1：检查 force 字段
       if (this.config.force === true) {
         // 强制启用，继续执行
@@ -64,21 +64,21 @@ export abstract class BaseWidget {
           };
         }
       }
-      
+
       // 渲染内容 | Render content
       const content = await this.renderContent(context);
-      
+
       // 组合图标和内容 | Combine icon and content
       if (content) {
         const icon = this.selectIcon();
         const final = icon ? `${icon} ${content}` : content;
-        
+
         return {
           success: true,
           content: final,
         };
       }
-      
+
       return {
         success: true,
         content: null,
@@ -91,12 +91,12 @@ export abstract class BaseWidget {
       };
     }
   }
-  
+
   /**
    * 渲染内容 - 子类必须实现 | Render content - subclasses must implement
    */
   protected abstract renderContent(context?: any): Promise<string | null>;
-  
+
   /**
    * 三级图标选择逻辑 | Three-level icon selection logic
    * 优先级：nerd_icon → emoji_icon → text_icon
@@ -106,16 +106,16 @@ export abstract class BaseWidget {
     if (this.capabilities.nerdFont && this.config.nerd_icon) {
       return this.config.nerd_icon;
     }
-    
+
     // 2. 如果支持emoji且有emoji_icon
     if (this.capabilities.emoji && this.config.emoji_icon) {
       return this.config.emoji_icon;
     }
-    
+
     // 3. 回退到文本图标
     return this.config.text_icon || '';
   }
-  
+
   /**
    * f-string模板渲染 | f-string template rendering
    */
@@ -123,7 +123,7 @@ export abstract class BaseWidget {
     if (!template || !data) {
       return template || '';
     }
-    
+
     try {
       return template.replace(/{([^}]+)}/g, (match, expr) => {
         return this.evaluateExpression(expr.trim(), data);
@@ -133,7 +133,7 @@ export abstract class BaseWidget {
       return template;
     }
   }
-  
+
   /**
    * 求值表达式 | Evaluate expression
    */
@@ -142,17 +142,20 @@ export abstract class BaseWidget {
       // 支持格式化：{value:.2f}
       const formatMatch = expr.match(/^(.+):(.+)$/);
       if (formatMatch) {
-        const [, mathExpr, format] = formatMatch;
-        const value = this.evaluateMathExpression(mathExpr, data);
-        return this.applyFormat(value, format);
+        const mathExpr = formatMatch[1];
+        const format = formatMatch[2];
+        if (mathExpr && format) {
+          const value = this.evaluateMathExpression(mathExpr, data);
+          return this.applyFormat(value, format);
+        }
       }
-      
+
       // 尝试数学表达式
       if (this.isMathExpression(expr)) {
         const value = this.evaluateMathExpression(expr, data);
         return String(value ?? '');
       }
-      
+
       // 普通路径：{field} 或 {nested.field}
       const value = this.getValueFromPath(expr, data);
       return String(value ?? '');
@@ -161,7 +164,7 @@ export abstract class BaseWidget {
       return `{${expr}}`;
     }
   }
-  
+
   /**
    * 判断是否为数学表达式 | Check if it's a math expression
    */
@@ -169,7 +172,7 @@ export abstract class BaseWidget {
     // 包含数学运算符
     return /[+\-*/()\s]/.test(expr) && !/^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(expr.trim());
   }
-  
+
   /**
    * 求值数学表达式 | Evaluate math expression
    */
@@ -184,7 +187,7 @@ export abstract class BaseWidget {
         // 如果不是数字，返回0避免错误
         return '0';
       });
-      
+
       // 简单的数学表达式求值（只支持基本运算）
       // 出于安全考虑，不使用eval，进行简单解析
       return this.safeEvaluateMath(processedExpr);
@@ -193,19 +196,19 @@ export abstract class BaseWidget {
       return undefined;
     }
   }
-  
+
   /**
    * 安全的数学表达式求值 | Safe math expression evaluation
    */
   private safeEvaluateMath(expr: string): number | undefined {
     // 移除空格
     const cleanExpr = expr.replace(/\s/g, '');
-    
+
     // 只允许数字、小数点、基本运算符和括号
     if (!/^[0-9+\-*/.()]+$/.test(cleanExpr)) {
       return undefined;
     }
-    
+
     try {
       // 使用Function构造函数而非eval来安全求值
       const result = new Function('return ' + cleanExpr)();
@@ -214,21 +217,21 @@ export abstract class BaseWidget {
       return undefined;
     }
   }
-  
+
   /**
    * 从路径获取值 | Get value from path
    */
   private getValueFromPath(path: string, data: any): any {
     if (!path || !data) return undefined;
-    
+
     const keys = path.split('.');
     let current = data;
-    
+
     for (const key of keys) {
       if (current == null) {
         return undefined;
       }
-      
+
       // 如果当前值是字符串，尝试解析为JSON
       if (typeof current === 'string' && current.trim().startsWith('{')) {
         try {
@@ -237,39 +240,39 @@ export abstract class BaseWidget {
           // 解析失败，继续当作普通对象处理
         }
       }
-      
+
       if (typeof current !== 'object') {
         return undefined;
       }
-      
+
       current = current[key];
     }
-    
+
     return current;
   }
-  
+
   /**
    * 应用格式化 | Apply formatting
    */
   private applyFormat(value: any, format: string): string {
     if (value == null) return '';
-    
+
     try {
       // 数值格式化：.2f, .0f 等
       if (format.endsWith('f')) {
         const precisionMatch = format.match(/\.(\d+)f$/);
-        if (precisionMatch) {
+        if (precisionMatch && precisionMatch[1]) {
           const precision = parseInt(precisionMatch[1], 10);
           return Number(value).toFixed(precision);
         }
         return Number(value).toFixed(2);
       }
-      
+
       // 整数格式化：d
       if (format === 'd') {
         return Math.floor(Number(value)).toString();
       }
-      
+
       // 默认转字符串
       return String(value);
     } catch (error) {
@@ -277,47 +280,47 @@ export abstract class BaseWidget {
       return String(value);
     }
   }
-  
+
   /**
    * 评估条件 | Evaluate condition
    */
   private evaluateCondition(condition: string | undefined, data: any): boolean {
     if (!condition) return true;
-    
+
     try {
       // 简单条件支持：field > 0, field != null 等
       const trimmed = condition.trim();
-      
+
       // 大于条件：field > value
       const gtMatch = trimmed.match(/^(\w+(?:\.\w+)*)\s*>\s*(\d+(?:\.\d+)?)$/);
-      if (gtMatch) {
+      if (gtMatch && gtMatch[1] && gtMatch[2]) {
         const fieldValue = this.getValueFromPath(gtMatch[1], data);
         const compareValue = parseFloat(gtMatch[2]);
         return Number(fieldValue) > compareValue;
       }
-      
+
       // 小于条件：field < value
       const ltMatch = trimmed.match(/^(\w+(?:\.\w+)*)\s*<\s*(\d+(?:\.\d+)?)$/);
-      if (ltMatch) {
+      if (ltMatch && ltMatch[1] && ltMatch[2]) {
         const fieldValue = this.getValueFromPath(ltMatch[1], data);
         const compareValue = parseFloat(ltMatch[2]);
         return Number(fieldValue) < compareValue;
       }
-      
+
       // 等于条件：field == value 或 field != value
       const eqMatch = trimmed.match(/^(\w+(?:\.\w+)*)\s*(==|!=)\s*(.+)$/);
-      if (eqMatch) {
+      if (eqMatch && eqMatch[1] && eqMatch[2] && eqMatch[3] !== undefined) {
         const fieldValue = this.getValueFromPath(eqMatch[1], data);
         const operator = eqMatch[2];
         const compareValue = eqMatch[3].replace(/^["']|["']$/g, ''); // 去除引号
-        
+
         if (operator === '==') {
           return String(fieldValue) === compareValue;
         } else {
           return String(fieldValue) !== compareValue;
         }
       }
-      
+
       // 简单存在性检查：field
       const fieldValue = this.getValueFromPath(trimmed, data);
       return Boolean(fieldValue);
@@ -326,7 +329,7 @@ export abstract class BaseWidget {
       return true; // 默认显示
     }
   }
-  
+
   /**
    * 评估检测规则 | Evaluate detection rules
    */
@@ -334,22 +337,22 @@ export abstract class BaseWidget {
     if (!detection || !detection.env) {
       return true; // 如果没有检测配置，默认启用
     }
-    
+
     const envValue = process.env[detection.env];
     if (!envValue) {
       return false; // 环境变量不存在，不启用
     }
-    
+
     // 精确匹配
     if (detection.equals) {
       return envValue === detection.equals;
     }
-    
+
     // 包含匹配
     if (detection.contains) {
       return envValue.includes(detection.contains);
     }
-    
+
     // 正则表达式匹配
     if (detection.pattern) {
       try {
@@ -360,7 +363,7 @@ export abstract class BaseWidget {
         return false;
       }
     }
-    
+
     // 如果没有指定匹配方式，默认启用
     return true;
   }
