@@ -105,7 +105,6 @@ data_path = "$.usage[0]"                       # 提取数组第一个元素
 # 适用于：https://co.yes.vg 类型的URL（不包含"/team"后缀）
 # 检测方式：精确匹配URL
 # 本示例提供3个小组件：YesCode 名称小组件，YesCode 余额小组件，YesCode 最近请求小组件
-# 目前情况下，YesCode的非Team计划查询接口鉴权需要JWT Token，该Token可通过浏览器检查模式检查网络请求获得。后续会更新为只需要API_KEY
 
 # 小组件0：YesCode 名称
 [widgets.yescode_name]
@@ -142,11 +141,10 @@ base_url = "${ANTHROPIC_BASE_URL}"
 endpoint = "/api/v1/user/balance"
 method = "GET"
 timeout = 5000
-data_path = "$"  # 获取整个响应对象
+data_path = "$"                    # 获取整个响应对象
 
 [widgets.yescode_balance.api.headers]
 "X-API-Key" = "${ANTHROPIC_AUTH_TOKEN}"
-"Authorization" = "Bearer ${YES_JWT_TOKEN}" # 后续随着YesCode接口更新会移除
 
 # 小组件2：YesCode 最近请求
 [widgets.yescode_last_request]
@@ -169,11 +167,11 @@ base_url = "${ANTHROPIC_BASE_URL}"
 endpoint = "/api/v1/user/usage?limit=1"
 method = "GET"
 timeout = 5000
-data_path = "$.usage[0]"                       # 提取数组第一个元素
+data_path = "$.usage[0]"                # 提取数组第一个元素
 
 [widgets.yescode_last_request.api.headers]
 "X-API-Key" = "${ANTHROPIC_AUTH_TOKEN}"
-"Authorization" = "Bearer ${YES_JWT_TOKEN}" # 后续随着YesCode接口更新会移除
+
 # ====================================================================
 # DuckCoding / InstCopilot 配置（New-API架构中转站）
 # ====================================================================
