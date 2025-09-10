@@ -65,11 +65,11 @@ env = "ANTHROPIC_BASE_URL"
 pattern = ".*yes\\.vg/team$"
 
 [widgets.yescode_team_balance.api]
-base_url = "${ANTHROPIC_BASE_URL}" # API基础URL，使用环境变量
-endpoint = "/stats/spending"       # API端点路径
-method = "GET"                     # HTTP方法
-timeout = 5000                     # 请求超时时间（毫秒）
-data_path = "$.daily_remaining"    # JSONPath表达式，提取响应数据中的字段
+base_url = "https://co.yes.vg"           # API基础URL，不能使用环境变量，endpoint不一致
+endpoint = "/api/v1/team/stats/spending" # API端点路径
+method = "GET"                           # HTTP方法
+timeout = 5000                           # 请求超时时间（毫秒）
+data_path = "$.daily_remaining"          # JSONPath表达式，提取响应数据中的字段
 
 [widgets.yescode_team_balance.api.headers]
 "X-API-Key" = "${ANTHROPIC_AUTH_TOKEN}" # API认证头，使用环境变量
@@ -90,11 +90,11 @@ env = "ANTHROPIC_BASE_URL"
 pattern = ".*yes\\.vg/team$"
 
 [widgets.yescode_team_last_request.api]
-base_url = "${ANTHROPIC_BASE_URL}"
-endpoint = "/stats/usage?period=today&limit=1"
+base_url = "https://co.yes.vg"
+endpoint = "/api/v1/team/stats/usage?period=today&limit=1"
 method = "GET"
 timeout = 5000
-data_path = "$.usage[0]"                       # 提取数组第一个元素
+data_path = "$.usage[0]"                                   # 提取数组第一个元素
 
 [widgets.yescode_team_last_request.api.headers]
 "X-API-Key" = "${ANTHROPIC_AUTH_TOKEN}"
