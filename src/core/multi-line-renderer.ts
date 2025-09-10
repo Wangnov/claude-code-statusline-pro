@@ -8,8 +8,8 @@
  * 3. 组装最终的多行输出
  */
 
-import { WidgetFactory } from '../components/widgets/widget-factory.js';
-import { ComponentConfigLoader } from '../config/component-config-loader.js';
+import { createWidget } from '../components/widgets/widget-factory.js';
+import { loadAllComponentConfigs } from '../config/component-config-loader.js';
 import type {
   ComponentMultilineConfig,
   Config,
@@ -73,10 +73,7 @@ export class MultiLineRenderer {
         }) || [];
 
       // 只加载启用的组件配置 | Load only enabled component configs
-      const componentConfigs = await ComponentConfigLoader.loadAllComponentConfigs(
-        this.configBaseDir,
-        enabledComponents
-      );
+      const componentConfigs = await loadAllComponentConfigs(this.configBaseDir, enabledComponents);
 
       // 统计信息 | Statistics
       let totalWidgets = 0;
@@ -145,7 +142,7 @@ export class MultiLineRenderer {
 
       try {
         // 创建小组件 | Create widget
-        const widget = WidgetFactory.createWidget(widgetConfig, context.capabilities);
+        const widget = createWidget(widgetConfig, context.capabilities);
 
         // 渲染小组件 | Render widget
         const result = await widget.render(context);

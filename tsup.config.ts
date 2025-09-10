@@ -32,15 +32,16 @@ export default defineConfig([
     bundle: true,
     minify: true,
     treeshake: true,
-    // 只打包必需的依赖
+    esbuildOptions(options) {
+      options.legalComments = 'none';
+    },
+    // 只打包必需的依赖（移除有eval警告的包）
     noExternal: [
       '@inquirer/prompts',
       '@inquirer/checkbox',
       '@inquirer/confirm',
       '@inquirer/input',
       '@inquirer/select',
-      '@iarna/toml',
-      'commander',
       'supports-color',
       'zod',
     ],

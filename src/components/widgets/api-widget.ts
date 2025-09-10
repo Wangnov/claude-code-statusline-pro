@@ -219,7 +219,7 @@ export class ApiWidget extends BaseWidget {
       // 处理数组索引：[0] 或 0]
       if (segment.endsWith(']')) {
         const index = parseInt(segment.replace(']', ''), 10);
-        if (isNaN(index)) {
+        if (Number.isNaN(index)) {
           throw new Error(`无效的数组索引: ${segment}`);
         }
 

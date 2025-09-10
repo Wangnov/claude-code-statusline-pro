@@ -5,8 +5,8 @@
  * 遵循KISS原则：单一职责、错误处理清晰、性能考虑
  */
 
-import { promises as fs } from 'fs';
-import { dirname, join } from 'path';
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
 import { parse as parseToml } from '@iarna/toml';
 import { z } from 'zod';
 import type { ComponentMultilineConfig } from './schema.js';
@@ -80,250 +80,241 @@ interface ComponentConfigCacheItem {
   loadTime: number;
 }
 
+// 模块级缓存配置 | Module-level cache configuration
+const CACHE_TTL = 5000; // 5秒缓存 | 5-second cache
+const configCache = new Map<string, ComponentConfigCacheItem>();
+
 /**
- * 组件配置加载器 | Component config loader
+ * 加载指定组件的配置 | Load config for specific component
  */
-export class ComponentConfigLoader {
-  private static readonly CACHE_TTL = 5000; // 5秒缓存 | 5-second cache
-  private static cache = new Map<string, ComponentConfigCacheItem>();
+export async function loadComponentConfig(
+  componentName: string,
+  baseDir?: string
+): Promise<ComponentConfigLoadResult> {
+  try {
+    const configDir = resolveComponentsDir(baseDir);
+    const configPath = join(configDir, `${componentName.toLowerCase()}.toml`);
 
-  /**
-   * 加载指定组件的配置 | Load config for specific component
-   */
-  static async loadComponentConfig(
-    componentName: string,
-    baseDir?: string
-  ): Promise<ComponentConfigLoadResult> {
-    try {
-      const configDir = ComponentConfigLoader.resolveComponentsDir(baseDir);
-      const configPath = join(configDir, `${componentName.toLowerCase()}.toml`);
-
-      // 检查缓存 | Check cache
-      const cached = ComponentConfigLoader.getFromCache(configPath);
-      if (cached) {
-        return {
-          success: true,
-          config: cached,
-          filePath: configPath,
-        };
-      }
-
-      // 检查文件是否存在 | Check if file exists
-      const exists = await ComponentConfigLoader.fileExists(configPath);
-      if (!exists) {
-        return {
-          success: false,
-          error: `配置文件不存在: ${configPath}`,
-          filePath: configPath,
-        };
-      }
-
-      // 读取和解析配置 | Read and parse config
-      const config = await ComponentConfigLoader.parseConfigFile(configPath);
-
-      // 缓存结果 | Cache result
-      await ComponentConfigLoader.setToCache(configPath, config);
-
+    // 检查缓存 | Check cache
+    const cached = getFromCache(configPath);
+    if (cached) {
       return {
         success: true,
-        config,
+        config: cached,
         filePath: configPath,
       };
-    } catch (error) {
+    }
+
+    // 检查文件是否存在 | Check if file exists
+    const exists = await fileExists(configPath);
+    if (!exists) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: `配置文件不存在: ${configPath}`,
+        filePath: configPath,
       };
     }
+
+    // 读取和解析配置 | Read and parse config
+    const config = await parseConfigFile(configPath);
+
+    // 缓存结果 | Cache result
+    await setToCache(configPath, config);
+
+    return {
+      success: true,
+      config,
+      filePath: configPath,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
+}
 
-  /**
-   * 加载所有组件配置 | Load all component configs
-   */
-  static async loadAllComponentConfigs(
-    baseDir?: string,
-    enabledComponents?: string[]
-  ): Promise<Map<string, ComponentMultilineConfig>> {
-    const configDir = ComponentConfigLoader.resolveComponentsDir(baseDir);
-    const configs = new Map<string, ComponentMultilineConfig>();
+/**
+ * 加载所有组件配置 | Load all component configs
+ */
+export async function loadAllComponentConfigs(
+  baseDir?: string,
+  enabledComponents?: string[]
+): Promise<Map<string, ComponentMultilineConfig>> {
+  const configDir = resolveComponentsDir(baseDir);
+  const configs = new Map<string, ComponentMultilineConfig>();
 
-    try {
-      let componentNames: string[];
+  try {
+    let componentNames: string[];
 
-      if (enabledComponents && enabledComponents.length > 0) {
-        // 只加载启用的组件配置 | Only load enabled component configs
-        componentNames = enabledComponents;
-      } else {
-        // 回退到扫描所有文件的旧行为 | Fallback to old behavior of scanning all files
-        const files = await ComponentConfigLoader.scanComponentFiles(configDir);
-        componentNames = files.map((fileName) => fileName.replace('.toml', ''));
+    if (enabledComponents && enabledComponents.length > 0) {
+      // 只加载启用的组件配置 | Only load enabled component configs
+      componentNames = enabledComponents;
+    } else {
+      // 回退到扫描所有文件的旧行为 | Fallback to old behavior of scanning all files
+      const files = await scanComponentFiles(configDir);
+      componentNames = files.map((fileName) => fileName.replace('.toml', ''));
+    }
+
+    // 并行加载指定的配置 | Load specified configs in parallel
+    const loadPromises = componentNames.map(async (componentName) => {
+      const result = await loadComponentConfig(componentName, baseDir);
+
+      if (result.success && result.config) {
+        configs.set(componentName, result.config);
+      } else if (result.error) {
+        console.warn(`加载组件配置失败: ${componentName} - ${result.error}`);
       }
+    });
 
-      // 并行加载指定的配置 | Load specified configs in parallel
-      const loadPromises = componentNames.map(async (componentName) => {
-        const result = await ComponentConfigLoader.loadComponentConfig(componentName, baseDir);
+    await Promise.all(loadPromises);
+  } catch (error) {
+    console.error('扫描组件配置目录失败:', error);
+  }
 
-        if (result.success && result.config) {
-          configs.set(componentName, result.config);
-        } else if (result.error) {
-          console.warn(`加载组件配置失败: ${componentName} - ${result.error}`);
-        }
-      });
+  return configs;
+}
 
-      await Promise.all(loadPromises);
-    } catch (error) {
-      console.error('扫描组件配置目录失败:', error);
+/**
+ * 清除缓存 | Clear cache
+ */
+export function clearCache(): void {
+  configCache.clear();
+}
+
+/**
+ * 解析配置所在目录 | Resolve components directory
+ */
+function resolveComponentsDir(baseDir?: string): string {
+  if (baseDir) {
+    return join(baseDir, 'components');
+  }
+
+  // 默认使用当前工作目录下的components | Default to components in current working directory
+  return join(process.cwd(), 'components');
+}
+
+/**
+ * 检查文件是否存在 | Check if file exists
+ */
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await fs.access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 扫描组件配置文件 | Scan component config files
+ */
+async function scanComponentFiles(configDir: string): Promise<string[]> {
+  try {
+    const files = await fs.readdir(configDir);
+    return files.filter((file) => file.endsWith('.toml'));
+  } catch (error) {
+    // 目录不存在时返回空数组 | Return empty array if directory doesn't exist
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return [];
     }
-
-    return configs;
+    throw error;
   }
+}
 
-  /**
-   * 清除缓存 | Clear cache
-   */
-  static clearCache(): void {
-    ComponentConfigLoader.cache.clear();
-  }
+/**
+ * 解析配置文件 | Parse config file
+ */
+async function parseConfigFile(filePath: string): Promise<ComponentMultilineConfig> {
+  try {
+    // 读取文件内容 | Read file content
+    const content = await fs.readFile(filePath, 'utf-8');
 
-  /**
-   * 解析配置所在目录 | Resolve components directory
-   */
-  private static resolveComponentsDir(baseDir?: string): string {
-    if (baseDir) {
-      return join(baseDir, 'components');
+    // 解析TOML | Parse TOML
+    const rawConfig = parseToml(content);
+
+    // 环境变量替换 | Environment variable substitution
+    const processedConfig = processEnvironmentVariables(rawConfig);
+
+    // 验证配置格式 | Validate config format
+    const validatedConfig = ComponentMultilineConfigSchema.parse(processedConfig);
+
+    return validatedConfig;
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new Error(`配置格式错误: ${error.issues.map((e) => e.message).join(', ')}`);
     }
-
-    // 默认使用当前工作目录下的components | Default to components in current working directory
-    return join(process.cwd(), 'components');
+    throw new Error(`解析配置文件失败: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
 
-  /**
-   * 检查文件是否存在 | Check if file exists
-   */
-  private static async fileExists(path: string): Promise<boolean> {
-    try {
-      await fs.access(path);
-      return true;
-    } catch {
-      return false;
-    }
-  }
+/**
+ * 处理环境变量 | Process environment variables
+ */
+function processEnvironmentVariables(obj: any): any {
+  if (typeof obj === 'string') {
+    // 临时占位符，用于保护转义的美元符号
+    const DOLLAR_PLACEHOLDER = '\u0000DOLLAR\u0000';
 
-  /**
-   * 扫描组件配置文件 | Scan component config files
-   */
-  private static async scanComponentFiles(configDir: string): Promise<string[]> {
-    try {
-      const files = await fs.readdir(configDir);
-      return files.filter((file) => file.endsWith('.toml'));
-    } catch (error) {
-      // 目录不存在时返回空数组 | Return empty array if directory doesn't exist
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return [];
+    // 1. 先处理转义的 \$，将其替换为占位符
+    let result = obj.replace(/\\\$/g, DOLLAR_PLACEHOLDER);
+
+    // 2. 替换 ${VAR_NAME} 格式的环境变量
+    result = result.replace(/\$\{([^}]+)\}/g, (match, varName) => {
+      const value = process.env[varName];
+      if (value === undefined) {
+        console.warn(`环境变量未找到: ${varName}`);
+        return match; // 保持原始字符串
       }
-      throw error;
+      return value;
+    });
+
+    // 3. 将占位符替换回美元符号
+    result = result.replace(new RegExp(DOLLAR_PLACEHOLDER, 'g'), '$');
+
+    return result;
+  } else if (Array.isArray(obj)) {
+    return obj.map((item) => processEnvironmentVariables(item));
+  } else if (obj && typeof obj === 'object') {
+    const processed: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      processed[key] = processEnvironmentVariables(value);
     }
+    return processed;
+  }
+  return obj;
+}
+
+/**
+ * 从缓存获取 | Get from cache
+ */
+function getFromCache(filePath: string): ComponentMultilineConfig | null {
+  const item = configCache.get(filePath);
+  if (!item) return null;
+
+  // 检查缓存是否过期 | Check if cache is expired
+  const now = Date.now();
+  if (now - item.loadTime > CACHE_TTL) {
+    configCache.delete(filePath);
+    return null;
   }
 
-  /**
-   * 解析配置文件 | Parse config file
-   */
-  private static async parseConfigFile(filePath: string): Promise<ComponentMultilineConfig> {
-    try {
-      // 读取文件内容 | Read file content
-      const content = await fs.readFile(filePath, 'utf-8');
+  return item.config;
+}
 
-      // 解析TOML | Parse TOML
-      const rawConfig = parseToml(content);
-
-      // 环境变量替换 | Environment variable substitution
-      const processedConfig = ComponentConfigLoader.processEnvironmentVariables(rawConfig);
-
-      // 验证配置格式 | Validate config format
-      const validatedConfig = ComponentMultilineConfigSchema.parse(processedConfig);
-
-      return validatedConfig;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new Error(`配置格式错误: ${error.issues.map((e) => e.message).join(', ')}`);
-      }
-      throw new Error(
-        `解析配置文件失败: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  }
-
-  /**
-   * 处理环境变量 | Process environment variables
-   */
-  private static processEnvironmentVariables(obj: any): any {
-    if (typeof obj === 'string') {
-      // 临时占位符，用于保护转义的美元符号
-      const DOLLAR_PLACEHOLDER = '\u0000DOLLAR\u0000';
-
-      // 1. 先处理转义的 \$，将其替换为占位符
-      let result = obj.replace(/\\\$/g, DOLLAR_PLACEHOLDER);
-
-      // 2. 替换 ${VAR_NAME} 格式的环境变量
-      result = result.replace(/\$\{([^}]+)\}/g, (match, varName) => {
-        const value = process.env[varName];
-        if (value === undefined) {
-          console.warn(`环境变量未找到: ${varName}`);
-          return match; // 保持原始字符串
-        }
-        return value;
-      });
-
-      // 3. 将占位符替换回美元符号
-      result = result.replace(new RegExp(DOLLAR_PLACEHOLDER, 'g'), '$');
-
-      return result;
-    } else if (Array.isArray(obj)) {
-      return obj.map((item) => ComponentConfigLoader.processEnvironmentVariables(item));
-    } else if (obj && typeof obj === 'object') {
-      const processed: any = {};
-      for (const [key, value] of Object.entries(obj)) {
-        processed[key] = ComponentConfigLoader.processEnvironmentVariables(value);
-      }
-      return processed;
-    }
-    return obj;
-  }
-
-  /**
-   * 从缓存获取 | Get from cache
-   */
-  private static getFromCache(filePath: string): ComponentMultilineConfig | null {
-    const item = ComponentConfigLoader.cache.get(filePath);
-    if (!item) return null;
-
-    // 检查缓存是否过期 | Check if cache is expired
-    const now = Date.now();
-    if (now - item.loadTime > ComponentConfigLoader.CACHE_TTL) {
-      ComponentConfigLoader.cache.delete(filePath);
-      return null;
-    }
-
-    return item.config;
-  }
-
-  /**
-   * 设置到缓存 | Set to cache
-   */
-  private static async setToCache(
-    filePath: string,
-    config: ComponentMultilineConfig
-  ): Promise<void> {
-    try {
-      const stats = await fs.stat(filePath);
-      ComponentConfigLoader.cache.set(filePath, {
-        config,
-        mtime: stats.mtimeMs,
-        loadTime: Date.now(),
-      });
-    } catch (error) {
-      // 缓存失败不影响主流程 | Cache failure doesn't affect main flow
-      console.warn('缓存配置失败:', error);
-    }
+/**
+ * 设置到缓存 | Set to cache
+ */
+async function setToCache(filePath: string, config: ComponentMultilineConfig): Promise<void> {
+  try {
+    const stats = await fs.stat(filePath);
+    configCache.set(filePath, {
+      config,
+      mtime: stats.mtimeMs,
+      loadTime: Date.now(),
+    });
+  } catch (error) {
+    // 缓存失败不影响主流程 | Cache failure doesn't affect main flow
+    console.warn('缓存配置失败:', error);
   }
 }

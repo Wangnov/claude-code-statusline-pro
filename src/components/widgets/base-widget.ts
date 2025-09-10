@@ -5,7 +5,7 @@
  * 遵循Linus精神：接口清晰、职责单一、错误处理明确
  */
 
-import type { RenderContext, WidgetConfig } from '../../config/schema.js';
+import type { WidgetConfig } from '../../config/schema.js';
 import type { TerminalCapabilities } from '../../terminal/detector.js';
 
 /**
@@ -125,7 +125,7 @@ export abstract class BaseWidget {
     }
 
     try {
-      return template.replace(/{([^}]+)}/g, (match, expr) => {
+      return template.replace(/{([^}]+)}/g, (_match, expr) => {
         return this.evaluateExpression(expr.trim(), data);
       });
     } catch (error) {
@@ -210,10 +210,73 @@ export abstract class BaseWidget {
     }
 
     try {
-      // 使用Function构造函数而非eval来安全求值
-      const result = new Function('return ' + cleanExpr)();
-      return typeof result === 'number' && !isNaN(result) ? result : undefined;
-    } catch (error) {
+      // 使用安全的表达式解析器替代 Function 构造函数
+      return this.parseArithmeticExpression(cleanExpr);
+    } catch (_error) {
+      return undefined;
+    }
+  }
+
+  /**
+   * 安全解析算数表达式 | Safe arithmetic expression parser
+   */
+  private parseArithmeticExpression(expr: string): number | undefined {
+    // 简单的递归下降解析器，仅支持基本算数运算
+    let index = 0;
+
+    const parseNumber = (): number => {
+      const start = index;
+      while (index < expr.length && /[0-9.]/.test(expr[index] ?? '')) {
+        index++;
+      }
+      return parseFloat(expr.substring(start, index));
+    };
+
+    const parseFactor = (): number => {
+      if (expr[index] === '(') {
+        index++; // skip '('
+        const result = parseExpression();
+        index++; // skip ')'
+        return result;
+      }
+      return parseNumber();
+    };
+
+    const parseTerm = (): number => {
+      let result = parseFactor();
+      while (index < expr.length && (expr[index] === '*' || expr[index] === '/')) {
+        const op = expr[index++];
+        const right = parseFactor();
+        if (op === '*') {
+          result *= right;
+        } else {
+          if (right === 0) throw new Error('Division by zero');
+          result /= right;
+        }
+      }
+      return result;
+    };
+
+    const parseExpression = (): number => {
+      let result = parseTerm();
+      while (index < expr.length && (expr[index] === '+' || expr[index] === '-')) {
+        const op = expr[index++];
+        const right = parseTerm();
+        if (op === '+') {
+          result += right;
+        } else {
+          result -= right;
+        }
+      }
+      return result;
+    };
+
+    try {
+      const result = parseExpression();
+      return index === expr.length && typeof result === 'number' && !Number.isNaN(result)
+        ? result
+        : undefined;
+    } catch {
       return undefined;
     }
   }
@@ -236,7 +299,7 @@ export abstract class BaseWidget {
       if (typeof current === 'string' && current.trim().startsWith('{')) {
         try {
           current = JSON.parse(current);
-        } catch (error) {
+        } catch (_error) {
           // 解析失败，继续当作普通对象处理
         }
       }
@@ -261,7 +324,7 @@ export abstract class BaseWidget {
       // 数值格式化：.2f, .0f 等
       if (format.endsWith('f')) {
         const precisionMatch = format.match(/\.(\d+)f$/);
-        if (precisionMatch && precisionMatch[1]) {
+        if (precisionMatch?.[1]) {
           const precision = parseInt(precisionMatch[1], 10);
           return Number(value).toFixed(precision);
         }
@@ -278,55 +341,6 @@ export abstract class BaseWidget {
     } catch (error) {
       console.warn(`格式化失败: ${format}`, error);
       return String(value);
-    }
-  }
-
-  /**
-   * 评估条件 | Evaluate condition
-   */
-  private evaluateCondition(condition: string | undefined, data: any): boolean {
-    if (!condition) return true;
-
-    try {
-      // 简单条件支持：field > 0, field != null 等
-      const trimmed = condition.trim();
-
-      // 大于条件：field > value
-      const gtMatch = trimmed.match(/^(\w+(?:\.\w+)*)\s*>\s*(\d+(?:\.\d+)?)$/);
-      if (gtMatch && gtMatch[1] && gtMatch[2]) {
-        const fieldValue = this.getValueFromPath(gtMatch[1], data);
-        const compareValue = parseFloat(gtMatch[2]);
-        return Number(fieldValue) > compareValue;
-      }
-
-      // 小于条件：field < value
-      const ltMatch = trimmed.match(/^(\w+(?:\.\w+)*)\s*<\s*(\d+(?:\.\d+)?)$/);
-      if (ltMatch && ltMatch[1] && ltMatch[2]) {
-        const fieldValue = this.getValueFromPath(ltMatch[1], data);
-        const compareValue = parseFloat(ltMatch[2]);
-        return Number(fieldValue) < compareValue;
-      }
-
-      // 等于条件：field == value 或 field != value
-      const eqMatch = trimmed.match(/^(\w+(?:\.\w+)*)\s*(==|!=)\s*(.+)$/);
-      if (eqMatch && eqMatch[1] && eqMatch[2] && eqMatch[3] !== undefined) {
-        const fieldValue = this.getValueFromPath(eqMatch[1], data);
-        const operator = eqMatch[2];
-        const compareValue = eqMatch[3].replace(/^["']|["']$/g, ''); // 去除引号
-
-        if (operator === '==') {
-          return String(fieldValue) === compareValue;
-        } else {
-          return String(fieldValue) !== compareValue;
-        }
-      }
-
-      // 简单存在性检查：field
-      const fieldValue = this.getValueFromPath(trimmed, data);
-      return Boolean(fieldValue);
-    } catch (error) {
-      console.warn(`条件评估失败: ${condition}`, error);
-      return true; // 默认显示
     }
   }
 
