@@ -7,6 +7,13 @@
 
 import type { WidgetConfig } from '../../config/schema.js';
 import type { TerminalCapabilities } from '../../terminal/detector.js';
+import {
+  calculateTimeDifference,
+  formatTimeDifference,
+  isTimeFormat,
+  now,
+  parseDate,
+} from '../../utils/date-formatter.js';
 
 /**
  * 小组件渲染结果 | Widget render result
@@ -178,12 +185,44 @@ export abstract class BaseWidget {
    */
   private evaluateMathExpression(expr: string, data: any): number | undefined {
     try {
+      // === 新增：检测时间差表达式 ===
+      const timeDiffMatch = expr.match(/^(.+?)\s*-\s*(.+?)$/);
+      if (timeDiffMatch?.[1] && timeDiffMatch[2]) {
+        const left = timeDiffMatch[1];
+        const right = timeDiffMatch[2];
+
+        // 处理 now() 函数和字段值
+        const leftValue =
+          left.trim() === 'now()' ? now() : this.getValueFromPath(left.trim(), data);
+        const rightValue =
+          right.trim() === 'now()' ? now() : this.getValueFromPath(right.trim(), data);
+
+        // 计算时间差
+        const timeDiff = calculateTimeDifference(rightValue, leftValue); // 注意顺序：结果 = left - right
+        if (timeDiff !== null) {
+          return timeDiff; // 返回毫秒差值
+        }
+      }
+
+      // === 原有：数学表达式处理 ===
       // 替换字段名为实际数值
       const processedExpr = expr.replace(/[a-zA-Z_][a-zA-Z0-9_.]*/g, (match) => {
+        // 跳过now()函数
+        if (match === 'now()') {
+          return String(now().valueOf());
+        }
+
         const value = this.getValueFromPath(match, data);
         if (typeof value === 'number') {
           return String(value);
         }
+
+        // 尝试解析为日期并返回时间戳
+        const dateValue = parseDate(value);
+        if (dateValue) {
+          return String(dateValue.valueOf());
+        }
+
         // 如果不是数字，返回0避免错误
         return '0';
       });
@@ -321,6 +360,16 @@ export abstract class BaseWidget {
     if (value == null) return '';
 
     try {
+      // === 新增：时间差格式化 ===
+      if (isTimeFormat(format)) {
+        const numValue = Number(value);
+        if (Number.isNaN(numValue)) {
+          return '{时间格式化失败}';
+        }
+        return formatTimeDifference(numValue, format);
+      }
+
+      // === 原有：数值格式化 ===
       // 数值格式化：.2f, .0f 等
       if (format.endsWith('f')) {
         const precisionMatch = format.match(/\.(\d+)f$/);

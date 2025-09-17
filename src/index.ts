@@ -112,7 +112,14 @@ export {
 export { ColorSystem, IconSystem, TerminalRenderer } from './terminal/colors.js';
 // 终端系统导出
 export { TerminalDetector } from './terminal/detector.js';
-
+// 日期格式化工具导出
+export {
+  calculateTimeDifference,
+  formatTimeDifference,
+  isTimeFormat,
+  now,
+  parseDate,
+} from './utils/date-formatter.js';
 // 工具函数导出
 export * from './utils/index.js';
 

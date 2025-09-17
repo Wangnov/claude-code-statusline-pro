@@ -34,6 +34,7 @@ version = "2.0"
 # ====================================================================
 # 适用于：https://api.yes.vg/team 类型的URL
 # 检测方式：正则表达式匹配yescode的URL结尾是否包含 "/team"
+#
 # 本示例提供3个小组件：YesCode Team 计划名称小组件，YesCode Team 计划余额小组件，YesCode Team 计划最近请求小组件
 
 [widgets.yescode_team_name]
@@ -52,13 +53,13 @@ pattern = ".*yes\\.vg/team$" # 正则表达式：匹配URL结尾包含"/team"的
 
 [widgets.yescode_team_balance]
 enabled = true
-type = "api"                             # API类型Widget，会发送HTTP请求获取数据
+type = "api"                               # API类型Widget，会发送HTTP请求获取数据
 row = 1
 col = 1
 nerd_icon = "\uef8d"
 emoji_icon = "💰"
 text_icon = "[$]"
-template = "余额:\\${daily_remaining:.2f}" # 模板字符串，\\$表示转义的美元符号
+template = "今日余额:\\${daily_remaining:.2f}" # 模板字符串，\\$表示转义的美元符号
 
 [widgets.yescode_team_balance.detection]
 env = "ANTHROPIC_BASE_URL"
@@ -104,6 +105,7 @@ data_path = "$.usage[0]"                                   # 提取数组第一�
 # ====================================================================
 # 适用于：https://co.yes.vg 类型的URL（不包含"/team"后缀）
 # 检测方式：精确匹配URL
+#
 # 本示例提供3个小组件：YesCode 名称小组件，YesCode 余额小组件，YesCode 最近请求小组件
 
 # 小组件0：YesCode 名称
@@ -130,7 +132,7 @@ col = 1
 nerd_icon = "\uef8d"
 emoji_icon = "💰"
 text_icon = "[$]"
-template = "按需:\\${pay_as_you_go_balance:.2f} | 订阅:\\${subscription_balance:.2f}"
+template = "按量余额:\\${pay_as_you_go_balance:.2f} | 订阅余额:\\${subscription_balance:.2f}"
 
 [widgets.yescode_balance.detection]
 env = "ANTHROPIC_BASE_URL"
@@ -171,6 +173,112 @@ data_path = "$.usage[0]"                # 提取数组第一个元素
 
 [widgets.yescode_last_request.api.headers]
 "X-API-Key" = "${ANTHROPIC_AUTH_TOKEN}"
+# ====================================================================
+# Packy Code 普通订阅计划配置
+# ====================================================================
+# 适用于：https://api.packycode.com 类型的URL
+# 检测方式：正则表达式精确匹配
+#
+# 本示例提供4个小组件：Packy Code 名称小组件，Packy Code 余额小组件, Packy Code 订阅剩余时长小组件，Packy Code 最近请求小组件
+#
+# 特殊说明：Packy Code 最近请求接口目前只支持JWT鉴权，故暂不提供示例
+# 
+
+# 小组件0：Packy Code 名称
+[widgets.packycode_name]
+enabled = true
+type = "static"
+row = 1
+col = 0
+nerd_icon = "\uf0c3"
+emoji_icon = "⚡️"
+text_icon = "[P]"
+content = "Packy Code"
+
+[widgets.packycode_name.detection]
+env = "ANTHROPIC_BASE_URL"
+equals = "https://api.packycode.com"
+
+[widgets.packycode_balance]
+enabled = true
+type = "api"
+row = 1
+col = 1
+nerd_icon = "\uef8d"
+emoji_icon = "💰"
+text_icon = "[$]"
+template = "今日余额:\\${daily_budget_usd - daily_spent_usd:.2f}"
+
+[widgets.packycode_balance.detection]
+env = "ANTHROPIC_BASE_URL"
+equals = "https://api.packycode.com"
+
+[widgets.packycode_balance.api]
+base_url = "https://www.packycode.com"
+endpoint = "/api/backend/users/info"
+method = "GET"
+timeout = 5000
+data_path = "$"
+
+[widgets.packycode_balance.api.headers]
+"Authorization" = "Bearer ${ANTHROPIC_AUTH_TOKEN}"
+
+[widgets.packycode_subscription_remaining_time]
+enabled = true
+type = "api"
+row = 1
+col = 2
+nerd_icon = "\uef8d"
+emoji_icon = "⏰"
+text_icon = "[T]"
+# 🆕 新功能：时间差格式化 - 支持各种时间输入格式
+# 业界标准：M=月份，m=分钟，D=天，H=小时，S=秒
+template = "剩余:{plan_expires_at - now():.D}天"
+
+# === 其他格式化选项示例 ===
+# template = "订阅:{plan_expires_at - now():.DHm}"           # 输出：2天3小时15分钟
+# template = "剩余时间{plan_expires_at - now():.Hm}"         # 输出：51小时15分钟  
+# template = "精确剩余:{plan_expires_at - now():.HmS}"       # 输出：51小时15分钟30秒
+# template = "还有{plan_expires_at - now():.m}分钟"          # 输出：3000分钟
+# template = "负数显示过期:{plan_expires_at - now():.D}天"   # 过期时显示负数：-5天
+
+[widgets.packycode_subscription_remaining_time.detection]
+env = "ANTHROPIC_BASE_URL"
+equals = "https://api.packycode.com"
+
+[widgets.packycode_subscription_remaining_time.api]
+base_url = "https://www.packycode.com"
+endpoint = "/api/backend/users/info"
+method = "GET"
+timeout = 5000
+data_path = "$"
+
+[widgets.packycode_subscription_remaining_time.api.headers]
+"Authorization" = "Bearer ${ANTHROPIC_AUTH_TOKEN}"
+
+# [widgets.packycode_last_request]
+# enabled = true
+# type = "api"
+# row = 1
+# col = 3
+# nerd_icon = "\uee0c"
+# emoji_icon = "🔄"
+# text_icon = "[R]"
+# template = "{model} ↗{input_tokens} ↘{output_tokens} :{cache_creation_tokens:.0f} +{cache_read_tokens:.0f} \\${cost:.4f}"
+
+# [widgets.packycode_last_request.detection]
+# env = "ANTHROPIC_BASE_URL"
+# equals = "https://api.packycode.com"
+
+# [widgets.packycode_last_request.api]
+# base_url = "https://www.packycode.com"
+# endpoint = "/api/backend/users/{user_id}/usage-stats?days=30"
+# method = "GET"
+# timeout = 5000
+# data_path = "$"
+
+# [widgets.packycode_last_request.api.headers]
+# "Authorization" = "Bearer ${ANTHROPIC_AUTH_TOKEN}"
 
 # ====================================================================
 # DuckCoding / InstCopilot 配置（New-API架构中转站）
@@ -178,6 +286,8 @@ data_path = "$.usage[0]"                # 提取数组第一个元素
 # 适用于：包含 "duckcoding.com" 或 "instcopilot-api.com" 的URL
 # 检测方式：正则表达式包含匹配
 #
+# 本示例提供3个小组件：DuckCoding 名称小组件，DuckCoding 余额小组件，DuckCoding 最近请求小组件
+# 
 # 特殊说明：New-API架构的中转站需要特殊的认证方式
 # 需要同时提供 Authorization 头和 New-Api-User 头
 #
