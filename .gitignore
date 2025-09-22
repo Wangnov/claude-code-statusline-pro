@@ -46,3 +46,7 @@ coverage/
 
 .tgz
 /dist
+
+# Rust编译输出
+rust/target/
+*.pdb

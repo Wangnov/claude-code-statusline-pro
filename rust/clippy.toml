@@ -1,0 +1,42 @@
+# Clippy配置
+
+# 最大认知复杂度
+cognitive-complexity-threshold = 30
+
+# 枚举变体最大数量
+enum-variant-size-threshold = 200
+
+# 函数参数最大数量
+too-many-arguments-threshold = 7
+
+# 函数行数最大值
+too-many-lines-threshold = 100
+
+# 类型复杂度阈值
+type-complexity-threshold = 250
+
+# 单个表达式的最大嵌套
+excessive-nesting-threshold = 5
+
+# 数组大小警告阈值
+large-stack-arrays-threshold = 512000
+
+# 允许的lint
+allow = []
+
+# 警告级别的lint
+warn = [
+    "clippy::all",
+    "clippy::pedantic",
+    "clippy::nursery",
+    "clippy::cargo",
+]
+
+# 拒绝的lint（导致编译失败）
+deny = [
+    "clippy::unwrap_used",
+    "clippy::expect_used",
+    "clippy::panic",
+    "clippy::unimplemented",
+    "clippy::todo",
+]

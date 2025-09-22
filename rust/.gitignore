@@ -1,0 +1,32 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# 注意: Cargo.lock应该被提交（因为这是一个应用程序，不是库）
+# 如果是库项目才需要忽略Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+*.profraw
+*.profdata
+
+# Benchmark results
+/criterion/
+
+# Documentation
+/doc/
+
+# Temporary files
+*.tmp
+.tmp/
