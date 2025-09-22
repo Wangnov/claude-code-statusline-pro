@@ -414,7 +414,7 @@ data_path = "$.data.items[0]"          # 提取响应中数组的第一个元素
 # 
 # [widgets.custom_api_widget.api.headers]
 # "Authorization" = "Bearer ${CUSTOM_API_TOKEN}"
-# "User-Agent" = "Claude-Statusline/2.3.0"
+# "User-Agent" = "claude-code-statusline-pro/2.3.0"
 
 # ====================================================================
 # 配置说明和最佳实践
