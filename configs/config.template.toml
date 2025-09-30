@@ -218,7 +218,8 @@ show_full_name = false
 "claude-opus-4-1-20250805" = "O4.1"
 "claude-opus-4-20250514" = "O4"
 
-# Sonnet 模型  
+# Sonnet 模型
+"claude-sonnet-4-5-20250929" = "S4.5"
 "claude-sonnet-4-20250514" = "S4"
 "claude-sonnet-4-20250514[1m]" = "S4[1m]"
 "claude-3-7-sonnet-20250219" = "S3.7"
@@ -235,6 +236,7 @@ show_full_name = false
 "claude-opus-4-20250514" = "Opus 4"
 
 # Sonnet 模型
+"claude-sonnet-4-5-20250929" = "Sonnet 4.5"
 "claude-sonnet-4-20250514" = "Sonnet 4"
 "claude-sonnet-4-20250514[1m]" = "Sonnet 4[1m]"
 "claude-3-7-sonnet-20250219" = "Sonnet 3.7"
