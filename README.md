@@ -11,7 +11,7 @@
 
 # 使用指南
 
-**Claude Code 专业状态栏** - 为Claude Code量身定制的智能状态栏系统。
+**Claude Code Statusline Pro** - 为Claude Code量身定制的智能状态栏系统。
 
 ## ✨ 核心特性
 
@@ -23,6 +23,15 @@
 - 🌈 **跨平台兼容**: Windows、macOS、Linux智能适配，支持各种终端
 - ⚡ **高性能优化**: 缓存机制，300ms更新间隔，符合Claude Code官方建议
 - 🌐 **双语支持**: 中英双语配置界面和错误提示
+- 🦀 **Rust 引擎**: 提供原生 Rust 内核，更快更稳
+
+## 🦀 Rust 重写优化亮点
+
+- 原生 `git2` 仓库分析：直接获取分支、状态、stash 等信息，避免频繁 Shell 调用，在大型仓库中依然流畅
+- 多层缓存体系：组件级内存缓存结合会话持久化存储，减少重复解析配置与历史数据的 IO
+- Tokio 异步运行时：多线程调度渲染与文件操作，维持官方推荐的 300ms 更新节奏并提升稳定性
+- 增量 Transcript 解析：按偏移量增量读取 `.jsonl`，并通过原子写入持久化快照，避免大型日志反复全量扫描
+- 配置与扩展缓存：合并配置结果可复用并附带差异报告，多行组件缓存上次 Widget 内容以降低 I/O 和网络抖动
 
 ## 📋 系统要求
 
@@ -217,12 +226,13 @@ cost = (inputTokens * inputPrice + outputTokens * outputPrice +
 **项目级配置** (优先级: 高)
 - 路径: `~/.claude/projects/{project-hash}/statusline-pro/config.toml`
 - 适用: 特定项目的个性化配置
-- 初始化: `npx claude-code-statusline-pro@latest config --init`
+- 初始化: `npx claude-code-statusline-pro@latest config init`
+- 初始化并复制组件模板: `npx claude-code-statusline-pro@latest config init -w`
 
 **用户级配置** (优先级: 低)
 - 路径: `~/.claude/statusline-pro/config.toml`
 - 适用: 全局默认配置，适用于所有项目
-- 初始化: `npx claude-code-statusline-pro@latest config --init -g`
+- 初始化: `npx claude-code-statusline-pro@latest config init -g`
 
 #### ⚡ 智能终端检测和配置初始化
 
@@ -230,14 +240,19 @@ cost = (inputTokens * inputPrice + outputTokens * outputPrice +
 
 ```bash
 # 初始化项目级配置（推荐）
-npx claude-code-statusline-pro@latest config --init
+npx claude-code-statusline-pro@latest config init
+
+# 初始化项目级配置并复制组件模板
+npx claude-code-statusline-pro@latest config init -w
 
 # 初始化全局配置
-npx claude-code-statusline-pro@latest config --init -g
+npx claude-code-statusline-pro@latest config init -g
 
 # 强制重新初始化（覆盖现有配置）
-npx claude-code-statusline-pro@latest config --init --force
+npx claude-code-statusline-pro@latest config init --force
 ```
+
+> 提示：`-w` 等同于 `--with-components`，会把组件多行模板一并复制到配置目录，方便直接在本地调整。
 
 **智能检测功能：**
 - 🎨 **Nerd Font 检测**: 自动识别终端是否支持 Nerd Font 图标
@@ -381,6 +396,15 @@ echo '{"model":{"id":"claude-sonnet-4"}}' | npx claude-code-statusline-pro@lates
 - 🌈 **Cross-platform Compatibility**: Smart adaptation for Windows, macOS, Linux, supporting various terminals
 - ⚡ **High Performance Optimization**: Caching mechanism, 300ms update interval, following Claude Code official recommendations
 - 🌐 **Bilingual Support**: Chinese and English configuration interface with error messages
+- 🦀 **Rust Engine**: Native Rust core for faster, more stable statusline updates
+
+## 🦀 Rust Rewrite Highlights
+
+- Native `git2` repository analysis: reads branch status, stash counts, and operations without spawning shells, keeping large repos responsive
+- Layered caching system: in-memory component caches plus persisted session storage to avoid redundant config/history IO
+- Tokio-powered async runtime: multi-threaded scheduling separates rendering from file work, maintaining the 300ms refresh cadence with higher stability
+- Incremental transcript parsing: seeks to the last processed offset and persists snapshots atomically so large `.jsonl` logs no longer stall refreshes
+- Cached config and widgets: merged configurations are reused with diff reports, while multiline widgets memoize their last render to smooth IO and API calls
 
 ## 📋 System Requirements
 
@@ -576,12 +600,13 @@ The status bar uses a two-level configuration system for flexible configuration 
 **Project-level Configuration** (Priority: High)
 - Path: `~/.claude/projects/{project-hash}/statusline-pro/config.toml`
 - Application: Personalized configuration for specific projects
-- Initialization: `npx claude-code-statusline-pro@latest config --init`
+- Initialization: `npx claude-code-statusline-pro@latest config init`
+- Initialization with component templates: `npx claude-code-statusline-pro@latest config init -w`
 
 **User-level Configuration** (Priority: Low)
 - Path: `~/.claude/statusline-pro/config.toml`
 - Application: Global default configuration for all projects
-- Initialization: `npx claude-code-statusline-pro@latest config --init -g`
+- Initialization: `npx claude-code-statusline-pro@latest config init -g`
 
 #### ⚡ Smart Terminal Detection and Configuration Initialization
 
@@ -589,14 +614,19 @@ When running initialization commands, the system automatically detects your term
 
 ```bash
 # Initialize project-level configuration (recommended)
-npx claude-code-statusline-pro@latest config --init
+npx claude-code-statusline-pro@latest config init
+
+# Initialize project-level configuration and copy component templates
+npx claude-code-statusline-pro@latest config init -w
 
 # Initialize global configuration
-npx claude-code-statusline-pro@latest config --init -g
+npx claude-code-statusline-pro@latest config init -g
 
 # Force re-initialization (overwrite existing configuration)
-npx claude-code-statusline-pro@latest config --init --force
+npx claude-code-statusline-pro@latest config init --force
 ```
+
+> Tip: `-w` is the short form of `--with-components`; it copies the bundled multiline widget templates into your config folder so you can customize them locally.
 
 **Smart Detection Features:**
 - 🎨 **Nerd Font Detection**: Automatically identifies if terminal supports Nerd Font icons
