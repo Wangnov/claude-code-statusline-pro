@@ -1,0 +1,39 @@
+{
+  "name": "ccstatus",
+  "version": "3.0.0",
+  "description": "Claude Code Statusline Pro Rust CLI (prebuilt binary distribution)",
+  "license": "MIT",
+  "bin": {
+    "ccstatus": "index.js"
+  },
+  "files": [
+    "index.js",
+    "install.js",
+    "manifest.json",
+    "bin/",
+    "binaries/"
+  ],
+  "scripts": {
+    "postinstall": "node install.js",
+    "prepare-binaries": "node scripts/prepare-binaries.js"
+  },
+  "keywords": [
+    "cli",
+    "statusline",
+    "claude",
+    "rust",
+    "terminal"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wangnov/claude-code-statusline-pro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wangnov/claude-code-statusline-pro/issues"
+  },
+  "homepage": "https://github.com/wangnov/claude-code-statusline-pro",
+  "author": "wangnov",
+  "engines": {
+    "node": ">=16"
+  }
+}

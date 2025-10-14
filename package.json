@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "workspaces": [
+    "npm/ccstatus",
+    "npm/claude-code-statusline-pro"
+  ],
+  "scripts": {
+    "version": "npm version --workspaces",
+    "lint": "echo \"No JS lint configured\""
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "targets": {
+    "darwin-arm64": {
+      "file": "binaries/darwin-arm64/ccstatus",
+      "binaryName": "ccstatus"
+    },
+    "darwin-x64": {
+      "file": "binaries/darwin-x64/ccstatus",
+      "binaryName": "ccstatus"
+    },
+    "linux-x64": {
+      "file": "binaries/linux-x64/ccstatus",
+      "binaryName": "ccstatus",
+      "aliases": ["linux-x86_64"]
+    },
+    "linux-arm64": {
+      "file": "binaries/linux-arm64/ccstatus",
+      "binaryName": "ccstatus",
+      "aliases": ["linux-aarch64"]
+    },
+    "win32-x64": {
+      "file": "binaries/win32-x64/ccstatus.exe",
+      "binaryName": "ccstatus.exe"
+    },
+    "win32-arm64": {
+      "file": "binaries/win32-arm64/ccstatus.exe",
+      "binaryName": "ccstatus.exe"
+    }
+  }
+}
