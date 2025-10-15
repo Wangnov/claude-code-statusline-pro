@@ -2,7 +2,8 @@
   "private": true,
   "workspaces": [
     "npm/ccstatus",
-    "npm/claude-code-statusline-pro"
+    "npm/claude-code-statusline-pro",
+    "npm/platforms/*"
   ],
   "scripts": {
     "version": "npm version --workspaces",

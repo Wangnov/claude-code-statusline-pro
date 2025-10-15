@@ -10,7 +10,7 @@
     "index.js"
   ],
   "dependencies": {
-    "ccstatus": "workspace:*"
+    "ccstatus": "^3.0.0"
   },
   "scripts": {
     "postinstall": "node index.js --check-install"

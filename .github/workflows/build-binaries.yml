@@ -19,6 +19,12 @@ jobs:
             platform: linux-x64
             binary: claude-code-statusline-pro
             artifact: linux-x64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            platform: linux-arm64
+            binary: claude-code-statusline-pro
+            artifact: linux-arm64
+            setup: install-linux-arm-toolchain
           - os: macos-13
             target: x86_64-apple-darwin
             platform: darwin-x64
@@ -34,9 +40,20 @@ jobs:
             platform: win32-x64
             binary: claude-code-statusline-pro.exe
             artifact: win32-x64
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            platform: win32-arm64
+            binary: claude-code-statusline-pro.exe
+            artifact: win32-arm64
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install cross toolchain
+        if: matrix.setup == 'install-linux-arm-toolchain'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -70,30 +87,55 @@ jobs:
         with:
           path: dist/artifacts
 
-      - name: Arrange binaries for npm package
+      - name: Arrange binaries for npm packages
         run: |
           set -euo pipefail
-          mkdir -p npm/ccstatus/binaries/darwin-arm64 \
-                   npm/ccstatus/binaries/darwin-x64 \
-                   npm/ccstatus/binaries/linux-x64 \
-                   npm/ccstatus/binaries/win32-x64
 
-          cp dist/artifacts/darwin-arm64/claude-code-statusline-pro npm/ccstatus/binaries/darwin-arm64/ccstatus || true
-          cp dist/artifacts/darwin-x64/claude-code-statusline-pro npm/ccstatus/binaries/darwin-x64/ccstatus || true
-          cp dist/artifacts/linux-x64/claude-code-statusline-pro npm/ccstatus/binaries/linux-x64/ccstatus || true
-          cp dist/artifacts/win32-x64/claude-code-statusline-pro.exe npm/ccstatus/binaries/win32-x64/ccstatus.exe || true
+          declare -a PLATFORMS=(
+            "darwin-arm64:claude-code-statusline-pro:ccstatus"
+            "darwin-x64:claude-code-statusline-pro:ccstatus"
+            "linux-x64:claude-code-statusline-pro:ccstatus"
+            "linux-arm64:claude-code-statusline-pro:ccstatus"
+            "win32-x64:claude-code-statusline-pro.exe:ccstatus.exe"
+            "win32-arm64:claude-code-statusline-pro.exe:ccstatus.exe"
+          )
 
-          chmod +x npm/ccstatus/binaries/darwin-arm64/ccstatus 2>/dev/null || true
-          chmod +x npm/ccstatus/binaries/darwin-x64/ccstatus 2>/dev/null || true
-          chmod +x npm/ccstatus/binaries/linux-x64/ccstatus 2>/dev/null || true
+          for entry in "${PLATFORMS[@]}"; do
+            IFS=":" read -r platform sourceBinary destBinary <<<"$entry"
+            pkg_dir="npm/platforms/ccstatus-${platform}/bin"
+            mkdir -p "${pkg_dir}"
+
+            artifact_path="dist/artifacts/${platform}/${sourceBinary}"
+            if [ -f "${artifact_path}" ]; then
+              cp "${artifact_path}" "${pkg_dir}/${destBinary}"
+              if [[ "${destBinary}" != *.exe ]]; then
+                chmod +x "${pkg_dir}/${destBinary}"
+              fi
+              rm -f "${pkg_dir}/.gitkeep"
+            else
+              echo "No artifact found for ${platform}, leaving placeholder."
+            fi
+          done
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Install dependencies
-        run: npm install
+      - name: Pack platform packages
+        run: |
+          set -euo pipefail
+          packages=(
+            ccstatus-darwin-arm64
+            ccstatus-darwin-x64
+            ccstatus-linux-x64
+            ccstatus-linux-arm64
+            ccstatus-win32-x64
+            ccstatus-win32-arm64
+          )
+          for pkg in "${packages[@]}"; do
+            npm --prefix "npm/platforms/${pkg}" pack
+          done
 
       - name: Pack ccstatus
         run: npm --prefix npm/ccstatus pack
@@ -106,5 +148,6 @@ jobs:
         with:
           name: npm-packages
           path: |
+            npm/platforms/*/*.tgz
             npm/ccstatus/*.tgz
             npm/claude-code-statusline-pro/*.tgz

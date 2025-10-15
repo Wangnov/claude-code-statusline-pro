@@ -3,11 +3,20 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const manifestPath = path.join(__dirname, "manifest.json");
+const PLATFORM_PACKAGES = {
+  "darwin-arm64": "@wangnov/ccstatus-darwin-arm64",
+  "darwin-x64": "@wangnov/ccstatus-darwin-x64",
+  "linux-arm64": "@wangnov/ccstatus-linux-arm64",
+  "linux-x64": "@wangnov/ccstatus-linux-x64",
+  "win32-arm64": "@wangnov/ccstatus-win32-arm64",
+  "win32-x64": "@wangnov/ccstatus-win32-x64"
+};
+
+const targetKey = `${process.platform}-${process.arch}`;
+const pkgName = PLATFORM_PACKAGES[targetKey];
 const binDir = path.join(__dirname, "bin");
 const isWindows = process.platform === "win32";
 const binaryName = isWindows ? "ccstatus.exe" : "ccstatus";
-const targetKey = `${process.platform}-${process.arch}`;
 
 function log(message) {
   console.log(`[ccstatus] ${message}`);
@@ -17,79 +26,55 @@ function warn(message) {
   console.warn(`[ccstatus] ${message}`);
 }
 
-function loadManifest() {
-  if (!fs.existsSync(manifestPath)) {
-    warn("manifest.json missing - skipping binary installation (development mode).");
-    return null;
-  }
-
+function copyBinaryFromPackage(packageName) {
+  let exportedPath;
   try {
-    return JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    // Platform package exports absolute path to the bundled binary
+    // eslint-disable-next-line import/no-dynamic-require, global-require
+    exportedPath = require(packageName);
   } catch (err) {
-    warn(`failed to read manifest: ${err.message}`);
-    return null;
-  }
-}
-
-function findEntry(manifest) {
-  if (!manifest || !manifest.targets) {
-    return null;
-  }
-
-  if (manifest.targets[targetKey]) {
-    return manifest.targets[targetKey];
-  }
-
-  // Support aliases (e.g. linux -> linux-gnu)
-  for (const [key, value] of Object.entries(manifest.targets)) {
-    if (value.aliases && value.aliases.includes(targetKey)) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-function copyBinary(entry) {
-  const srcPath = path.join(__dirname, entry.file);
-
-  if (!fs.existsSync(srcPath)) {
     warn(
-      `prebuilt binary '${entry.file}' not found. Populate npm/ccstatus/binaries before publishing.`
+      `optional dependency '${packageName}' was not installed. ` +
+        "Ensure you are using npm >=7 with workspace support, or reinstall the package."
     );
     return false;
   }
 
+  if (!exportedPath || !fs.existsSync(exportedPath)) {
+    warn(`binary not found in '${packageName}'. Path attempted: ${exportedPath || "<empty>"}`);
+    return false;
+  }
+
   fs.mkdirSync(binDir, { recursive: true });
-  const destPath = path.join(binDir, entry.binaryName || binaryName);
-  fs.copyFileSync(srcPath, destPath);
+  const destPath = path.join(binDir, binaryName);
+  fs.copyFileSync(exportedPath, destPath);
 
   if (!isWindows) {
     fs.chmodSync(destPath, 0o755);
   }
 
-  log(`installed binary for ${targetKey}`);
+  log(`installed ${packageName} binary to ${destPath}`);
   return true;
 }
 
 function main() {
   if (process.env.CCSTATUS_DEV_SKIP_BINARY === "1") {
-    log("CCSTATUS_DEV_SKIP_BINARY=1 detected - skipping binary install.");
+    log("CCSTATUS_DEV_SKIP_BINARY=1 detected - skipping binary installation.");
     return;
   }
 
-  const manifest = loadManifest();
-  const entry = findEntry(manifest);
-
-  if (!entry) {
+  if (!pkgName) {
     warn(
-      `no prebuilt binary entry for platform '${process.platform}' arch '${process.arch}'. ` +
-        "You can build from source via 'cargo build --release' and place the binary into npm/ccstatus/binaries'."
+      `no prebuilt binary available for platform '${process.platform}' architecture '${process.arch}'.\n` +
+        "You can compile from source with 'cargo build --release' and place the binary in your PATH."
     );
+    process.exitCode = 1;
     return;
   }
 
-  copyBinary(entry);
+  if (!copyBinaryFromPackage(pkgName)) {
+    process.exitCode = 1;
+  }
 }
 
 main();

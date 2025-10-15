@@ -1,0 +1,10 @@
+{
+  "name": "@wangnov/ccstatus-win32-x64",
+  "version": "3.0.0",
+  "description": "ccstatus prebuilt binary for Windows x64",
+  "license": "MIT",
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "files": ["index.js", "bin/"],
+  "main": "index.js"
+}

@@ -16,7 +16,7 @@ function ensureBinary() {
   }
 
   console.error(
-    "[ccstatus] Prebuilt binary not found. Please run 'npm install ccstatus' again or set CCSTATUS_FROM_SOURCE=1 to build manually."
+    "[ccstatus] Prebuilt binary not found. Try reinstalling with 'npm install --force ccstatus' or compile it manually via 'cargo build --release'."
   );
   process.exitCode = 1;
   return process.exit();

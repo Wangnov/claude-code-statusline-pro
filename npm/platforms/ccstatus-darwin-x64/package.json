@@ -1,0 +1,10 @@
+{
+  "name": "@wangnov/ccstatus-darwin-x64",
+  "version": "3.0.0",
+  "description": "ccstatus prebuilt binary for macOS x64",
+  "license": "MIT",
+  "os": ["darwin"],
+  "cpu": ["x64"],
+  "files": ["index.js", "bin/"],
+  "main": "index.js"
+}

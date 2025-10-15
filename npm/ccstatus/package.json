@@ -9,13 +9,10 @@
   "files": [
     "index.js",
     "install.js",
-    "manifest.json",
-    "bin/",
-    "binaries/"
+    "bin/"
   ],
   "scripts": {
-    "postinstall": "node install.js",
-    "prepare-binaries": "node scripts/prepare-binaries.js"
+    "postinstall": "node install.js"
   },
   "keywords": [
     "cli",
@@ -35,5 +32,13 @@
   "author": "wangnov",
   "engines": {
     "node": ">=16"
+  },
+  "optionalDependencies": {
+    "@wangnov/ccstatus-darwin-arm64": "^3.0.0",
+    "@wangnov/ccstatus-darwin-x64": "^3.0.0",
+    "@wangnov/ccstatus-linux-x64": "^3.0.0",
+    "@wangnov/ccstatus-linux-arm64": "^3.0.0",
+    "@wangnov/ccstatus-win32-x64": "^3.0.0",
+    "@wangnov/ccstatus-win32-arm64": "^3.0.0"
   }
 }
