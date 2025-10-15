@@ -459,7 +459,11 @@ impl ConfigLoader {
 
     fn get_project_config_path(&self) -> Result<PathBuf> {
         let cwd = std::env::current_dir()?;
-        Ok(cwd.join("statusline.config.toml"))
+        let cwd_str = cwd
+            .to_str()
+            .ok_or_else(|| anyhow!("Current directory path is not valid UTF-8"))?;
+        let project_id = ProjectResolver::hash_global_path(cwd_str);
+        Ok(self.get_project_config_path_with_id(&project_id))
     }
 
     fn get_project_config_path_with_id(&self, project_id: &str) -> PathBuf {

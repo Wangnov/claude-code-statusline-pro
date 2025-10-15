@@ -53,6 +53,43 @@ jobs:
         if: matrix.setup == 'install-linux-arm-toolchain'
         run: |
           sudo dpkg --add-architecture arm64 || true
+
+          # 备份并完全替换 ubuntu.sources 文件（Ubuntu 24.04 DEB822 格式）
+          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sudo cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.bak
+            cat <<'EOF' | sudo tee /etc/apt/sources.list.d/ubuntu.sources
+          Types: deb
+          URIs: http://archive.ubuntu.com/ubuntu
+          Suites: noble noble-updates noble-backports
+          Components: main restricted universe multiverse
+          Architectures: amd64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+          Types: deb
+          URIs: http://security.ubuntu.com/ubuntu
+          Suites: noble-security
+          Components: main restricted universe multiverse
+          Architectures: amd64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+          fi
+
+          # 修改传统的 sources.list 文件（如果存在）
+          if [ -f /etc/apt/sources.list ]; then
+            sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+            sudo sed -i 's/^deb-src /deb-src [arch=amd64] /' /etc/apt/sources.list
+          fi
+
+          # 为 arm64 添加独立的 ports 源
+          cat <<'EOF' | sudo tee /etc/apt/sources.list.d/ubuntu-ports.sources
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports
+          Suites: noble noble-updates noble-security noble-backports
+          Components: main restricted universe multiverse
+          Architectures: arm64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
             gcc-aarch64-linux-gnu \
