@@ -34,11 +34,11 @@
     "node": ">=16"
   },
   "optionalDependencies": {
-    "@wangnov/ccstatus-darwin-arm64": "^3.0.0",
-    "@wangnov/ccstatus-darwin-x64": "^3.0.0",
+    "@wangnov/ccstatus-macos-arm64": "^3.0.0",
+    "@wangnov/ccstatus-macos-x64": "^3.0.0",
     "@wangnov/ccstatus-linux-x64": "^3.0.0",
     "@wangnov/ccstatus-linux-arm64": "^3.0.0",
-    "@wangnov/ccstatus-win32-x64": "^3.0.0",
-    "@wangnov/ccstatus-win32-arm64": "^3.0.0"
+    "@wangnov/ccstatus-windows-x64": "^3.0.0",
+    "@wangnov/ccstatus-windows-arm64": "^3.0.0"
   }
 }

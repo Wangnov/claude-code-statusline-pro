@@ -1,5 +1,5 @@
 {
-  "name": "@wangnov/ccstatus-darwin-x64",
+  "name": "@wangnov/ccstatus-macos-x64",
   "version": "3.0.0",
   "description": "ccstatus prebuilt binary for macOS x64",
   "license": "MIT",

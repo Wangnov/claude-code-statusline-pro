@@ -27,24 +27,24 @@ jobs:
             setup: install-linux-arm-toolchain
           - os: macos-13
             target: x86_64-apple-darwin
-            platform: darwin-x64
+            platform: macos-x64
             binary: claude-code-statusline-pro
-            artifact: darwin-x64
+            artifact: macos-x64
           - os: macos-14
             target: aarch64-apple-darwin
-            platform: darwin-arm64
+            platform: macos-arm64
             binary: claude-code-statusline-pro
-            artifact: darwin-arm64
+            artifact: macos-arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            platform: win32-x64
+            platform: windows-x64
             binary: claude-code-statusline-pro.exe
-            artifact: win32-x64
+            artifact: windows-x64
           - os: windows-latest
             target: aarch64-pc-windows-msvc
-            platform: win32-arm64
+            platform: windows-arm64
             binary: claude-code-statusline-pro.exe
-            artifact: win32-arm64
+            artifact: windows-arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -52,8 +52,13 @@ jobs:
       - name: Install cross toolchain
         if: matrix.setup == 'install-linux-arm-toolchain'
         run: |
+          sudo dpkg --add-architecture arm64 || true
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            libssl-dev:arm64 \
+            pkg-config
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -61,7 +66,19 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build ${{ matrix.target }}
-        run: cargo build --release --target ${{ matrix.target }}
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == "linux-arm64" ]]; then
+            export PKG_CONFIG_ALLOW_CROSS=1
+            export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+            export OPENSSL_DIR=/usr
+            export OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu
+            export OPENSSL_INCLUDE_DIR=/usr/include/aarch64-linux-gnu
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+            export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+            export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc-ar
+          fi
+          cargo build --release --target ${{ matrix.target }}
 
       - name: Collect artifact
         run: |
@@ -92,12 +109,12 @@ jobs:
           set -euo pipefail
 
           declare -a PLATFORMS=(
-            "darwin-arm64:claude-code-statusline-pro:ccstatus"
-            "darwin-x64:claude-code-statusline-pro:ccstatus"
+            "macos-arm64:claude-code-statusline-pro:ccstatus"
+            "macos-x64:claude-code-statusline-pro:ccstatus"
             "linux-x64:claude-code-statusline-pro:ccstatus"
             "linux-arm64:claude-code-statusline-pro:ccstatus"
-            "win32-x64:claude-code-statusline-pro.exe:ccstatus.exe"
-            "win32-arm64:claude-code-statusline-pro.exe:ccstatus.exe"
+            "windows-x64:claude-code-statusline-pro.exe:ccstatus.exe"
+            "windows-arm64:claude-code-statusline-pro.exe:ccstatus.exe"
           )
 
           for entry in "${PLATFORMS[@]}"; do
@@ -126,12 +143,12 @@ jobs:
         run: |
           set -euo pipefail
           packages=(
-            ccstatus-darwin-arm64
-            ccstatus-darwin-x64
+            ccstatus-macos-arm64
+            ccstatus-macos-x64
             ccstatus-linux-x64
             ccstatus-linux-arm64
-            ccstatus-win32-x64
-            ccstatus-win32-arm64
+            ccstatus-windows-x64
+            ccstatus-windows-arm64
           )
           for pkg in "${packages[@]}"; do
             npm --prefix "npm/platforms/${pkg}" pack
