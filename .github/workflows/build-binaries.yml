@@ -188,14 +188,18 @@ jobs:
             ccstatus-windows-arm64
           )
           for pkg in "${packages[@]}"; do
-            npm --prefix "npm/platforms/${pkg}" pack
+            (cd "npm/platforms/${pkg}" && npm pack)
           done
 
       - name: Pack ccstatus
-        run: npm --prefix npm/ccstatus pack
+        run: |
+          set -euo pipefail
+          (cd npm/ccstatus && npm pack)
 
       - name: Pack legacy package
-        run: npm --prefix npm/claude-code-statusline-pro pack
+        run: |
+          set -euo pipefail
+          (cd npm/claude-code-statusline-pro && npm pack)
 
       - name: Upload npm tarballs
         uses: actions/upload-artifact@v4
