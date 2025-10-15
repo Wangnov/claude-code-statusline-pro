@@ -41,6 +41,13 @@ pub struct TerminalCapabilityHint {
     pub nerd_font: bool,
 }
 
+/// Options for copying component templates
+#[derive(Debug, Clone, Default)]
+pub struct CopyComponentOptions {
+    pub force: bool,
+    pub interactive: bool,
+}
+
 /// Options for generating a default configuration file
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CreateConfigOptions<'a> {
@@ -48,6 +55,7 @@ pub struct CreateConfigOptions<'a> {
     pub theme: Option<&'a str>,
     pub capabilities: Option<TerminalCapabilityHint>,
     pub copy_components: bool,
+    pub force: bool,
 }
 
 /// Result after creating a configuration file
@@ -265,7 +273,7 @@ impl ConfigLoader {
 
         let copy_stats = if options.copy_components {
             if let Some(dir) = target_path.parent() {
-                Some(self.copy_component_configs(dir)?)
+                Some(self.copy_component_configs(dir, options.force)?)
             } else {
                 None
             }
@@ -330,7 +338,7 @@ impl ConfigLoader {
     }
 
     /// Copy component configuration templates into the provided directory
-    pub fn copy_component_configs(&self, target_dir: &Path) -> Result<ComponentCopyStats> {
+    pub fn copy_component_configs(&self, target_dir: &Path, force: bool) -> Result<ComponentCopyStats> {
         let Some(template_dir) = self.find_component_template_dir() else {
             return Ok(ComponentCopyStats::default());
         };
@@ -364,8 +372,12 @@ impl ConfigLoader {
             let target_path = target_components_dir.join(&target_name);
 
             if target_path.exists() {
-                stats.skipped += 1;
-                continue;
+                if !force {
+                    // Skip without prompting, just count as skipped
+                    stats.skipped += 1;
+                    continue;
+                }
+                // Force mode: overwrite the file
             }
 
             fs::copy(&path, &target_path).with_context(|| {

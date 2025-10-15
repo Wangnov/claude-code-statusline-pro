@@ -408,6 +408,7 @@ fn handle_config_init(
             nerd_font: capabilities.supports_nerd_font,
         }),
         copy_components: init_args.with_components,
+        force: init_args.force,
     };
 
     if parent_args.dry_run {
@@ -440,10 +441,13 @@ fn handle_config_init(
         println!("✅ 已生成配置文件: {}", result.path.display());
         if let Some(stats) = result.copy_stats {
             if stats.copied > 0 {
-                println!(
-                    "✅ 已复制 {} 个组件模板（跳过 {} 个已存在文件）",
-                    stats.copied, stats.skipped
-                );
+                println!("✅ 已复制 {} 个组件模板", stats.copied);
+            }
+            if stats.skipped > 0 {
+                println!("⏭️  跳过 {} 个已存在的组件文件", stats.skipped);
+                if !init_args.force {
+                    println!("💡 提示: 使用 --force/-y 可以覆盖已存在的文件");
+                }
             }
         }
 
