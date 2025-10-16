@@ -20,7 +20,7 @@ pub struct TokensComponent {
 }
 
 impl TokensComponent {
-    pub fn new(config: TokensComponentConfig) -> Self {
+    #[must_use] pub const fn new(config: TokensComponentConfig) -> Self {
         Self { config }
     }
 
@@ -33,14 +33,14 @@ impl TokensComponent {
         {
             let used = mock_tokens
                 .get("context_used")
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or(0);
             if used == 0 && !self.config.show_zero {
                 return None;
             }
             let window = mock_tokens
                 .get("context_window")
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or_else(|| self.context_window_for_model(ctx));
             return Some(TokenUsageInfo {
                 used,
@@ -143,7 +143,7 @@ impl TokensComponent {
 
                 if gradient_enabled && supports_colors {
                     let (r, g, b) = rainbow_gradient_color(gradient_percentage);
-                    bar.push_str(&format!("\x1b[38;2;{};{};{}m{}", r, g, b, symbol));
+                    bar.push_str(&format!("\x1b[38;2;{r};{g};{b}m{symbol}"));
                     color_active = true;
                 } else {
                     bar.push(symbol);
@@ -180,7 +180,7 @@ impl TokensComponent {
         let style = &ctx.config.style;
 
         if terminal_cfg.force_text {
-            return icon_for_kind(&icons.text, status).map(|icon| icon.to_string());
+            return icon_for_kind(&icons.text, status).map(std::string::ToString::to_string);
         }
         if terminal_cfg.force_nerd_font {
             if let Some(icon) = icon_for_kind(&icons.nerd, status) {
@@ -209,7 +209,7 @@ impl TokensComponent {
             }
         }
 
-        icon_for_kind(&icons.text, status).map(|icon| icon.to_string())
+        icon_for_kind(&icons.text, status).map(std::string::ToString::to_string)
     }
 
     fn select_color(&self, percentage: f64) -> String {
@@ -230,14 +230,14 @@ impl TokensComponent {
         } else {
             let used_k = info.used as f64 / 1_000.0;
             let total_k = info.total as f64 / 1_000.0;
-            format!("({:.1}k/{:.0}k)", used_k, total_k)
+            format!("({used_k:.1}k/{total_k:.0}k)")
         }
     }
 }
 
 #[async_trait]
 impl Component for TokensComponent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "tokens"
     }
 
@@ -248,7 +248,7 @@ impl Component for TokensComponent {
     async fn render(&self, ctx: &RenderContext) -> ComponentOutput {
         if !self.is_enabled(ctx) {
             return ComponentOutput::hidden();
-        };
+        }
 
         let Some(usage) = self.fetch_usage_from_cache(ctx).await else {
             return ComponentOutput::hidden();
@@ -261,11 +261,11 @@ impl Component for TokensComponent {
         let mut parts = Vec::new();
 
         if let Some(bar) = self.build_progress_bar(ctx, clamped_percentage) {
-            parts.push(format!("[{}]", bar));
+            parts.push(format!("[{bar}]"));
         }
 
         if self.config.show_percentage {
-            parts.push(format!("{:.1}%", clamped_percentage));
+            parts.push(format!("{clamped_percentage:.1}%"));
         }
 
         parts.push(self.format_usage(&usage));
@@ -289,10 +289,10 @@ impl Component for TokensComponent {
     }
 }
 
-fn icon_for_kind<'a>(
-    set: &'a crate::config::TokenIconSetConfig,
+fn icon_for_kind(
+    set: &crate::config::TokenIconSetConfig,
     kind: TokenStatusKind,
-) -> Option<&'a str> {
+) -> Option<&str> {
     match kind {
         TokenStatusKind::Backup => (!set.backup.is_empty()).then_some(set.backup.as_str()),
         TokenStatusKind::Critical => (!set.critical.is_empty()).then_some(set.critical.as_str()),
@@ -317,9 +317,9 @@ fn rainbow_gradient_color(percentage: f64) -> (u8, u8, u8) {
     let lerp = |start: (f64, f64, f64), end: (f64, f64, f64), t: f64| {
         let clamp_t = t.clamp(0.0, 1.0);
         (
-            start.0 + (end.0 - start.0) * clamp_t,
-            start.1 + (end.1 - start.1) * clamp_t,
-            start.2 + (end.2 - start.2) * clamp_t,
+            (end.0 - start.0).mul_add(clamp_t, start.0),
+            (end.1 - start.1).mul_add(clamp_t, start.1),
+            (end.2 - start.2).mul_add(clamp_t, start.2),
         )
     };
 
@@ -344,7 +344,7 @@ impl ComponentFactory for TokensComponentFactory {
         Box::new(TokensComponent::new(config.components.tokens.clone()))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "tokens"
     }
 }
@@ -382,7 +382,7 @@ mod tests {
 
         let output = component.render(&ctx).await;
         assert!(output.visible);
-        assert!(output.text.contains("%"));
+        assert!(output.text.contains('%'));
     }
 
     #[tokio::test]
@@ -412,7 +412,7 @@ mod tests {
 
         let output = component.render(&ctx).await;
         assert!(output.visible);
-        assert!(output.text.contains("["));
+        assert!(output.text.contains('['));
     }
 
     #[tokio::test]

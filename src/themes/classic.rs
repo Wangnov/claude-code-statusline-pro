@@ -14,14 +14,14 @@ pub struct ClassicThemeRenderer {
 
 impl ClassicThemeRenderer {
     /// Create a new classic theme renderer
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             separator: " | ".to_string(),
         }
     }
 
     /// Create with custom separator
-    pub fn with_separator(separator: String) -> Self {
+    #[must_use] pub const fn with_separator(separator: String) -> Self {
         Self { separator }
     }
 }
@@ -101,7 +101,7 @@ impl ThemeRenderer for ClassicThemeRenderer {
         Ok(parts.join(&colored_separator))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "classic"
     }
 }

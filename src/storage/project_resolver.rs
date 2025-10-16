@@ -24,14 +24,14 @@ pub struct ProjectResolver {
 
 impl ProjectResolver {
     /// Private constructor
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             cached_project_id: None,
         }
     }
 
     /// Get singleton instance
-    pub fn instance() -> Arc<Mutex<ProjectResolver>> {
+    #[must_use] pub fn instance() -> Arc<Mutex<Self>> {
         INSTANCE.clone()
     }
 
@@ -60,7 +60,7 @@ impl ProjectResolver {
     /// Priority:
     /// 1. Use cached project ID (from stdin)
     /// 2. Generate from provided path or current directory
-    pub fn get_project_id(&self, fallback_path: Option<&str>) -> String {
+    #[must_use] pub fn get_project_id(&self, fallback_path: Option<&str>) -> String {
         // Priority 1: Use cached project ID
         if let Some(ref cached_id) = self.cached_project_id {
             return cached_id.clone();
@@ -74,13 +74,13 @@ impl ProjectResolver {
     /// Directly hash specified path (no cache)
     ///
     /// Used for temporary project ID generation, like config -i command
-    pub fn hash_path(&self, project_path: &str) -> String {
+    #[must_use] pub fn hash_path(&self, project_path: &str) -> String {
         self.hash_project_path(project_path)
     }
 
     /// Directly set the cached project ID (primarily for runtime coordination)
     pub fn set_project_id(&mut self, project_id: Option<&str>) {
-        self.cached_project_id = project_id.map(|id| id.to_string());
+        self.cached_project_id = project_id.map(std::string::ToString::to_string);
 
         if std::env::var("DEBUG").is_ok() {
             eprintln!(
@@ -110,9 +110,7 @@ impl ProjectResolver {
     /// macOS/Unix: /Users/name/project -> -Users-name-project
     /// Windows: C:\Users\name\project -> C--Users-name-project
     fn hash_project_path(&self, project_path: &str) -> String {
-        if project_path.is_empty() {
-            panic!("Project path cannot be empty");
-        }
+        assert!(!project_path.is_empty(), "Project path cannot be empty");
 
         lazy_static! {
             static ref WINDOWS_DRIVE_BACKSLASH: Regex = Regex::new(r"^([A-Za-z]):\\").unwrap();
@@ -172,7 +170,7 @@ impl ProjectResolver {
             let combined = if normalized_rest.is_empty() {
                 prefix.to_string()
             } else {
-                format!("{}{}", prefix, normalized_rest)
+                format!("{prefix}{normalized_rest}")
             };
             combined.trim_end_matches('-').to_string()
         } else {
@@ -186,7 +184,7 @@ impl ProjectResolver {
     }
 
     /// Get current cached project ID (for debugging)
-    pub fn get_cached_project_id(&self) -> Option<&String> {
+    #[must_use] pub const fn get_cached_project_id(&self) -> Option<&String> {
         self.cached_project_id.as_ref()
     }
 }
@@ -194,7 +192,7 @@ impl ProjectResolver {
 /// Convenience functions for global access
 impl ProjectResolver {
     /// Static method to get project ID
-    pub fn get_global_project_id(fallback_path: Option<&str>) -> String {
+    #[must_use] pub fn get_global_project_id(fallback_path: Option<&str>) -> String {
         let resolver = Self::instance();
         let resolver = resolver.lock().unwrap();
         resolver.get_project_id(fallback_path)
@@ -215,7 +213,7 @@ impl ProjectResolver {
     }
 
     /// Static method to hash path
-    pub fn hash_global_path(project_path: &str) -> String {
+    #[must_use] pub fn hash_global_path(project_path: &str) -> String {
         let resolver = Self::instance();
         let resolver = resolver.lock().unwrap();
         resolver.hash_path(project_path)
@@ -237,14 +235,14 @@ mod tests {
     fn preserves_drive_prefix_for_windows_paths() {
         let resolver = ProjectResolver::new();
         let hashed = resolver.hash_project_path(r"E:\\Users\\example\\project");
-        assert!(hashed.starts_with("E--"), "hashed={}", hashed);
-        assert!(!hashed.starts_with("E---"), "hashed={}", hashed);
+        assert!(hashed.starts_with("E--"), "hashed={hashed}");
+        assert!(!hashed.starts_with("E---"), "hashed={hashed}");
     }
 
     #[test]
     fn strips_unc_prefix_before_hashing() {
         let resolver = ProjectResolver::new();
         let hashed = resolver.hash_project_path(r"\\\\?\\C:\\Users\\example\\project");
-        assert!(hashed.starts_with("C--"), "hashed={}", hashed);
+        assert!(hashed.starts_with("C--"), "hashed={hashed}");
     }
 }

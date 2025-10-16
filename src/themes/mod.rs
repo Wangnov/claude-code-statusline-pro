@@ -34,11 +34,11 @@ pub(crate) fn colorize_segment(
 pub(crate) const ANSI_RESET: &str = "\x1b[0m";
 
 pub(crate) fn ansi_fg(color: &str) -> Option<String> {
-    resolve_color(color).map(|(r, g, b)| format!("\x1b[38;2;{};{};{}m", r, g, b))
+    resolve_color(color).map(|(r, g, b)| format!("\x1b[38;2;{r};{g};{b}m"))
 }
 
 pub(crate) fn ansi_bg(color: &str) -> Option<String> {
-    resolve_color(color).map(|(r, g, b)| format!("\x1b[48;2;{};{};{}m", r, g, b))
+    resolve_color(color).map(|(r, g, b)| format!("\x1b[48;2;{r};{g};{b}m"))
 }
 
 pub(crate) fn reapply_background(content: &str, bg_seq: &str) -> String {
@@ -48,10 +48,10 @@ pub(crate) fn reapply_background(content: &str, bg_seq: &str) -> String {
 
     let mut processed = content.replace(ANSI_RESET, &(String::from(ANSI_RESET) + bg_seq));
     if !processed.starts_with(bg_seq) {
-        processed = format!("{}{}", bg_seq, processed);
+        processed = format!("{bg_seq}{processed}");
     }
     if !processed.ends_with(bg_seq) {
-        processed = format!("{}{}", processed, bg_seq);
+        processed = format!("{processed}{bg_seq}");
     }
     processed
 }
@@ -87,7 +87,7 @@ fn resolve_color(name: &str) -> Option<(u8, u8, u8)> {
     fn lighten(color: (u8, u8, u8), amount: f32) -> (u8, u8, u8) {
         let (r, g, b) = color;
         let lerp = |component: u8| -> u8 {
-            let comp = component as f32 + (255.0 - component as f32) * amount;
+            let comp = (255.0 - f32::from(component)).mul_add(amount, f32::from(component));
             comp.round().clamp(0.0, 255.0) as u8
         };
         (lerp(r), lerp(g), lerp(b))
@@ -158,11 +158,11 @@ pub enum Theme {
 
 impl Theme {
     /// Parse theme from string
-    pub fn from_str(s: &str) -> Self {
+    #[must_use] pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
-            "powerline" => Theme::Powerline,
-            "capsule" => Theme::Capsule,
-            _ => Theme::Classic, // Default to classic
+            "powerline" => Self::Powerline,
+            "capsule" => Self::Capsule,
+            _ => Self::Classic, // Default to classic
         }
     }
 }
@@ -182,7 +182,7 @@ pub trait ThemeRenderer: Send + Sync {
 }
 
 /// Create a theme renderer based on the theme name
-pub fn create_theme_renderer(theme: &str) -> Box<dyn ThemeRenderer> {
+#[must_use] pub fn create_theme_renderer(theme: &str) -> Box<dyn ThemeRenderer> {
     match Theme::from_str(theme) {
         Theme::Classic => Box::new(ClassicThemeRenderer::new()),
         Theme::Powerline => Box::new(PowerlineThemeRenderer::new()),

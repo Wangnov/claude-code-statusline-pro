@@ -203,7 +203,7 @@ async fn handle_run(cli: &Cli) -> Result<()> {
     // CLI参数覆盖配置文件 - 确保命令行参数优先级最高
     if let Some(theme) = &cli.theme {
         if config.debug {
-            eprintln!("[调试] 检测到 CLI theme参数: {}", theme);
+            eprintln!("[调试] 检测到 CLI theme参数: {theme}");
             eprintln!("[调试] 配置文件中的theme: {}", config.theme);
         }
         config.theme = theme.clone();
@@ -265,7 +265,7 @@ async fn handle_run(cli: &Cli) -> Result<()> {
     }
 
     let statusline = generator.generate(input).await?;
-    println!("{}", statusline);
+    println!("{statusline}");
     Ok(())
 }
 
@@ -382,7 +382,7 @@ fn handle_config_init(
                 return Ok(());
             }
             Err(err) => {
-                eprintln!("无法获取确认输入: {}", err);
+                eprintln!("无法获取确认输入: {err}");
                 eprintln!("如果确认覆盖，请使用 --force 选项。");
                 return Ok(());
             }
@@ -502,8 +502,8 @@ fn handle_config_set(
         if !target_path.exists() {
             println!("  - 将创建新的配置文件 (使用默认模板)");
         }
-        println!("  - 作用范围: {}", scope_label);
-        println!("  - 设置 {} = {}", key_for_display, value_expr);
+        println!("  - 作用范围: {scope_label}");
+        println!("  - 设置 {key_for_display} = {value_expr}");
         return Ok(());
     }
 
@@ -527,7 +527,7 @@ fn handle_config_set(
     if created {
         println!("🆕 已创建配置文件: {}", target_path.display());
     }
-    println!("✅ 已更新配置: {} = {}", key_for_display, value_expr);
+    println!("✅ 已更新配置: {key_for_display} = {value_expr}");
     println!(
         "📄 配置文件位置: {} ({})",
         target_path.display(),
@@ -543,7 +543,7 @@ async fn handle_theme(args: &ThemeArgs) -> Result<()> {
     match args.name.as_deref() {
         Some(name) => {
             loader.apply_theme(name).await?;
-            println!("✅ 已应用主题: {}", name);
+            println!("✅ 已应用主题: {name}");
         }
         None => {
             loader.load(None).await?;
@@ -604,7 +604,7 @@ async fn handle_doctor() -> Result<()> {
     let mut loader = ConfigLoader::new();
     match loader.load(None).await {
         Ok(_) => println!("配置状态: ✅ 有效"),
-        Err(err) => println!("配置状态: ❌ 无效 ({})", err),
+        Err(err) => println!("配置状态: ❌ 无效 ({err})"),
     }
 
     Ok(())
@@ -789,15 +789,12 @@ fn parse_value_expression(expr: &str) -> TomlEditValue {
 }
 
 fn try_parse_toml_value(expr: &str) -> Option<TomlEditValue> {
-    let snippet = format!("__value__ = {}", expr);
+    let snippet = format!("__value__ = {expr}");
     let mut document = snippet.parse::<DocumentMut>().ok()?;
     document
         .as_table_mut()
         .remove("__value__")
-        .and_then(|item| match item.into_value() {
-            Ok(value) => Some(value),
-            Err(_) => None,
-        })
+        .and_then(|item| item.into_value().ok())
 }
 
 #[derive(Debug, Clone)]
@@ -841,7 +838,7 @@ fn parse_path_tokens(path: &str) -> Result<Vec<PathToken>> {
 
                 let mut index_buffer = String::new();
                 let mut closed = false;
-                while let Some(next_ch) = chars.next() {
+                for next_ch in chars.by_ref() {
                     if next_ch == ']' {
                         closed = true;
                         break;
@@ -859,7 +856,7 @@ fn parse_path_tokens(path: &str) -> Result<Vec<PathToken>> {
                 } else {
                     let index = index_str
                         .parse::<usize>()
-                        .map_err(|_| anyhow!(r#"数组索引必须是非负整数: "{}""#, index_str))?;
+                        .map_err(|_| anyhow!(r#"数组索引必须是非负整数: "{index_str}""#))?;
                     tokens.push(PathToken::Index(IndexKind::Position(index)));
                 }
             }
@@ -931,15 +928,15 @@ fn set_in_table(
 
             let item = table
                 .get_mut(key)
-                .ok_or_else(|| anyhow!("内部错误: 无法获取路径 {}", path))?;
+                .ok_or_else(|| anyhow!("内部错误: 无法获取路径 {path}"))?;
 
             if !item.is_table() {
-                bail!(r#"路径 "{}" 已存在且不是表，无法继续设置"#, path);
+                bail!(r#"路径 "{path}" 已存在且不是表，无法继续设置"#);
             }
 
             let child_table = item
                 .as_table_mut()
-                .ok_or_else(|| anyhow!("内部错误: 无法获取路径 {}", path))?;
+                .ok_or_else(|| anyhow!("内部错误: 无法获取路径 {path}"))?;
             set_in_table(child_table, next_key, &rest[1..], value, path)
         }
         PathToken::Index(_) => {
@@ -949,12 +946,12 @@ fn set_in_table(
 
             let item = table
                 .get_mut(key)
-                .ok_or_else(|| anyhow!("内部错误: 无法获取路径 {}", path))?;
+                .ok_or_else(|| anyhow!("内部错误: 无法获取路径 {path}"))?;
 
             let array = item
                 .as_value_mut()
                 .and_then(|v| v.as_array_mut())
-                .ok_or_else(|| anyhow!(r#"路径 "{}" 不是数组"#, path))?;
+                .ok_or_else(|| anyhow!(r#"路径 "{path}" 不是数组"#))?;
 
             set_in_array(array, rest, value, path)
         }
@@ -974,7 +971,7 @@ fn set_in_array(
     match index_kind {
         IndexKind::Append => {
             if tokens.len() > 1 {
-                bail!(r#"路径 "{}[]" 不支持继续嵌套"#, current_path);
+                bail!(r#"路径 "{current_path}[]" 不支持继续嵌套"#);
             }
             array.push(value);
             Ok(())
@@ -982,13 +979,13 @@ fn set_in_array(
         IndexKind::Position(index) => {
             let idx = *index;
             if tokens.len() > 1 {
-                bail!(r#"数组项 "{}[{}]" 不支持继续嵌套"#, current_path, idx);
+                bail!(r#"数组项 "{current_path}[{idx}]" 不支持继续嵌套"#);
             }
 
             if idx < array.len() {
                 let element = array
                     .get_mut(idx)
-                    .ok_or_else(|| anyhow!("内部错误: 无法访问数组索引 {}", idx))?;
+                    .ok_or_else(|| anyhow!("内部错误: 无法访问数组索引 {idx}"))?;
                 *element = value;
             } else if idx == array.len() {
                 array.push(value);

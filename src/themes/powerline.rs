@@ -15,7 +15,7 @@ impl PowerlineThemeRenderer {
     const POWERLINE_SEPARATOR: char = '\u{e0b0}';
     const POWERLINE_START: char = '\u{e0d7}';
 
-    pub fn new() -> Self {
+    #[must_use] pub const fn new() -> Self {
         Self
     }
 
@@ -96,8 +96,7 @@ impl PowerlineThemeRenderer {
             || component
                 .icon
                 .as_ref()
-                .map(|icon| icon.contains('\u{ec03}'))
-                .unwrap_or(false)
+                .is_some_and(|icon| icon.contains('\u{ec03}'))
     }
 
     fn should_preserve_internal_colors(component: &ComponentOutput) -> bool {
@@ -250,7 +249,7 @@ impl ThemeRenderer for PowerlineThemeRenderer {
         Ok(rendered)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "powerline"
     }
 }

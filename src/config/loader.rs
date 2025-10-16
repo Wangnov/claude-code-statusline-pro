@@ -1,6 +1,6 @@
 //! Configuration loader implementation
 //!
-//! This module provides the ConfigLoader which handles:
+//! This module provides the `ConfigLoader` which handles:
 //! - Configuration file discovery
 //! - TOML parsing
 //! - Multi-layer configuration merging
@@ -25,7 +25,7 @@ pub struct ConfigSource {
     pub source_type: ConfigSourceType,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfigSourceType {
     Default,
     User,
@@ -98,8 +98,8 @@ pub struct ConfigLoader {
 }
 
 impl ConfigLoader {
-    /// Create a new ConfigLoader instance
-    pub fn new() -> Self {
+    /// Create a new `ConfigLoader` instance
+    #[must_use] pub const fn new() -> Self {
         Self {
             cached_config: None,
             config_source: None,
@@ -197,7 +197,7 @@ impl ConfigLoader {
                     source_type: ConfigSourceType::Custom,
                 };
             } else {
-                return Err(anyhow!("Custom configuration file not found at {}", path));
+                return Err(anyhow!("Custom configuration file not found at {path}"));
             }
         }
 
@@ -305,12 +305,12 @@ impl ConfigLoader {
     }
 
     /// Get configuration source information
-    pub fn get_config_source(&self) -> Option<&ConfigSource> {
+    #[must_use] pub const fn get_config_source(&self) -> Option<&ConfigSource> {
         self.config_source.as_ref()
     }
 
     /// Retrieve the latest merge report.
-    pub fn merge_report(&self) -> Option<&MergeReport> {
+    #[must_use] pub const fn merge_report(&self) -> Option<&MergeReport> {
         self.merge_report.as_ref()
     }
 
@@ -322,7 +322,7 @@ impl ConfigLoader {
     }
 
     /// Return the path to the user-level configuration file
-    pub fn user_config_path(&self) -> Option<PathBuf> {
+    #[must_use] pub fn user_config_path(&self) -> Option<PathBuf> {
         self.get_user_config_path()
     }
 
@@ -332,13 +332,17 @@ impl ConfigLoader {
     }
 
     /// Compute the project config path for a specific project directory
-    pub fn project_config_path_for_path(&self, project_path: &str) -> PathBuf {
+    #[must_use] pub fn project_config_path_for_path(&self, project_path: &str) -> PathBuf {
         let project_id = ProjectResolver::hash_global_path(project_path);
         self.get_project_config_path_with_id(&project_id)
     }
 
     /// Copy component configuration templates into the provided directory
-    pub fn copy_component_configs(&self, target_dir: &Path, force: bool) -> Result<ComponentCopyStats> {
+    pub fn copy_component_configs(
+        &self,
+        target_dir: &Path,
+        force: bool,
+    ) -> Result<ComponentCopyStats> {
         let Some(template_dir) = self.find_component_template_dir() else {
             return Ok(ComponentCopyStats::default());
         };
@@ -371,14 +375,13 @@ impl ConfigLoader {
             let target_name = file_name.replace(".template", "");
             let target_path = target_components_dir.join(&target_name);
 
-            if target_path.exists() {
-                if !force {
+            if target_path.exists()
+                && !force {
                     // Skip without prompting, just count as skipped
                     stats.skipped += 1;
                     continue;
                 }
                 // Force mode: overwrite the file
-            }
 
             fs::copy(&path, &target_path).with_context(|| {
                 format!(
@@ -414,11 +417,11 @@ impl ConfigLoader {
     fn load_toml_value<P: AsRef<Path>>(&self, path: P) -> Result<Value> {
         let path = path.as_ref();
         let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config file: {:?}", path))?;
+            .with_context(|| format!("Failed to read config file: {path:?}"))?;
 
         let mut value: Value = content
             .parse::<Value>()
-            .with_context(|| format!("Failed to parse TOML config: {:?}", path))?;
+            .with_context(|| format!("Failed to parse TOML config: {path:?}"))?;
 
         Self::normalize_value(&mut value);
 

@@ -59,12 +59,12 @@ impl GitService {
     }
 
     /// Collect a snapshot of repository state.
-    pub fn collect_info(&self) -> GitInfo {
+    #[must_use] pub fn collect_info(&self) -> GitInfo {
         self.collect_info_with_options(&GitCollectionOptions::default())
     }
 
     /// Collect repository information according to the provided options.
-    pub fn collect_info_with_options(&self, options: &GitCollectionOptions) -> GitInfo {
+    #[must_use] pub fn collect_info_with_options(&self, options: &GitCollectionOptions) -> GitInfo {
         let branch = self.branch_info().unwrap_or_default();
         let status = if options.include_status {
             self.working_status().unwrap_or_default()
@@ -98,10 +98,10 @@ impl GitService {
     }
 
     /// Estimate number of tracked entries (index size) in the repository.
-    pub fn estimate_workdir_entries(&self) -> usize {
+    #[must_use] pub fn estimate_workdir_entries(&self) -> usize {
         self.repo
             .index()
-            .map(|index| index.len() as usize)
+            .map(|index| index.len())
             .unwrap_or(0)
     }
 
@@ -110,9 +110,7 @@ impl GitService {
         let detached = !head.is_branch();
 
         let current = if detached {
-            head.target()
-                .map(|oid| format!("HEAD@{}", oid.to_string()[..7].to_string()))
-                .unwrap_or_else(|| "HEAD".to_string())
+            head.target().map_or_else(|| "HEAD".to_string(), |oid| format!("HEAD@{}", &oid.to_string()[..7]))
         } else {
             head.shorthand().unwrap_or("HEAD").to_string()
         };
@@ -133,14 +131,14 @@ impl GitService {
 
         let local_branch = self.repo.find_branch(shorthand, BranchType::Local)?;
         if let Ok(upstream) = local_branch.upstream() {
-            info.upstream = upstream.name()?.map(|name| name.to_string());
+            info.upstream = upstream.name()?.map(std::string::ToString::to_string);
 
             if let (Some(local_oid), Some(upstream_oid)) =
                 (local_branch.get().target(), upstream.get().target())
             {
                 if let Ok((ahead, behind)) = self.repo.graph_ahead_behind(local_oid, upstream_oid) {
-                    info.ahead = ahead as usize;
-                    info.behind = behind as usize;
+                    info.ahead = ahead;
+                    info.behind = behind;
                 }
             }
         }
@@ -235,7 +233,7 @@ impl GitService {
         let author = commit
             .author()
             .name()
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .unwrap_or_default();
         let timestamp = commit.time().seconds();
 
@@ -257,7 +255,7 @@ impl GitService {
     }
 
     /// Expose repository workdir for callers that need it.
-    pub fn workdir(&self) -> &Path {
+    #[must_use] pub fn workdir(&self) -> &Path {
         &self.workdir
     }
 }

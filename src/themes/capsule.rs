@@ -13,7 +13,7 @@ pub struct CapsuleThemeRenderer;
 impl CapsuleThemeRenderer {
     const LEFT_CAP: char = '\u{e0b6}';
     const RIGHT_CAP: char = '\u{e0b4}';
-    pub fn new() -> Self {
+    #[must_use] pub const fn new() -> Self {
         Self
     }
 
@@ -181,7 +181,7 @@ impl ThemeRenderer for CapsuleThemeRenderer {
         Ok(rendered.join(" "))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "capsule"
     }
 }

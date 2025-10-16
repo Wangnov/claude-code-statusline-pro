@@ -73,7 +73,7 @@ impl ComponentOutput {
     }
 
     /// Create an invisible/hidden component output
-    pub fn hidden() -> Self {
+    #[must_use] pub const fn hidden() -> Self {
         Self {
             text: String::new(),
             icon: None,

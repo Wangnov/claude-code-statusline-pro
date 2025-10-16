@@ -37,7 +37,7 @@ pub struct MultiLineRenderer {
 }
 
 impl MultiLineRenderer {
-    pub fn new(config: Config, base_dir: Option<PathBuf>) -> Self {
+    #[must_use] pub fn new(config: Config, base_dir: Option<PathBuf>) -> Self {
         let log_file = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join(".claude")
@@ -55,7 +55,7 @@ impl MultiLineRenderer {
 
     async fn log_error(&self, message: &str) {
         let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
-        let log_message = format!("[{}] {}\n", timestamp, message);
+        let log_message = format!("[{timestamp}] {message}\n");
 
         // 确保日志目录存在
         if let Some(parent) = self.log_file.parent() {
@@ -102,7 +102,7 @@ impl MultiLineRenderer {
             .components
             .order
             .iter()
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .collect::<Vec<_>>();
 
         for component_name in component_order {
@@ -174,7 +174,7 @@ impl MultiLineRenderer {
         if let Some(base) = &self.config_base_dir {
             candidate_paths.push(
                 base.join("components")
-                    .join(format!("{}.toml", component_name)),
+                    .join(format!("{component_name}.toml")),
             );
         }
 
@@ -184,11 +184,11 @@ impl MultiLineRenderer {
                     .join(".claude")
                     .join("statusline-pro")
                     .join("components")
-                    .join(format!("{}.toml", component_name)),
+                    .join(format!("{component_name}.toml")),
             );
         }
 
-        candidate_paths.push(PathBuf::from("components").join(format!("{}.toml", component_name)));
+        candidate_paths.push(PathBuf::from("components").join(format!("{component_name}.toml")));
 
         for path in candidate_paths {
             if path.exists() {
@@ -227,7 +227,7 @@ impl MultiLineRenderer {
                 continue;
             }
 
-            let cache_key = format!("{}::{}", component_name, widget_name);
+            let cache_key = format!("{component_name}::{widget_name}");
             let content = match widget_config.kind {
                 WidgetType::Static => self.render_static_widget(widget_config, context),
                 WidgetType::Api => match self.render_api_widget(widget_config, context).await {
@@ -265,7 +265,7 @@ impl MultiLineRenderer {
         Ok(())
     }
 
-    fn should_render_widget(&self, widget: &WidgetConfig) -> bool {
+    const fn should_render_widget(&self, widget: &WidgetConfig) -> bool {
         match widget.force {
             Some(true) => true,
             Some(false) => false,
@@ -394,7 +394,7 @@ impl MultiLineRenderer {
             // 添加headers
             for (key, value) in &headers {
                 let substituted_value = substitute_env(value);
-                request = request.set(&key, &substituted_value);
+                request = request.set(key, &substituted_value);
             }
 
             // 添加User-Agent
@@ -425,7 +425,7 @@ impl MultiLineRenderer {
                     selected: value,
                 });
             }
-            return Err(anyhow!("JSONPath {:?} yielded no results", path));
+            return Err(anyhow!("JSONPath {path:?} yielded no results"));
         }
 
         let selected = json.clone();
@@ -453,7 +453,7 @@ impl MultiLineRenderer {
         if icon.is_empty() {
             content.to_string()
         } else {
-            format!("{} {}", icon, content)
+            format!("{icon} {content}")
         }
     }
 }
@@ -492,8 +492,7 @@ fn value_matches_filter(filter: &WidgetFilterConfig, data: &Value) -> bool {
                 .any(|value| regex.is_match(&json_value_as_string(value))),
             Err(err) => {
                 eprintln!(
-                    "[statusline] widget filter pattern {:?} invalid: {}",
-                    keyword, err
+                    "[statusline] widget filter pattern {keyword:?} invalid: {err}"
                 );
                 false
             }
@@ -529,7 +528,7 @@ impl MultiLineGrid {
     fn set_cell(&mut self, row: u32, col: u32, content: String) {
         self.rows
             .entry(row)
-            .or_insert_with(BTreeMap::new)
+            .or_default()
             .insert(col, content);
     }
 
@@ -640,8 +639,8 @@ fn render_template(template: &str, data: &Value) -> String {
             match render_placeholder(expr, data) {
                 Ok(rendered) => result.push_str(&rendered),
                 Err(err) => {
-                    eprintln!("[statusline] 模板渲染失败: {}", err);
-                    result.push_str(&format!("{{{}}}", expr));
+                    eprintln!("[statusline] 模板渲染失败: {err}");
+                    result.push_str(&format!("{{{expr}}}"));
                 }
             }
             last_index = m.end();
@@ -679,8 +678,7 @@ fn evaluate_expression(expr: &str, data: &Value) -> Result<Value> {
 
     if trimmed.eq_ignore_ascii_case("now()") {
         return Ok(Number::from_f64(now_timestamp_millis())
-            .map(Value::Number)
-            .unwrap_or(Value::Null));
+            .map_or(Value::Null, Value::Number));
     }
 
     lazy_static! {
@@ -689,8 +687,8 @@ fn evaluate_expression(expr: &str, data: &Value) -> Result<Value> {
     }
 
     if let Some(caps) = TIME_DIFF_RE.captures(trimmed) {
-        let left = caps.get(1).map(|m| m.as_str().trim()).unwrap_or("");
-        let right = caps.get(2).map(|m| m.as_str().trim()).unwrap_or("");
+        let left = caps.get(1).map_or("", |m| m.as_str().trim());
+        let right = caps.get(2).map_or("", |m| m.as_str().trim());
 
         if let (Some(left_dt), Some(right_dt)) = (
             resolve_time_operand(left, data),
@@ -698,16 +696,14 @@ fn evaluate_expression(expr: &str, data: &Value) -> Result<Value> {
         ) {
             let diff_ms = calculate_time_difference(right_dt, left_dt);
             return Ok(Number::from_f64(diff_ms)
-                .map(Value::Number)
-                .unwrap_or(Value::Null));
+                .map_or(Value::Null, Value::Number));
         }
     }
 
     if is_math_expression(trimmed) {
         let number = evaluate_math_expression(trimmed, data)?;
         return Ok(Number::from_f64(number)
-            .map(Value::Number)
-            .unwrap_or(Value::Null));
+            .map_or(Value::Null, Value::Number));
     }
 
     extract_value(trimmed, data)
@@ -730,8 +726,7 @@ fn extract_value(path: &str, data: &Value) -> Result<Value> {
 
     if path == "now()" {
         return Ok(Number::from_f64(now_timestamp_millis())
-            .map(Value::Number)
-            .unwrap_or(Value::Null));
+            .map_or(Value::Null, Value::Number));
     }
 
     let mut current = data.clone();
@@ -753,24 +748,22 @@ fn extract_value(path: &str, data: &Value) -> Result<Value> {
                 Value::Object(map) => map
                     .get(name)
                     .cloned()
-                    .ok_or_else(|| anyhow!("Missing field: {}", name))?,
-                _ => return Err(anyhow!("Expected object for field: {}", name)),
+                    .ok_or_else(|| anyhow!("Missing field: {name}"))?,
+                _ => return Err(anyhow!("Expected object for field: {name}")),
             };
 
             let idx: usize = index
                 .parse()
-                .map_err(|_| anyhow!("Invalid index: {}", index))?;
+                .map_err(|_| anyhow!("Invalid index: {index}"))?;
 
             current = match base {
                 Value::Array(arr) => arr
                     .get(idx)
                     .cloned()
-                    .ok_or_else(|| anyhow!("Missing index {} for field {}", idx, name))?,
+                    .ok_or_else(|| anyhow!("Missing index {idx} for field {name}"))?,
                 other => {
                     return Err(anyhow!(
-                        "Expected array for field {} but found {:?}",
-                        name,
-                        other
+                        "Expected array for field {name} but found {other:?}"
                     ))
                 }
             };
@@ -782,8 +775,8 @@ fn extract_value(path: &str, data: &Value) -> Result<Value> {
                 Value::Array(arr) => arr
                     .get(idx)
                     .cloned()
-                    .ok_or_else(|| anyhow!("Missing index {}", idx))?,
-                _ => return Err(anyhow!("Expected array for index {}", idx)),
+                    .ok_or_else(|| anyhow!("Missing index {idx}"))?,
+                _ => return Err(anyhow!("Expected array for index {idx}")),
             };
             continue;
         }
@@ -792,8 +785,8 @@ fn extract_value(path: &str, data: &Value) -> Result<Value> {
             Value::Object(map) => map
                 .get(segment)
                 .cloned()
-                .ok_or_else(|| anyhow!("Missing field: {}", segment))?,
-            _ => return Err(anyhow!("Expected object for field {}", segment)),
+                .ok_or_else(|| anyhow!("Missing field: {segment}"))?,
+            _ => return Err(anyhow!("Expected object for field {segment}")),
         };
     }
 
@@ -953,7 +946,7 @@ impl<'a> MathParser<'a> {
 
         if self.consume_char('(') {
             // Unsupported function call
-            return Err(anyhow!("Unsupported function in expression: {}", ident));
+            return Err(anyhow!("Unsupported function in expression: {ident}"));
         }
 
         ident = ident.trim();
@@ -963,8 +956,7 @@ impl<'a> MathParser<'a> {
     fn skip_whitespace(&mut self) {
         while self
             .peek_char()
-            .map(|ch| ch.is_whitespace())
-            .unwrap_or(false)
+            .is_some_and(char::is_whitespace)
         {
             self.pos += 1;
         }
@@ -996,11 +988,11 @@ impl<'a> MathParser<'a> {
     }
 }
 
-fn is_identifier_start(ch: char) -> bool {
+const fn is_identifier_start(ch: char) -> bool {
     ch.is_ascii_alphabetic() || ch == '_'
 }
 
-fn is_identifier_part(ch: char) -> bool {
+const fn is_identifier_part(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_' || ch == '[' || ch == ']'
 }
 
@@ -1031,7 +1023,7 @@ fn value_to_f64(value: &Value) -> Result<f64> {
             if let Some(dt) = parse_date_string(s.trim()) {
                 return Ok(dt.timestamp_millis() as f64);
             }
-            Err(anyhow!("Invalid numeric string: {}", s))
+            Err(anyhow!("Invalid numeric string: {s}"))
         }
         Value::Bool(b) => Ok(if *b { 1.0 } else { 0.0 }),
         Value::Null => Ok(0.0),
@@ -1072,19 +1064,18 @@ fn format_value_with_spec(value: &Value, spec: &str) -> Result<String> {
         ));
     }
 
-    if spec.ends_with('%') {
-        let body = &spec[..spec.len() - 1];
+    if let Some(body) = spec.strip_suffix('%') {
         let numeric = value_to_f64(value)? * 100.0;
         if body.is_empty() {
-            return Ok(format!("{}%", numeric));
+            return Ok(format!("{numeric}%"));
         }
         if body.starts_with('.') && body.ends_with('f') {
             let precision = body[1..body.len() - 1]
                 .parse::<usize>()
                 .map_err(|_| anyhow!("Invalid precision"))?;
-            return Ok(format!("{:.precision$}%", numeric, precision = precision));
+            return Ok(format!("{numeric:.precision$}%"));
         }
-        return Err(anyhow!("Unsupported format specifier: {}", spec));
+        return Err(anyhow!("Unsupported format specifier: {spec}"));
     }
 
     Ok(match value {
@@ -1119,7 +1110,7 @@ fn parse_numeric_timestamp(num: f64) -> Option<DateTime<Utc>> {
     }
     let timestamp = if num >= 1.0e12 { num } else { num * 1000.0 };
     let millis = timestamp.round() as i64;
-    Some(Utc.timestamp_millis_opt(millis).single()?)
+    Utc.timestamp_millis_opt(millis).single()
 }
 
 fn parse_date_string(input: &str) -> Option<DateTime<Utc>> {
@@ -1213,7 +1204,7 @@ fn format_time_difference(diff_ms: f64, format: &str) -> String {
         "S" | "seconds" => format_number(sign * (abs_ms / SECOND_MS).ceil()),
         "YMD" => {
             let months_in_year = (months % 12.0).max(0.0);
-            let days_after_months = (days - months * 30.0).max(0.0);
+            let days_after_months = months.mul_add(-30.0, days).max(0.0);
             let prefix = if sign < 0.0 { "-" } else { "" };
             format!(
                 "{}{}年{}月{}天",
@@ -1249,7 +1240,7 @@ fn format_time_difference(diff_ms: f64, format: &str) -> String {
             )
         }
         _ => {
-            eprintln!("[statusline] 未知的时间格式: {}", format);
+            eprintln!("[statusline] 未知的时间格式: {format}");
             format_number(sign * (abs_ms / DAY_MS).ceil())
         }
     }
@@ -1259,7 +1250,7 @@ fn format_number(value: f64) -> String {
     if value.fract() == 0.0 {
         format!("{}", value as i64)
     } else {
-        format!("{}", value)
+        format!("{value}")
     }
 }
 

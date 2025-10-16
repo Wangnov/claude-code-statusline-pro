@@ -30,7 +30,7 @@ pub enum WidgetType {
 
 impl Default for WidgetType {
     fn default() -> Self {
-        WidgetType::Static
+        Self::Static
     }
 }
 
@@ -83,7 +83,7 @@ pub struct WidgetDetectionConfig {
 /// Filtering options for API widgets
 #[derive(Debug, Clone, Deserialize)]
 pub struct WidgetFilterConfig {
-    /// JSONPath expression to locate target value (default `$`)
+    /// `JSONPath` expression to locate target value (default `$`)
     #[serde(default = "default_filter_object")]
     pub object: String,
     /// Filtering mode (equals / contains / pattern)
@@ -114,7 +114,7 @@ pub enum WidgetFilterMode {
 
 impl Default for WidgetFilterMode {
     fn default() -> Self {
-        WidgetFilterMode::Equals
+        Self::Equals
     }
 }
 
@@ -130,14 +130,14 @@ pub enum WidgetApiMethod {
 
 impl Default for WidgetApiMethod {
     fn default() -> Self {
-        WidgetApiMethod::GET
+        Self::GET
     }
 }
 
 /// API configuration for API widgets
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct WidgetApiConfig {
-    /// Base URL (e.g. https://api.example.com)
+    /// Base URL (e.g. <https://api.example.com>)
     pub base_url: Option<String>,
     /// Endpoint path (e.g. /v1/data)
     pub endpoint: Option<String>,
@@ -150,7 +150,7 @@ pub struct WidgetApiConfig {
     /// Optional headers (supports environment variable substitutions)
     #[serde(default)]
     pub headers: HashMap<String, String>,
-    /// JSONPath expression for extracting data from response
+    /// `JSONPath` expression for extracting data from response
     pub data_path: Option<String>,
 }
 

@@ -20,7 +20,7 @@ pub struct BranchComponent {
 }
 
 impl BranchComponent {
-    pub fn new(config: BranchComponentConfig) -> Self {
+    #[must_use] pub fn new(config: BranchComponentConfig) -> Self {
         Self {
             config,
             git_cache: Mutex::new(HashMap::new()),
@@ -137,7 +137,7 @@ impl BranchComponent {
 
         if let Some(git) = &ctx.input.git {
             if self.config.status.show_dirty {
-                let is_dirty = git.status.as_ref().map_or(false, |s| s == "dirty")
+                let is_dirty = git.status.as_ref().is_some_and(|s| s == "dirty")
                     || git.staged.unwrap_or(0) > 0
                     || git.unstaged.unwrap_or(0) > 0
                     || git.untracked.unwrap_or(0) > 0;
@@ -257,7 +257,7 @@ struct BranchStatus {
 
 #[async_trait]
 impl Component for BranchComponent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "branch"
     }
 
@@ -353,7 +353,7 @@ impl BranchComponent {
 }
 
 impl BranchComponent {
-    fn status_required(&self) -> bool {
+    const fn status_required(&self) -> bool {
         self.config.status.show_dirty || self.config.status.show_ahead_behind
     }
 }
@@ -366,7 +366,7 @@ impl ComponentFactory for BranchComponentFactory {
         Box::new(BranchComponent::new(config.components.branch.clone()))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "branch"
     }
 }
@@ -424,8 +424,8 @@ mod tests {
         let output = component.render(&ctx).await;
         assert!(output.visible);
         assert!(output.text.starts_with("feature"));
-        assert!(output.text.contains("3")); // ahead count
-        assert!(output.text.contains("2")); // behind count
+        assert!(output.text.contains('3')); // ahead count
+        assert!(output.text.contains('2')); // behind count
     }
 
     #[tokio::test]

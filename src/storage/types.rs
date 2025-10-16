@@ -60,7 +60,7 @@ pub struct SessionSnapshot {
 }
 
 impl SessionSnapshot {
-    pub fn new(session_id: &str) -> Self {
+    #[must_use] pub fn new(session_id: &str) -> Self {
         Self {
             meta: SessionMeta {
                 session_id: session_id.to_string(),
@@ -177,27 +177,27 @@ pub struct CostMetrics {
 }
 
 impl CostMetrics {
-    pub fn from_cost_value(value: &serde_json::Value) -> Self {
+    #[must_use] pub fn from_cost_value(value: &serde_json::Value) -> Self {
         Self {
             total_cost_usd: value
                 .get("total_cost_usd")
-                .and_then(|v| v.as_f64())
+                .and_then(serde_json::Value::as_f64)
                 .unwrap_or_default(),
             total_duration_ms: value
                 .get("total_duration_ms")
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or_default(),
             total_api_duration_ms: value
                 .get("total_api_duration_ms")
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or_default(),
             total_lines_added: value
                 .get("total_lines_added")
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or_default(),
             total_lines_removed: value
                 .get("total_lines_removed")
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or_default(),
         }
     }

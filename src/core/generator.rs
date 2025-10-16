@@ -59,11 +59,11 @@ impl Default for GeneratorOptions {
 }
 
 impl GeneratorOptions {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn with_preset(mut self, preset: String) -> Self {
+    #[must_use] pub fn with_preset(mut self, preset: String) -> Self {
         self.preset = Some(preset);
         self
     }
@@ -206,7 +206,7 @@ impl StatuslineGenerator {
                 _ => None,
             })
             .filter(|name| seen.insert(*name))
-            .map(|name| name.to_string())
+            .map(std::string::ToString::to_string)
             .collect()
     }
 
@@ -240,7 +240,7 @@ impl StatuslineGenerator {
 
         if let Ok(snapshot_value) = serde_json::to_value(&input_data) {
             if let Err(err) = storage::update_session_snapshot(&snapshot_value).await {
-                eprintln!("[statusline] failed to update session snapshot: {}", err);
+                eprintln!("[statusline] failed to update session snapshot: {err}");
             }
         }
 
@@ -283,7 +283,7 @@ impl StatuslineGenerator {
         if extension_result.success {
             lines.extend(extension_result.lines);
         } else if let Some(err) = extension_result.error {
-            eprintln!("[statusline] multiline render failed: {}", err);
+            eprintln!("[statusline] multiline render failed: {err}");
         }
 
         let result = lines.join("\n");
@@ -314,7 +314,7 @@ impl StatuslineGenerator {
                     palette
                         .iter()
                         .find(|(component_name, _)| *component_name == name)
-                        .map(|(_, color)| color.to_string())
+                        .map(|(_, color)| (*color).to_string())
                 })
                 .unwrap_or_else(|| self.component_config_color(name));
 
@@ -334,8 +334,7 @@ impl StatuslineGenerator {
             "status" => self.config.components.status.base.icon_color.clone(),
             other => {
                 eprintln!(
-                    "[statusline] unknown component '{}' when resolving theme colors, fallback to blue",
-                    other
+                    "[statusline] unknown component '{other}' when resolving theme colors, fallback to blue"
                 );
                 "blue".to_string()
             }
@@ -415,7 +414,7 @@ impl StatuslineGenerator {
 
         let fallback_path = input_data
             .project_dir()
-            .or_else(|| input_data.cwd.as_deref());
+            .or(input_data.cwd.as_deref());
 
         let project_id = ProjectResolver::get_global_project_id(fallback_path);
         ProjectResolver::set_global_project_id(Some(&project_id));
@@ -436,7 +435,7 @@ impl StatuslineGenerator {
     }
 
     /// Get the current configuration
-    pub fn config(&self) -> &Config {
+    #[must_use] pub fn config(&self) -> &Config {
         &self.config
     }
 

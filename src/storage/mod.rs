@@ -18,19 +18,12 @@ use std::sync::RwLock;
 use tokio::task;
 
 #[derive(Debug, Clone)]
+#[derive(Default)]
 struct StorageRuntimeState {
     config: types::StorageConfig,
     project_id: Option<String>,
 }
 
-impl Default for StorageRuntimeState {
-    fn default() -> Self {
-        Self {
-            config: types::StorageConfig::default(),
-            project_id: None,
-        }
-    }
-}
 
 lazy_static! {
     static ref STORAGE_RUNTIME: RwLock<StorageRuntimeState> =
@@ -140,13 +133,11 @@ pub async fn get_session_cost_display(session_id: &str) -> Result<f64> {
     let session_id = session_id.to_string();
     let snapshot = task::spawn_blocking(move || {
         let manager = StorageManager::new()?;
-        Ok::<_, anyhow::Error>(manager.get_snapshot(&session_id)?)
+        manager.get_snapshot(&session_id)
     })
     .await??;
 
-    Ok(snapshot
-        .and_then(|snap| Some(snap.history.cost.total.total_cost_usd))
-        .unwrap_or(0.0))
+    Ok(snapshot.map_or(0.0, |snap| snap.history.cost.total.total_cost_usd))
 }
 
 /// Get conversation cost display (conversation mode)
@@ -159,7 +150,7 @@ pub async fn get_session_tokens(session_id: &str) -> Result<Option<TokenHistory>
     let session_id = session_id.to_string();
     let snapshot = task::spawn_blocking(move || {
         let manager = StorageManager::new()?;
-        Ok::<_, anyhow::Error>(manager.get_snapshot(&session_id)?)
+        manager.get_snapshot(&session_id)
     })
     .await??;
 

@@ -27,14 +27,14 @@ pub struct StorageManager {
 }
 
 impl StorageManager {
-    /// Create new StorageManager using runtime configuration
+    /// Create new `StorageManager` using runtime configuration
     pub fn new() -> Result<Self> {
         let config = current_runtime_config();
         let project_id = current_runtime_project_id();
         Self::with_config(config, project_id)
     }
 
-    /// Create new StorageManager with custom configuration and project context
+    /// Create new `StorageManager` with custom configuration and project context
     pub fn with_config(config: StorageConfig, project_id: Option<String>) -> Result<Self> {
         let paths = Self::initialize_paths(&config, project_id.as_deref())?;
 
@@ -50,7 +50,7 @@ impl StorageManager {
 
     /// Initialize storage paths based on current project
     fn initialize_paths(config: &StorageConfig, project_id: Option<&str>) -> Result<StoragePaths> {
-        let base_path = config.storage_path.as_ref().cloned().unwrap_or_else(|| {
+        let base_path = config.storage_path.clone().unwrap_or_else(|| {
             dirs::home_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
                 .join(".claude")
@@ -105,7 +105,7 @@ impl StorageManager {
     }
 
     fn session_file_path(&self, session_id: &str) -> PathBuf {
-        self.paths.sessions_dir.join(format!("{}.json", session_id))
+        self.paths.sessions_dir.join(format!("{session_id}.json"))
     }
 
     fn load_snapshot(&self, session_id: &str) -> Result<Option<SessionSnapshot>> {
@@ -208,8 +208,8 @@ impl StorageManager {
             .get("display_name")
             .or_else(|| model.get("displayName"))
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let timestamp = timestamp.map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
+        let timestamp = timestamp.map(std::string::ToString::to_string);
 
         if let Some(entry) = history.model_usage.iter_mut().find(|entry| entry.id == id) {
             if display_name.is_some() {
@@ -238,7 +238,7 @@ impl StorageManager {
         }
 
         let metadata = fs::metadata(path)
-            .with_context(|| format!("Failed to read transcript metadata: {}", transcript_path))?;
+            .with_context(|| format!("Failed to read transcript metadata: {transcript_path}"))?;
         let file_len = metadata.len();
 
         let mut offset = snapshot.transcript_state.processed_offset;
@@ -252,9 +252,9 @@ impl StorageManager {
         }
 
         let mut file = File::open(path)
-            .with_context(|| format!("Failed to open transcript: {}", transcript_path))?;
+            .with_context(|| format!("Failed to open transcript: {transcript_path}"))?;
         file.seek(SeekFrom::Start(offset))
-            .with_context(|| format!("Failed to seek transcript: {}", transcript_path))?;
+            .with_context(|| format!("Failed to seek transcript: {transcript_path}"))?;
         let mut reader = BufReader::new(file);
 
         let mut buffer = String::new();
@@ -265,7 +265,7 @@ impl StorageManager {
             buffer.clear();
             let bytes_read = reader
                 .read_line(&mut buffer)
-                .with_context(|| format!("Failed to read transcript line: {}", transcript_path))?;
+                .with_context(|| format!("Failed to read transcript line: {transcript_path}"))?;
             if bytes_read == 0 {
                 break;
             }
@@ -286,14 +286,14 @@ impl StorageManager {
 
             if value
                 .get("isCompactSummary")
-                .and_then(|flag| flag.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false)
             {
                 let mut entry = TokenHistory::default();
                 entry.last_timestamp = value
                     .get("timestamp")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+                    .map(std::string::ToString::to_string);
                 latest_tokens = Some(entry);
                 continue;
             }
@@ -301,26 +301,25 @@ impl StorageManager {
             if value
                 .get("type")
                 .and_then(|ty| ty.as_str())
-                .map(|ty| ty == "assistant")
-                .unwrap_or(false)
+                .is_some_and(|ty| ty == "assistant")
             {
                 if let Some(message) = value.get("message") {
                     if let Some(usage) = message.get("usage") {
                         let input = usage
                             .get("input_tokens")
-                            .and_then(|v| v.as_u64())
+                            .and_then(serde_json::Value::as_u64)
                             .unwrap_or(0);
                         let output = usage
                             .get("output_tokens")
-                            .and_then(|v| v.as_u64())
+                            .and_then(serde_json::Value::as_u64)
                             .unwrap_or(0);
                         let cache_creation = usage
                             .get("cache_creation_input_tokens")
-                            .and_then(|v| v.as_u64())
+                            .and_then(serde_json::Value::as_u64)
                             .unwrap_or(0);
                         let cache_read = usage
                             .get("cache_read_input_tokens")
-                            .and_then(|v| v.as_u64())
+                            .and_then(serde_json::Value::as_u64)
                             .unwrap_or(0);
 
                         let mut entry = latest_tokens.unwrap_or_default();
@@ -332,11 +331,11 @@ impl StorageManager {
                         entry.last_message_uuid = value
                             .get("uuid")
                             .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
+                            .map(std::string::ToString::to_string);
                         entry.last_timestamp = value
                             .get("timestamp")
                             .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
+                            .map(std::string::ToString::to_string);
 
                         latest_tokens = Some(entry);
                     }
@@ -423,8 +422,7 @@ impl StorageManager {
         if let Some(transcript_path) = Self::extract_transcript_path(input_data) {
             if let Err(err) = Self::read_tokens_from_transcript(&mut snapshot, transcript_path) {
                 eprintln!(
-                    "[storage] Failed to update token usage for session {}: {}",
-                    session_id, err
+                    "[storage] Failed to update token usage for session {session_id}: {err}"
                 );
             }
         }
@@ -462,7 +460,7 @@ impl StorageManager {
         }
 
         let cutoff_date = Utc::now()
-            - chrono::Duration::try_days(cleanup_days as i64)
+            - chrono::Duration::try_days(i64::from(cleanup_days))
                 .unwrap_or_else(|| chrono::Duration::milliseconds(0));
 
         if !self.paths.sessions_dir.exists() {
@@ -476,7 +474,7 @@ impl StorageManager {
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
 
-            if !path.extension().map_or(false, |ext| ext == "json") {
+            if !path.extension().is_some_and(|ext| ext == "json") {
                 continue;
             }
 

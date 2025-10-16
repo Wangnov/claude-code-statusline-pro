@@ -60,7 +60,7 @@ pub struct UsageComponent {
 
 impl UsageComponent {
     /// Create new usage component
-    pub fn new(name: String, config: UsageComponentConfig) -> Self {
+    #[must_use] pub const fn new(name: String, config: UsageComponentConfig) -> Self {
         Self { name, config }
     }
 
@@ -130,7 +130,7 @@ impl UsageComponent {
         let cost = data
             .get("cost")
             .and_then(|c| c.get("total_cost_usd"))
-            .and_then(|c| c.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0);
         let color = self.get_usage_color(cost);
 
@@ -145,19 +145,19 @@ impl UsageComponent {
         let cost = data
             .get("cost")
             .and_then(|c| c.get("total_cost_usd"))
-            .and_then(|c| c.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0);
 
         let lines_added = data
             .get("cost")
             .and_then(|c| c.get("total_lines_added"))
-            .and_then(|c| c.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
 
         let lines_removed = data
             .get("cost")
             .and_then(|c| c.get("total_lines_removed"))
-            .and_then(|c| c.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
 
         let mut text = self.format_cost(cost, self.config.precision);
@@ -169,11 +169,11 @@ impl UsageComponent {
             let mut line_parts = Vec::new();
 
             if self.config.show_lines_added && lines_added > 0 {
-                line_parts.push(format!("+{}", lines_added));
+                line_parts.push(format!("+{lines_added}"));
             }
 
             if self.config.show_lines_removed && lines_removed > 0 {
-                line_parts.push(format!("-{}", lines_removed));
+                line_parts.push(format!("-{lines_removed}"));
             }
 
             if !line_parts.is_empty() {
@@ -228,7 +228,7 @@ impl UsageComponent {
                 }
             }
             Err(e) => {
-                eprintln!("Failed to load conversation cost: {}", e);
+                eprintln!("Failed to load conversation cost: {e}");
                 ComponentOutput::new("$0.00")
                     .with_icon_color("gray".to_string())
                     .with_text_color("gray".to_string())
@@ -265,7 +265,7 @@ impl Component for UsageComponent {
         let serialized_input = match serde_json::to_value(&**input_data) {
             Ok(value) => Some(value),
             Err(err) => {
-                eprintln!("Failed to serialize usage input: {}", err);
+                eprintln!("Failed to serialize usage input: {err}");
                 None
             }
         };
@@ -292,8 +292,14 @@ impl Component for UsageComponent {
 /// Usage组件工厂 | Usage component factory
 pub struct UsageComponentFactory;
 
+impl Default for UsageComponentFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UsageComponentFactory {
-    pub fn new() -> Self {
+    #[must_use] pub const fn new() -> Self {
         Self
     }
 }
@@ -306,7 +312,7 @@ impl ComponentFactory for UsageComponentFactory {
         ))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "usage"
     }
 }

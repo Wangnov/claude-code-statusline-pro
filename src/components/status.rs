@@ -87,7 +87,7 @@ pub struct StatusComponent {
 
 impl StatusComponent {
     /// Create a new status component
-    pub fn new(config: StatusComponentConfig) -> Self {
+    #[must_use] pub const fn new(config: StatusComponentConfig) -> Self {
         Self {
             config,
             transcript_cache: Mutex::new(None),
@@ -121,7 +121,7 @@ impl StatusComponent {
 
         if let Some(error) = ctx.input.extra.get("error") {
             if error.as_bool().unwrap_or(false) || error.as_str().is_some() {
-                return StatusInfo::error(error.as_str().map(|s| s.to_string()));
+                return StatusInfo::error(error.as_str().map(std::string::ToString::to_string));
             }
         }
 
@@ -172,7 +172,7 @@ impl StatusComponent {
                 last_entry_type = value
                     .get("type")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+                    .map(std::string::ToString::to_string);
             }
 
             if value.get("type").and_then(|v| v.as_str()) != Some("assistant") {
@@ -190,7 +190,7 @@ impl StatusComponent {
             last_stop_reason = message
                 .get("stop_reason")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
 
             if self.is_error_entry(&value) {
                 assistant_error = true;
@@ -205,9 +205,9 @@ impl StatusComponent {
             .filter(|name| !name.is_empty());
 
         let info = if assistant_error {
-            StatusInfo::error(assistant_error_detail.clone())
+            StatusInfo::error(assistant_error_detail)
         } else if let Some(reason) = last_stop_reason.as_deref() {
-            self.parse_stop_reason(reason, tool_name.clone())
+            self.parse_stop_reason(reason, tool_name)
         } else if matches!(last_entry_type.as_deref(), Some("user")) {
             StatusInfo::thinking()
         } else {
@@ -331,8 +331,7 @@ impl StatusComponent {
             if tool_use_result
                 .get("type")
                 .and_then(|v| v.as_str())
-                .map(|ty| ty.eq_ignore_ascii_case("error"))
-                .unwrap_or(false)
+                .is_some_and(|ty| ty.eq_ignore_ascii_case("error"))
             {
                 return true;
             }
@@ -425,7 +424,7 @@ impl StatusComponent {
 
 #[async_trait]
 impl Component for StatusComponent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "status"
     }
 
@@ -481,7 +480,7 @@ impl ComponentFactory for StatusComponentFactory {
         Box::new(StatusComponent::new(config.components.status.clone()))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "status"
     }
 }

@@ -170,15 +170,15 @@ pub enum AutoDetect {
 
 impl Default for AutoDetect {
     fn default() -> Self {
-        AutoDetect::Auto("auto".to_string())
+        Self::Auto("auto".to_string())
     }
 }
 
 impl AutoDetect {
-    pub fn is_enabled(&self, detected: bool) -> bool {
+    #[must_use] pub const fn is_enabled(&self, detected: bool) -> bool {
         match self {
-            AutoDetect::Bool(value) => *value,
-            AutoDetect::Auto(_) => detected,
+            Self::Bool(value) => *value,
+            Self::Auto(_) => detected,
         }
     }
 }
@@ -718,6 +718,7 @@ impl Default for StatusComponentConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Default)]
 pub struct StatusIconsConfig {
     #[serde(default)]
     pub emoji: StatusEmojiIcons,
@@ -729,15 +730,6 @@ pub struct StatusIconsConfig {
     pub text: StatusTextIcons,
 }
 
-impl Default for StatusIconsConfig {
-    fn default() -> Self {
-        Self {
-            emoji: StatusEmojiIcons::default(),
-            nerd: StatusNerdIcons::default(),
-            text: StatusTextIcons::default(),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct StatusEmojiIcons {
@@ -889,11 +881,11 @@ fn default_language() -> String {
     "en".to_string()
 }
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 
-fn default_expiry() -> u32 {
+const fn default_expiry() -> u32 {
     30
 }
 
@@ -921,15 +913,15 @@ fn default_smart() -> String {
     "smart".to_string()
 }
 
-fn default_precision() -> u32 {
+const fn default_precision() -> u32 {
     2
 }
 
-fn default_max_rows() -> u32 {
+const fn default_max_rows() -> u32 {
     5
 }
 
-fn default_row_width() -> u32 {
+const fn default_row_width() -> u32 {
     120
 }
 
@@ -945,23 +937,23 @@ fn default_branch_operation_color() -> String {
     "red".to_string()
 }
 
-fn default_branch_max_length() -> u32 {
+const fn default_branch_max_length() -> u32 {
     20
 }
 
-fn default_branch_cache_ttl() -> u64 {
+const fn default_branch_cache_ttl() -> u64 {
     5_000
 }
 
-fn default_branch_git_timeout() -> u32 {
+const fn default_branch_git_timeout() -> u32 {
     1_000
 }
 
-fn default_branch_large_repo_threshold() -> u64 {
+const fn default_branch_large_repo_threshold() -> u64 {
     10_000
 }
 
-fn default_progress_width() -> u32 {
+const fn default_progress_width() -> u32 {
     15
 }
 
@@ -989,19 +981,19 @@ fn default_danger_color() -> String {
     "red".to_string()
 }
 
-fn default_warning_threshold() -> f64 {
+const fn default_warning_threshold() -> f64 {
     60.0
 }
 
-fn default_danger_threshold() -> f64 {
+const fn default_danger_threshold() -> f64 {
     85.0
 }
 
-fn default_backup_threshold() -> f64 {
+const fn default_backup_threshold() -> f64 {
     85.0
 }
 
-fn default_critical_threshold() -> f64 {
+const fn default_critical_threshold() -> f64 {
     95.0
 }
 

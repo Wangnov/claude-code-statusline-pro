@@ -13,7 +13,7 @@ pub struct ProjectComponent {
 }
 
 impl ProjectComponent {
-    pub fn new(config: ProjectComponentConfig) -> Self {
+    #[must_use] pub const fn new(config: ProjectComponentConfig) -> Self {
         Self { config }
     }
 
@@ -21,7 +21,7 @@ impl ProjectComponent {
     fn extract_project_name(&self, ctx: &RenderContext) -> Option<String> {
         // Try to get project directory from input
         let project_dir = ctx.input.project_dir()?;
-        let sanitized = project_dir.trim_end_matches(|c| c == '/' || c == '\\');
+        let sanitized = project_dir.trim_end_matches(['/', '\\']);
 
         if sanitized.is_empty() {
             return None;
@@ -30,20 +30,20 @@ impl ProjectComponent {
         let path = Path::new(sanitized);
 
         path.file_name()
-            .and_then(|os| os.to_str().map(|s| s.to_string()))
+            .and_then(|os| os.to_str().map(std::string::ToString::to_string))
             .or_else(|| {
                 sanitized
-                    .split(|c| c == '/' || c == '\\')
+                    .split(['/', '\\'])
                     .filter(|segment| !segment.is_empty())
-                    .last()
-                    .map(|s| s.to_string())
+                    .next_back()
+                    .map(std::string::ToString::to_string)
             })
     }
 }
 
 #[async_trait]
 impl Component for ProjectComponent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "project"
     }
 
@@ -91,7 +91,7 @@ impl ComponentFactory for ProjectComponentFactory {
         Box::new(ProjectComponent::new(config.components.project.clone()))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "project"
     }
 }

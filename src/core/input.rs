@@ -164,13 +164,13 @@ pub struct CostInfo {
 }
 
 impl InputData {
-    /// Parse InputData from JSON string
+    /// Parse `InputData` from JSON string
     pub fn from_json(json: &str) -> anyhow::Result<Self> {
-        let data: InputData = serde_json::from_str(json)?;
+        let data: Self = serde_json::from_str(json)?;
         Ok(data)
     }
 
-    /// Parse InputData from stdin
+    /// Parse `InputData` from stdin
     pub fn from_stdin() -> anyhow::Result<Self> {
         use std::io::{self, Read};
         let mut buffer = String::new();
@@ -178,7 +178,7 @@ impl InputData {
 
         // Handle empty input by returning default
         if buffer.trim().is_empty() {
-            return Ok(InputData::default());
+            return Ok(Self::default());
         }
 
         Self::from_json(&buffer)
@@ -187,7 +187,7 @@ impl InputData {
     /// Get the effective project directory
     ///
     /// Returns the project directory from workspace, or falls back to cwd
-    pub fn project_dir(&self) -> Option<&str> {
+    #[must_use] pub fn project_dir(&self) -> Option<&str> {
         self.workspace
             .as_ref()
             .and_then(|w| w.project_dir.as_deref())
@@ -196,8 +196,8 @@ impl InputData {
 
     /// Get the effective git branch
     ///
-    /// Prefers git.branch over the legacy git_branch field
-    pub fn branch(&self) -> Option<&str> {
+    /// Prefers git.branch over the legacy `git_branch` field
+    #[must_use] pub fn branch(&self) -> Option<&str> {
         self.git
             .as_ref()
             .and_then(|g| g.branch.as_deref())

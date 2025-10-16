@@ -50,13 +50,13 @@ async fn test_basic_statusline_generation() {
     let result = generator.generate(input.clone()).await.unwrap();
 
     // Debug: Print the actual result
-    println!("Generated statusline: '{}'", result);
+    println!("Generated statusline: '{result}'");
 
     // Basic assertions
     assert!(!result.is_empty(), "Result should not be empty");
     // Check for specific components rather than the word "project"
     assert!(
-        result.contains("test") || result.len() > 0,
+        result.contains("test") || !result.is_empty(),
         "Should have some content"
     );
     assert!(
@@ -110,7 +110,7 @@ async fn test_empty_input_handling() {
 
     // Even with empty input, might show some components with defaults
     // or empty state representations
-    assert!(result.is_empty() || result.len() > 0);
+    assert!(result.is_empty() || !result.is_empty());
 }
 
 #[tokio::test]

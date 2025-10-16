@@ -1,3 +1,12 @@
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unimplemented,
+    clippy::todo
+)]
+
 //! Claude Code Statusline Pro - Library
 //!
 //! Core library for statusline generation

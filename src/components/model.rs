@@ -12,7 +12,7 @@ pub struct ModelComponent {
 }
 
 impl ModelComponent {
-    pub fn new(config: ModelComponentConfig) -> Self {
+    #[must_use] pub const fn new(config: ModelComponentConfig) -> Self {
         Self { config }
     }
 
@@ -22,14 +22,14 @@ impl ModelComponent {
 
         // Priority 1: Check custom mappings first
         if let Some(id) = &model.id {
-            if !self.config.show_full_name {
-                // Short name mode: check mapping
-                if let Some(mapped) = self.config.mapping.get(id) {
+            if self.config.show_full_name {
+                // Long name mode: check long_name_mapping
+                if let Some(mapped) = self.config.long_name_mapping.get(id) {
                     return Some(mapped.clone());
                 }
             } else {
-                // Long name mode: check long_name_mapping
-                if let Some(mapped) = self.config.long_name_mapping.get(id) {
+                // Short name mode: check mapping
+                if let Some(mapped) = self.config.mapping.get(id) {
                     return Some(mapped.clone());
                 }
             }
@@ -82,16 +82,15 @@ impl ModelComponent {
 
         // Collect version numbers (major and optional minor)
         while idx < parts.len() {
-            if let Ok(_) = parts[idx].parse::<u32>() {
+            if parts[idx].parse::<u32>().is_ok() {
                 // This looks like a version number or date
                 // Date is always 8 digits (YYYYMMDD)
                 if parts[idx].len() == 8 {
                     // This is the date, stop here
                     break;
-                } else {
-                    version_parts.push(parts[idx]);
-                    idx += 1;
                 }
+                version_parts.push(parts[idx]);
+                idx += 1;
             } else {
                 // Non-numeric part after series, invalid format
                 return None;
@@ -159,7 +158,7 @@ fn capitalize(s: &str) -> String {
 
 #[async_trait]
 impl Component for ModelComponent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "model"
     }
 
@@ -206,7 +205,7 @@ impl ComponentFactory for ModelComponentFactory {
         Box::new(ModelComponent::new(config.components.model.clone()))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "model"
     }
 }

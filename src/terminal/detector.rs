@@ -13,12 +13,12 @@ pub struct TerminalDetector;
 
 impl TerminalDetector {
     /// Create a new terminal detector
-    pub fn new() -> Self {
+    #[must_use] pub const fn new() -> Self {
         Self
     }
 
     /// Detect terminal capabilities
-    pub fn detect(
+    #[must_use] pub fn detect(
         &self,
         enable_colors: &AutoDetect,
         enable_emoji: &AutoDetect,
@@ -60,9 +60,9 @@ impl TerminalDetector {
         // Debug output to help troubleshoot detection issues
         if std::env::var("DEBUG").is_ok() {
             eprintln!("[调试] 终端能力检测结果:");
-            eprintln!("  - supports_colors: {}", supports_colors);
-            eprintln!("  - supports_emoji: {}", supports_emoji);
-            eprintln!("  - supports_nerd_font: {}", supports_nerd_font);
+            eprintln!("  - supports_colors: {supports_colors}");
+            eprintln!("  - supports_emoji: {supports_emoji}");
+            eprintln!("  - supports_nerd_font: {supports_nerd_font}");
             eprintln!("  - TERM_PROGRAM: {:?}", std::env::var("TERM_PROGRAM"));
             eprintln!("  - TERM: {:?}", std::env::var("TERM"));
         }
