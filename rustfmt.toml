@@ -9,21 +9,9 @@ newline_style = "Unix"
 use_small_heuristics = "Default"
 
 # 导入
-imports_granularity = "Crate"
-group_imports = "StdExternalCrate"
 reorder_imports = true
 reorder_modules = true
-
-# 注释
-normalize_comments = true
-wrap_comments = true
-comment_width = 80
 
 # 其他
 use_field_init_shorthand = true
 use_try_shorthand = true
-format_code_in_doc_comments = true
-format_macro_matchers = true
-format_macro_bodies = true
-format_strings = false
-overflow_delimited_expr = true

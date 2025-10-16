@@ -18,25 +18,5 @@ type-complexity-threshold = 250
 # 单个表达式的最大嵌套
 excessive-nesting-threshold = 5
 
-# 数组大小警告阈值
-large-stack-arrays-threshold = 512000
-
-# 允许的lint
-allow = []
-
-# 警告级别的lint
-warn = [
-    "clippy::all",
-    "clippy::pedantic",
-    "clippy::nursery",
-    "clippy::cargo",
-]
-
-# 拒绝的lint（导致编译失败）
-deny = [
-    "clippy::unwrap_used",
-    "clippy::expect_used",
-    "clippy::panic",
-    "clippy::unimplemented",
-    "clippy::todo",
-]
+# 栈分配大小警告阈值
+stack-size-threshold = 512000
