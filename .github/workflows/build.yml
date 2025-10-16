@@ -1,6 +1,9 @@
-name: build-binaries
+name: Build
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -133,6 +136,8 @@ jobs:
     name: assemble npm package
     runs-on: ubuntu-latest
     needs: build
+    environment:
+      name: npm-release
 
     steps:
       - uses: actions/checkout@v4
@@ -188,18 +193,83 @@ jobs:
             ccstatus-windows-arm64
           )
           for pkg in "${packages[@]}"; do
-            (cd "npm/platforms/${pkg}" && npm pack)
+            pkg_dir="npm/platforms/${pkg}"
+            rm -f "${pkg_dir}"/*.tgz
+            (cd "${pkg_dir}" && npm pack)
           done
 
       - name: Pack ccstatus
         run: |
           set -euo pipefail
+          rm -f npm/ccstatus/*.tgz
           (cd npm/ccstatus && npm pack)
 
       - name: Pack legacy package
         run: |
           set -euo pipefail
+          rm -f npm/claude-code-statusline-pro/*.tgz
           (cd npm/claude-code-statusline-pro && npm pack)
+
+      - name: Read release version
+        id: release-version
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./npm/ccstatus/package.json').version")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test assembled packages (linux-x64)
+        run: |
+          set -euo pipefail
+          PLATFORM_TARBALL=$(ls npm/platforms/ccstatus-linux-x64/*.tgz)
+          MAIN_TARBALL=$(ls npm/ccstatus/*.tgz)
+          LEGACY_TARBALL=$(ls npm/claude-code-statusline-pro/*.tgz)
+
+          TMP_DIR=$(mktemp -d)
+          trap 'rm -rf "$TMP_DIR"' EXIT
+
+          npm install --prefix "$TMP_DIR" --no-save "$PLATFORM_TARBALL"
+          npm install --prefix "$TMP_DIR" --no-save "$MAIN_TARBALL"
+          npm install --prefix "$TMP_DIR" --no-save "$LEGACY_TARBALL"
+
+          NODE_PATH="$TMP_DIR/node_modules" node "$TMP_DIR/node_modules/claude-code-statusline-pro/index.js" --version
+          NODE_PATH="$TMP_DIR/node_modules" node "$TMP_DIR/node_modules/ccstatus/index.js" --help >/dev/null
+
+      - name: Ensure npm versions are unpublished
+        env:
+          VERSION: ${{ steps.release-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          packages=(
+            ccstatus
+            claude-code-statusline-pro
+            @wangnov/ccstatus-linux-x64
+            @wangnov/ccstatus-linux-arm64
+            @wangnov/ccstatus-macos-x64
+            @wangnov/ccstatus-macos-arm64
+            @wangnov/ccstatus-windows-x64
+            @wangnov/ccstatus-windows-arm64
+          )
+          for pkg in "${packages[@]}"; do
+            if npm view "${pkg}@${VERSION}" > /dev/null 2>&1; then
+              echo "::error::${pkg}@${VERSION} already exists on npm"
+              exit 1
+            fi
+          done
+
+      - name: Publish npm packages
+        if: secrets.NPM_TOKEN != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}"
+
+          for file in npm/platforms/*/*.tgz; do
+            npm publish "$file" --access public
+          done
+
+          npm publish "$(ls npm/ccstatus/*.tgz)" --access public
+          npm publish "$(ls npm/claude-code-statusline-pro/*.tgz)" --access public
 
       - name: Upload npm tarballs
         uses: actions/upload-artifact@v4
