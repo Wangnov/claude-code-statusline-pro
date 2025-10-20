@@ -7,7 +7,6 @@
 //! - Default value handling
 
 use anyhow::{anyhow, Context, Result};
-use dirs;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tokio::task;
@@ -16,6 +15,7 @@ use toml_edit::{value as toml_value, DocumentMut};
 
 use super::schema::Config;
 use crate::storage::ProjectResolver;
+use crate::utils;
 
 /// Configuration source information
 #[derive(Debug, Clone)]
@@ -544,7 +544,7 @@ impl ConfigLoader {
     }
 
     fn get_project_config_path_with_id(project_id: &str) -> PathBuf {
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        let home = utils::home_dir().unwrap_or_else(|| PathBuf::from("."));
         home.join(".claude")
             .join("projects")
             .join(project_id)
@@ -553,7 +553,7 @@ impl ConfigLoader {
     }
 
     fn get_user_config_path() -> Option<PathBuf> {
-        dirs::home_dir().map(|home| {
+        utils::home_dir().map(|home| {
             home.join(".claude")
                 .join("statusline-pro")
                 .join("config.toml")

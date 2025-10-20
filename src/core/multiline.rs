@@ -19,6 +19,7 @@ use crate::config::component_widgets::{
     WidgetFilterMode, WidgetType,
 };
 use crate::config::{Config, MultilineConfig, MultilineRowConfig};
+use crate::utils;
 
 static ENV_PATTERN: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static PLACEHOLDER_PATTERN: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
@@ -53,7 +54,7 @@ pub struct MultiLineRenderer {
 impl MultiLineRenderer {
     #[must_use]
     pub fn new(config: Config, base_dir: Option<PathBuf>) -> Self {
-        let log_file = dirs::home_dir()
+        let log_file = utils::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join(".claude")
             .join("statusline-pro")
@@ -189,7 +190,7 @@ impl MultiLineRenderer {
             );
         }
 
-        if let Some(user_dir) = dirs::home_dir() {
+        if let Some(user_dir) = utils::home_dir() {
             candidate_paths.push(
                 user_dir
                     .join(".claude")

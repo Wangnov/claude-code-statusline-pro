@@ -18,6 +18,7 @@ use super::types::{
     TokenHistory,
 };
 use super::{current_runtime_config, current_runtime_project_id, set_runtime_project_id};
+use crate::utils;
 
 /// Storage Manager responsible for persisting session snapshots.
 pub struct StorageManager {
@@ -59,7 +60,7 @@ impl StorageManager {
     /// Initialize storage paths based on current project
     fn initialize_paths(config: &StorageConfig, project_id: Option<&str>) -> StoragePaths {
         let base_path = config.storage_path.clone().unwrap_or_else(|| {
-            dirs::home_dir()
+            utils::home_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
                 .join(".claude")
         });
