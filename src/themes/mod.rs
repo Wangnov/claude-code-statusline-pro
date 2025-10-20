@@ -15,6 +15,22 @@ pub use capsule::CapsuleThemeRenderer;
 pub use classic::ClassicThemeRenderer;
 pub use powerline::PowerlineThemeRenderer;
 
+fn clamp_component(value: f32) -> u8 {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    {
+        value.clamp(0.0, 255.0).round() as u8
+    }
+}
+
+fn lighten(color: (u8, u8, u8), amount: f32) -> (u8, u8, u8) {
+    let (r, g, b) = color;
+    let lerp = |component: u8| -> u8 {
+        let comp = (255.0 - f32::from(component)).mul_add(amount, f32::from(component));
+        clamp_component(comp)
+    };
+    (lerp(r), lerp(g), lerp(b))
+}
+
 /// Apply ANSI colors to a segment if supported
 pub(crate) fn colorize_segment(
     segment: &str,
@@ -25,10 +41,10 @@ pub(crate) fn colorize_segment(
         return segment.to_string();
     }
 
-    match color_name.and_then(parse_color) {
-        Some(color) => segment.with(color).to_string(),
-        None => segment.to_string(),
-    }
+    color_name.and_then(parse_color).map_or_else(
+        || segment.to_string(),
+        |color| segment.with(color).to_string(),
+    )
 }
 
 pub(crate) const ANSI_RESET: &str = "\x1b[0m";
@@ -84,15 +100,6 @@ fn resolve_color(name: &str) -> Option<(u8, u8, u8)> {
         }
     }
 
-    fn lighten(color: (u8, u8, u8), amount: f32) -> (u8, u8, u8) {
-        let (r, g, b) = color;
-        let lerp = |component: u8| -> u8 {
-            let comp = (255.0 - f32::from(component)).mul_add(amount, f32::from(component));
-            comp.round().clamp(0.0, 255.0) as u8
-        };
-        (lerp(r), lerp(g), lerp(b))
-    }
-
     let nord = match normalized.as_str() {
         "black" => (46, 52, 64),
         "gray" | "grey" => (120, 128, 146),
@@ -126,14 +133,12 @@ fn parse_color(name: &str) -> Option<Color> {
         "black" => Some(Color::Black),
         "red" => Some(Color::Red),
         "green" => Some(Color::Green),
-        "yellow" => Some(Color::Yellow),
+        "yellow" | "orange" | "bright_orange" => Some(Color::Yellow),
         "blue" => Some(Color::Blue),
-        "magenta" | "purple" => Some(Color::Magenta),
+        "magenta" | "purple" | "pink" | "bright_pink" => Some(Color::Magenta),
         "cyan" => Some(Color::Cyan),
-        "white" => Some(Color::White),
+        "white" | "bright_white" => Some(Color::White),
         "gray" | "grey" => Some(Color::Grey),
-        "orange" => Some(Color::Yellow),
-        "pink" => Some(Color::Magenta),
         "bright_black" => Some(Color::DarkGrey),
         "bright_red" => Some(Color::DarkRed),
         "bright_green" => Some(Color::DarkGreen),
@@ -141,9 +146,6 @@ fn parse_color(name: &str) -> Option<Color> {
         "bright_blue" => Some(Color::DarkBlue),
         "bright_magenta" | "bright_purple" => Some(Color::DarkMagenta),
         "bright_cyan" => Some(Color::DarkCyan),
-        "bright_white" => Some(Color::White),
-        "bright_orange" => Some(Color::Yellow),
-        "bright_pink" => Some(Color::Magenta),
         _ => None,
     }
 }
@@ -157,12 +159,22 @@ pub enum Theme {
 }
 
 impl Theme {
-    /// Parse theme from string
-    #[must_use] pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "powerline" => Self::Powerline,
-            "capsule" => Self::Capsule,
-            _ => Self::Classic, // Default to classic
+    /// Parse theme from string, returning `Classic` if input is unknown.
+    #[must_use]
+    pub fn from_name(value: &str) -> Self {
+        value.parse().unwrap_or(Self::Classic)
+    }
+}
+
+impl std::str::FromStr for Theme {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "powerline" => Ok(Self::Powerline),
+            "capsule" => Ok(Self::Capsule),
+            "classic" | "" => Ok(Self::Classic),
+            _ => Err(()),
         }
     }
 }
@@ -170,6 +182,10 @@ impl Theme {
 /// Theme renderer trait
 pub trait ThemeRenderer: Send + Sync {
     /// Render components with the theme
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the renderer fails to format the statusline.
     fn render(
         &self,
         components: &[ComponentOutput],
@@ -182,8 +198,9 @@ pub trait ThemeRenderer: Send + Sync {
 }
 
 /// Create a theme renderer based on the theme name
-#[must_use] pub fn create_theme_renderer(theme: &str) -> Box<dyn ThemeRenderer> {
-    match Theme::from_str(theme) {
+#[must_use]
+pub fn create_theme_renderer(theme: &str) -> Box<dyn ThemeRenderer> {
+    match Theme::from_name(theme) {
         Theme::Classic => Box::new(ClassicThemeRenderer::new()),
         Theme::Powerline => Box::new(PowerlineThemeRenderer::new()),
         Theme::Capsule => Box::new(CapsuleThemeRenderer::new()),

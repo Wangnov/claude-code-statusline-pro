@@ -73,7 +73,8 @@ impl ComponentOutput {
     }
 
     /// Create an invisible/hidden component output
-    #[must_use] pub const fn hidden() -> Self {
+    #[must_use]
+    pub const fn hidden() -> Self {
         Self {
             text: String::new(),
             icon: None,
@@ -85,24 +86,28 @@ impl ComponentOutput {
     }
 
     /// Set the icon for this output
+    #[must_use]
     pub fn with_icon(mut self, icon: impl Into<String>) -> Self {
         self.icon = Some(icon.into());
         self
     }
 
     /// Set the icon color
+    #[must_use]
     pub fn with_icon_color(mut self, color: impl Into<String>) -> Self {
         self.icon_color = Some(color.into());
         self
     }
 
     /// Set the text color
+    #[must_use]
     pub fn with_text_color(mut self, color: impl Into<String>) -> Self {
         self.text_color = Some(color.into());
         self
     }
 
     /// Attach the originating component name
+    #[must_use]
     pub fn with_component_name(mut self, name: impl Into<String>) -> Self {
         self.component_name = Some(name.into());
         self

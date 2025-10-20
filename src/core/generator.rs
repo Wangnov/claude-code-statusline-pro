@@ -59,11 +59,13 @@ impl Default for GeneratorOptions {
 }
 
 impl GeneratorOptions {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self::default()
     }
 
-    #[must_use] pub fn with_preset(mut self, preset: String) -> Self {
+    #[must_use]
+    pub fn with_preset(mut self, preset: String) -> Self {
         self.preset = Some(preset);
         self
     }
@@ -169,7 +171,7 @@ impl StatuslineGenerator {
     /// Apply a preset configuration
     fn apply_preset(&mut self, preset: &str) {
         // Parse preset string (e.g., "PMBTUS" -> ["P", "M", "B", "T", "U", "S"])
-        let component_map = self.parse_preset(preset);
+        let component_map = Self::parse_preset(preset);
 
         // Update config.components.order based on preset
         if let Some(ref mut config) = Arc::get_mut(&mut self.config) {
@@ -191,7 +193,7 @@ impl StatuslineGenerator {
     }
 
     /// Parse preset string into component order
-    fn parse_preset(&self, preset: &str) -> Vec<String> {
+    fn parse_preset(preset: &str) -> Vec<String> {
         let mut seen = HashSet::new();
 
         preset
@@ -234,6 +236,10 @@ impl StatuslineGenerator {
     }
 
     /// Generate the statusline
+    /// # Errors
+    ///
+    /// Returns an error if component rendering fails or if required
+    /// configuration initialization steps cannot complete successfully.
     pub async fn generate(&mut self, input_data: InputData) -> Result<String> {
         // Check update rate limit
         self.ensure_storage_ready(&input_data).await?;
@@ -390,18 +396,22 @@ impl StatuslineGenerator {
                 continue;
             }
 
-            if let Some(factory) = self.component_registry.get(component_name.as_str()) {
-                let component = factory.create(&self.config);
+            let Some(factory) = self.component_registry.get(component_name.as_str()) else {
+                continue;
+            };
 
-                // Check if component is enabled
-                if component.is_enabled(context) {
-                    let mut output = component.render(context).await;
-                    if output.visible {
-                        output.set_component_name(component_name.clone());
-                        results.push(output);
-                    }
-                }
+            let component = factory.create(&self.config);
+            if !component.is_enabled(context) {
+                continue;
             }
+
+            let mut output = component.render(context).await;
+            if !output.visible {
+                continue;
+            }
+
+            output.set_component_name(component_name.clone());
+            results.push(output);
         }
 
         Ok(results)
@@ -412,9 +422,7 @@ impl StatuslineGenerator {
             ProjectResolver::set_global_project_id_from_transcript(Some(transcript));
         }
 
-        let fallback_path = input_data
-            .project_dir()
-            .or(input_data.cwd.as_deref());
+        let fallback_path = input_data.project_dir().or(input_data.cwd.as_deref());
 
         let project_id = ProjectResolver::get_global_project_id(fallback_path);
         ProjectResolver::set_global_project_id(Some(&project_id));
@@ -435,7 +443,8 @@ impl StatuslineGenerator {
     }
 
     /// Get the current configuration
-    #[must_use] pub fn config(&self) -> &Config {
+    #[must_use]
+    pub fn config(&self) -> &Config {
         &self.config
     }
 
@@ -456,21 +465,18 @@ mod tests {
 
     #[test]
     fn test_parse_preset() {
-        let config = Config::default();
-        let generator = StatuslineGenerator::new(config, GeneratorOptions::default());
-
-        let order = generator.parse_preset("PMBT");
+        let order = StatuslineGenerator::parse_preset("PMBT");
         assert_eq!(order, vec!["project", "model", "branch", "tokens"]);
 
-        let order = generator.parse_preset("TBMP");
+        let order = StatuslineGenerator::parse_preset("TBMP");
         assert_eq!(order, vec!["tokens", "branch", "model", "project"]);
 
         // Test with lowercase and mixed case
-        let order = generator.parse_preset("pmBT");
+        let order = StatuslineGenerator::parse_preset("pmBT");
         assert_eq!(order, vec!["project", "model", "branch", "tokens"]);
 
         // Test with invalid characters
-        let order = generator.parse_preset("PM-BT");
+        let order = StatuslineGenerator::parse_preset("PM-BT");
         assert_eq!(order, vec!["project", "model", "branch", "tokens"]);
     }
 

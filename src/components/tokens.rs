@@ -2,6 +2,8 @@
 //!
 //! Displays token usage information with cached transcript statistics and adaptive progress bars.
 
+use std::fmt::Write;
+
 use async_trait::async_trait;
 
 use super::base::{Component, ComponentFactory, ComponentOutput, RenderContext};
@@ -20,7 +22,8 @@ pub struct TokensComponent {
 }
 
 impl TokensComponent {
-    #[must_use] pub const fn new(config: TokensComponentConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: TokensComponentConfig) -> Self {
         Self { config }
     }
 
@@ -98,7 +101,8 @@ impl TokensComponent {
         }
 
         let width = self.config.progress_width.max(1) as usize;
-        let filled_len = ((percentage / 100.0) * width as f64).round() as usize;
+        let width_f64 = to_f64(width);
+        let filled_len = clamp_round_to_usize((percentage / 100.0) * width_f64, width);
         let capped_filled = filled_len.min(width);
 
         let gradient_enabled = self.config.show_gradient
@@ -135,7 +139,10 @@ impl TokensComponent {
                 let gradient_percentage = if capped_filled == 0 {
                     0.0
                 } else {
-                    ((idx as f64 + 0.5) / capped_filled as f64) * percentage
+                    let idx_f64 = to_f64(idx);
+                    let capped_filled_f64 = to_f64(capped_filled);
+
+                    ((idx_f64 + 0.5) / capped_filled_f64) * percentage
                 }
                 .clamp(0.0, 100.0);
                 let is_backup = gradient_percentage >= self.config.thresholds.backup;
@@ -143,7 +150,7 @@ impl TokensComponent {
 
                 if gradient_enabled && supports_colors {
                     let (r, g, b) = rainbow_gradient_color(gradient_percentage);
-                    bar.push_str(&format!("\x1b[38;2;{r};{g};{b}m{symbol}"));
+                    let _ = write!(bar, "\x1b[38;2;{r};{g};{b}m{symbol}");
                     color_active = true;
                 } else {
                     bar.push(symbol);
@@ -228,8 +235,8 @@ impl TokensComponent {
         if self.config.show_raw_numbers {
             format!("({}/{})", info.used, info.total)
         } else {
-            let used_k = info.used as f64 / 1_000.0;
-            let total_k = info.total as f64 / 1_000.0;
+            let used_k = to_f64(info.used) / 1_000.0;
+            let total_k = to_f64(info.total) / 1_000.0;
             format!("({used_k:.1}k/{total_k:.0}k)")
         }
     }
@@ -255,7 +262,7 @@ impl Component for TokensComponent {
         };
 
         let total = usage.total.max(1);
-        let percentage = (usage.used as f64 / total as f64) * 100.0;
+        let percentage = (to_f64(usage.used) / to_f64(total)) * 100.0;
         let clamped_percentage = percentage.clamp(0.0, 999.9);
 
         let mut parts = Vec::new();
@@ -289,10 +296,7 @@ impl Component for TokensComponent {
     }
 }
 
-fn icon_for_kind(
-    set: &crate::config::TokenIconSetConfig,
-    kind: TokenStatusKind,
-) -> Option<&str> {
+fn icon_for_kind(set: &crate::config::TokenIconSetConfig, kind: TokenStatusKind) -> Option<&str> {
     match kind {
         TokenStatusKind::Backup => (!set.backup.is_empty()).then_some(set.backup.as_str()),
         TokenStatusKind::Critical => (!set.critical.is_empty()).then_some(set.critical.as_str()),
@@ -333,7 +337,50 @@ fn rainbow_gradient_color(percentage: f64) -> (u8, u8, u8) {
         lerp(soft_orange, soft_red, (p - 75.0) / 25.0)
     };
 
-    (r.round() as u8, g.round() as u8, b.round() as u8)
+    let convert = |value: f64| -> u8 {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        {
+            value.clamp(0.0, 255.0).round() as u8
+        }
+    };
+
+    (convert(r), convert(g), convert(b))
+}
+
+fn clamp_round_to_usize(value: f64, max: usize) -> usize {
+    let max_f64 = to_f64(max);
+    let clamped = value.clamp(0.0, max_f64);
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let rounded = clamped.round() as usize;
+
+    rounded.min(max)
+}
+
+fn to_f64<T: IntoF64>(value: T) -> f64 {
+    value.into_f64()
+}
+
+trait IntoF64 {
+    fn into_f64(self) -> f64;
+}
+
+impl IntoF64 for usize {
+    fn into_f64(self) -> f64 {
+        #[allow(clippy::cast_precision_loss)]
+        {
+            self as f64
+        }
+    }
+}
+
+impl IntoF64 for u64 {
+    fn into_f64(self) -> f64 {
+        #[allow(clippy::cast_precision_loss)]
+        {
+            self as f64
+        }
+    }
 }
 
 /// Factory for creating Tokens components
@@ -352,26 +399,46 @@ impl ComponentFactory for TokensComponentFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::TerminalCapabilities;
     use crate::config::AutoDetect;
     use crate::core::InputData;
     use serde_json::json;
     use std::sync::Arc;
 
-    fn create_test_context_with_tokens(tokens: i64) -> RenderContext {
+    #[allow(clippy::field_reassign_with_default)]
+    fn build_tokens_config(
+        configure: impl FnOnce(&mut TokensComponentConfig),
+    ) -> TokensComponentConfig {
+        let mut config = TokensComponentConfig::default();
+        configure(&mut config);
+        config
+    }
+
+    #[allow(clippy::field_reassign_with_default)]
+    fn build_input(configure: impl FnOnce(&mut InputData)) -> InputData {
         let mut input = InputData::default();
-        input.session_id = Some("mock-session".to_string());
-        input.extra = json!({
-            "__mock__": {
-                "tokensUsage": {
-                    "context_used": tokens as u64
+        configure(&mut input);
+        input
+    }
+
+    fn create_test_context_with_tokens(tokens: i64) -> RenderContext {
+        let used = u64::try_from(tokens).unwrap_or(0);
+
+        let input = build_input(|input| {
+            input.session_id = Some("mock-session".to_string());
+            input.extra = json!({
+                "__mock__": {
+                    "tokensUsage": {
+                        "context_used": used
+                    }
                 }
-            }
+            });
         });
 
         RenderContext {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
-            terminal: Default::default(),
+            terminal: TerminalCapabilities::default(),
         }
     }
 
@@ -387,10 +454,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_tokens_raw_numbers_format() {
-        let mut config = TokensComponentConfig::default();
-        config.show_percentage = false;
-        config.show_progress_bar = false;
-        config.show_raw_numbers = true;
+        let config = build_tokens_config(|config| {
+            config.show_percentage = false;
+            config.show_progress_bar = false;
+            config.show_raw_numbers = true;
+        });
 
         let component = TokensComponent::new(config);
         let ctx = create_test_context_with_tokens(1_500);
@@ -402,10 +470,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_tokens_progress_bar_enabled() {
-        let mut config = TokensComponentConfig::default();
-        config.show_progress_bar = true;
-        config.show_percentage = false;
-        config.show_raw_numbers = false;
+        let config = build_tokens_config(|config| {
+            config.show_progress_bar = true;
+            config.show_percentage = false;
+            config.show_raw_numbers = false;
+        });
 
         let component = TokensComponent::new(config);
         let ctx = create_test_context_with_tokens(50_000);
@@ -417,17 +486,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_tokens_progress_bar_gradient() {
-        let mut config = TokensComponentConfig::default();
-        config.show_progress_bar = true;
-        config.show_percentage = false;
-        config.show_raw_numbers = false;
-        config.show_gradient = true;
-        config.progress_width = 6;
+        let config = build_tokens_config(|config| {
+            config.show_progress_bar = true;
+            config.show_percentage = false;
+            config.show_raw_numbers = false;
+            config.show_gradient = true;
+            config.progress_width = 6;
+        });
 
         let component = TokensComponent::new(config);
         let mut ctx = create_test_context_with_tokens(100_000);
-        Arc::get_mut(&mut ctx.config).unwrap().theme = "classic".to_string();
-        Arc::get_mut(&mut ctx.config).unwrap().style.enable_colors = AutoDetect::Bool(true);
+        let config = Arc::make_mut(&mut ctx.config);
+        config.theme = "classic".to_string();
+        config.style.enable_colors = AutoDetect::Bool(true);
         let mut terminal = ctx.terminal.clone();
         terminal.supports_colors = true;
         let ctx = RenderContext { terminal, ..ctx };
@@ -439,8 +510,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_tokens_zero_hidden() {
-        let mut config = TokensComponentConfig::default();
-        config.show_zero = false;
+        let config = build_tokens_config(|config| {
+            config.show_zero = false;
+        });
 
         let component = TokensComponent::new(config);
         let ctx = create_test_context_with_tokens(0);
@@ -451,8 +523,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_tokens_zero_shown() {
-        let mut config = TokensComponentConfig::default();
-        config.show_zero = true;
+        let config = build_tokens_config(|config| {
+            config.show_zero = true;
+        });
 
         let component = TokensComponent::new(config);
         let ctx = create_test_context_with_tokens(0);
@@ -463,8 +536,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_tokens_disabled() {
-        let mut config = TokensComponentConfig::default();
-        config.base.enabled = false;
+        let config = build_tokens_config(|config| {
+            config.base.enabled = false;
+        });
 
         let component = TokensComponent::new(config);
         let ctx = create_test_context_with_tokens(1000);
@@ -475,27 +549,29 @@ mod tests {
 
     #[tokio::test]
     async fn test_tokens_mock_context_window_override() {
-        let mut input = InputData::default();
-        input.session_id = Some("mock-session".to_string());
-        input.extra = json!({
-            "__mock__": {
-                "tokensUsage": {
-                    "context_used": 20u64,
-                    "context_window": 100u64
+        let input = build_input(|input| {
+            input.session_id = Some("mock-session".to_string());
+            input.extra = json!({
+                "__mock__": {
+                    "tokensUsage": {
+                        "context_used": 20u64,
+                        "context_window": 100u64
+                    }
                 }
-            }
+            });
         });
 
         let ctx = RenderContext {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
-            terminal: Default::default(),
+            terminal: TerminalCapabilities::default(),
         };
 
-        let mut config = TokensComponentConfig::default();
-        config.show_progress_bar = false;
-        config.show_percentage = false;
-        config.show_raw_numbers = true;
+        let config = build_tokens_config(|config| {
+            config.show_progress_bar = false;
+            config.show_percentage = false;
+            config.show_raw_numbers = true;
+        });
 
         let component = TokensComponent::new(config);
         let output = component.render(&ctx).await;

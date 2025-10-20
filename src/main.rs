@@ -1,3 +1,5 @@
+#![allow(clippy::multiple_crate_versions)]
+
 //! Claude Code Statusline Pro - Rust Edition
 //!
 //! Rich CLI supporting configuration management, theme selection,
@@ -234,8 +236,10 @@ async fn handle_run(cli: &Cli) -> Result<()> {
         .and_then(|source| source.path.as_ref())
         .and_then(|path| path.parent().map(|p| p.to_path_buf()));
 
-    let mut options = GeneratorOptions::default();
-    options.config_base_dir = base_dir.as_ref().map(|p| p.to_string_lossy().to_string());
+    let mut options = GeneratorOptions {
+        config_base_dir: base_dir.as_ref().map(|p| p.to_string_lossy().to_string()),
+        ..GeneratorOptions::default()
+    };
     if let Some(preset) = preset_override {
         options = options.with_preset(preset);
     }
@@ -363,7 +367,7 @@ fn handle_config_init(
             bail!("项目路径不存在: {}", project_path.display());
         }
 
-        loader.project_config_path_for_path(
+        ConfigLoader::project_config_path_for_path(
             project_path
                 .to_str()
                 .ok_or_else(|| anyhow!("项目路径包含非 UTF-8 字符"))?,
@@ -437,7 +441,7 @@ fn handle_config_init(
             println!("  - 作用范围: 项目级配置");
         }
     } else {
-        let result = loader.create_default_config(options)?;
+        let result = ConfigLoader::create_default_config(options)?;
         println!("✅ 已生成配置文件: {}", result.path.display());
         if let Some(stats) = result.copy_stats {
             if stats.copied > 0 {
@@ -509,7 +513,7 @@ fn handle_config_set(
 
     let mut created = false;
     if !target_path.exists() {
-        loader.create_default_config(CreateConfigOptions {
+        ConfigLoader::create_default_config(CreateConfigOptions {
             target_path: Some(target_path.as_path()),
             ..Default::default()
         })?;

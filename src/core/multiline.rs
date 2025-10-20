@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
+use std::fmt::Write;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
@@ -17,7 +19,19 @@ use crate::config::component_widgets::{
     WidgetFilterMode, WidgetType,
 };
 use crate::config::{Config, MultilineConfig, MultilineRowConfig};
-use lazy_static::lazy_static;
+
+static ENV_PATTERN: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static PLACEHOLDER_PATTERN: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static TIME_DIFF_PATTERN: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static IDENT_REGEX: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static MATH_CHARS_REGEX: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+
+const SECOND_MS: f64 = 1_000.0;
+const MINUTE_MS: f64 = 60.0 * SECOND_MS;
+const HOUR_MS: f64 = 60.0 * MINUTE_MS;
+const DAY_MS: f64 = 24.0 * HOUR_MS;
+const MONTH_MS: f64 = 30.0 * DAY_MS;
+const YEAR_MS: f64 = 365.0 * DAY_MS;
 
 /// Result of rendering multiline extension lines
 #[derive(Debug, Default)]
@@ -37,7 +51,8 @@ pub struct MultiLineRenderer {
 }
 
 impl MultiLineRenderer {
-    #[must_use] pub fn new(config: Config, base_dir: Option<PathBuf>) -> Self {
+    #[must_use]
+    pub fn new(config: Config, base_dir: Option<PathBuf>) -> Self {
         let log_file = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join(".claude")
@@ -110,25 +125,11 @@ impl MultiLineRenderer {
                 continue;
             }
 
-            match self.load_component_config(component_name.as_str()).await {
-                Ok(Some(component_config)) => {
-                    if let Err(err) = self
-                        .render_component_widgets(
-                            &component_name,
-                            &component_config,
-                            context,
-                            &multiline_config,
-                        )
-                        .await
-                    {
-                        return MultiLineRenderResult {
-                            success: false,
-                            lines: Vec::new(),
-                            error: Some(err.to_string()),
-                        };
-                    }
+            let component_config = match self.load_component_config(component_name.as_str()).await {
+                Ok(Some(config)) => config,
+                Ok(None) => {
+                    continue;
                 }
-                Ok(None) => continue,
                 Err(err) => {
                     return MultiLineRenderResult {
                         success: false,
@@ -136,20 +137,30 @@ impl MultiLineRenderer {
                         error: Some(err.to_string()),
                     };
                 }
+            };
+
+            if let Err(err) = self
+                .render_component_widgets(
+                    &component_name,
+                    &component_config,
+                    context,
+                    &multiline_config,
+                )
+                .await
+            {
+                return MultiLineRenderResult {
+                    success: false,
+                    lines: Vec::new(),
+                    error: Some(err.to_string()),
+                };
             }
         }
 
-        match self.grid.render(&multiline_config) {
-            Ok(lines) => MultiLineRenderResult {
-                success: true,
-                lines,
-                error: None,
-            },
-            Err(err) => MultiLineRenderResult {
-                success: false,
-                lines: Vec::new(),
-                error: Some(err),
-            },
+        let lines = self.grid.render(&multiline_config);
+        MultiLineRenderResult {
+            success: true,
+            lines,
+            error: None,
         }
     }
 
@@ -214,11 +225,11 @@ impl MultiLineRenderer {
         multiline_config: &MultilineConfig,
     ) -> Result<()> {
         for (widget_name, widget_config) in &component_config.widgets {
-            if !self.should_render_widget(widget_config) {
+            if !Self::should_render_widget(widget_config) {
                 continue;
             }
 
-            if !self.check_detection(widget_config) {
+            if !Self::check_detection(widget_config) {
                 continue;
             }
 
@@ -228,8 +239,8 @@ impl MultiLineRenderer {
             }
 
             let cache_key = format!("{component_name}::{widget_name}");
-            let content = match widget_config.kind {
-                WidgetType::Static => self.render_static_widget(widget_config, context),
+            let widget_output = match widget_config.kind {
+                WidgetType::Static => Some(self.render_static_widget(widget_config, context)),
                 WidgetType::Api => match self.render_api_widget(widget_config, context).await {
                     Ok(value) => value,
                     Err(err) => {
@@ -253,7 +264,7 @@ impl MultiLineRenderer {
                 },
             };
 
-            if let Some(final_text) = content {
+            if let Some(final_text) = widget_output {
                 self.grid
                     .set_cell(row, widget_config.col, final_text.clone());
                 self.widget_cache.insert(cache_key, final_text);
@@ -265,7 +276,7 @@ impl MultiLineRenderer {
         Ok(())
     }
 
-    const fn should_render_widget(&self, widget: &WidgetConfig) -> bool {
+    const fn should_render_widget(widget: &WidgetConfig) -> bool {
         match widget.force {
             Some(true) => true,
             Some(false) => false,
@@ -273,20 +284,17 @@ impl MultiLineRenderer {
         }
     }
 
-    fn check_detection(&self, widget: &WidgetConfig) -> bool {
-        let detection = match &widget.detection {
-            Some(d) => d,
-            None => return true,
+    fn check_detection(widget: &WidgetConfig) -> bool {
+        let Some(detection) = widget.detection.as_ref() else {
+            return true;
         };
 
-        let env_var = match detection.env.as_deref() {
-            Some(name) => std::env::var(name).ok(),
-            None => return true,
+        let Some(env_name) = detection.env.as_deref() else {
+            return true;
         };
 
-        let value = match env_var {
-            Some(v) => v,
-            None => return false,
+        let Some(value) = std::env::var(env_name).ok() else {
+            return false;
         };
 
         if let Some(expected) = detection.equals.as_deref() {
@@ -314,14 +322,10 @@ impl MultiLineRenderer {
         true
     }
 
-    fn render_static_widget(
-        &self,
-        widget: &WidgetConfig,
-        context: &RenderContext,
-    ) -> Option<String> {
-        let content = widget.content.as_deref().unwrap_or("");
-        let substituted = substitute_env(content);
-        Some(self.compose_with_icon(widget, &substituted, &context.terminal, &self.config))
+    fn render_static_widget(&self, widget: &WidgetConfig, context: &RenderContext) -> String {
+        let raw_widget_content = widget.content.as_deref().unwrap_or("");
+        let substituted = substitute_env(raw_widget_content);
+        Self::compose_with_icon(widget, &substituted, &context.terminal, &self.config)
     }
 
     async fn render_api_widget(
@@ -329,14 +333,13 @@ impl MultiLineRenderer {
         widget: &WidgetConfig,
         context: &RenderContext,
     ) -> Result<Option<String>> {
-        let api_config = match &widget.api {
-            Some(cfg) => cfg,
-            None => return Ok(None),
+        let Some(api_config) = widget.api.as_ref() else {
+            return Ok(None);
         };
 
         let api_data = self.fetch_api_data(api_config).await?;
 
-        if !self.passes_filter(widget, &api_data.root) {
+        if !Self::passes_filter(widget, &api_data.root) {
             return Ok(None);
         }
 
@@ -347,7 +350,7 @@ impl MultiLineRenderer {
             api_data.selected.to_string()
         };
 
-        Ok(Some(self.compose_with_icon(
+        Ok(Some(Self::compose_with_icon(
             widget,
             &rendered_text,
             &context.terminal,
@@ -435,15 +438,14 @@ impl MultiLineRenderer {
         })
     }
 
-    fn passes_filter(&self, widget: &WidgetConfig, data: &Value) -> bool {
-        match &widget.filter {
-            Some(filter) => value_matches_filter(filter, data),
-            None => true,
-        }
+    fn passes_filter(widget: &WidgetConfig, data: &Value) -> bool {
+        widget
+            .filter
+            .as_ref()
+            .map_or(true, |filter| value_matches_filter(filter, data))
     }
 
     fn compose_with_icon(
-        &self,
         widget: &WidgetConfig,
         content: &str,
         terminal: &TerminalCapabilities,
@@ -459,9 +461,8 @@ impl MultiLineRenderer {
 }
 
 fn value_matches_filter(filter: &WidgetFilterConfig, data: &Value) -> bool {
-    let keyword = match filter.keyword.as_deref() {
-        Some(k) => k,
-        None => return true,
+    let Some(keyword) = filter.keyword.as_deref() else {
+        return true;
     };
 
     let matches = match jsonpath::select(data, &filter.object) {
@@ -491,9 +492,7 @@ fn value_matches_filter(filter: &WidgetFilterConfig, data: &Value) -> bool {
                 .iter()
                 .any(|value| regex.is_match(&json_value_as_string(value))),
             Err(err) => {
-                eprintln!(
-                    "[statusline] widget filter pattern {keyword:?} invalid: {err}"
-                );
+                eprintln!("[statusline] widget filter pattern {keyword:?} invalid: {err}");
                 false
             }
         },
@@ -526,13 +525,10 @@ impl MultiLineGrid {
     }
 
     fn set_cell(&mut self, row: u32, col: u32, content: String) {
-        self.rows
-            .entry(row)
-            .or_default()
-            .insert(col, content);
+        self.rows.entry(row).or_default().insert(col, content);
     }
 
-    fn render(&self, config: &MultilineConfig) -> Result<Vec<String>, String> {
+    fn render(&self, config: &MultilineConfig) -> Vec<String> {
         let mut lines = Vec::new();
 
         for (row, columns) in &self.rows {
@@ -565,7 +561,7 @@ impl MultiLineGrid {
             lines.push(line);
         }
 
-        Ok(lines)
+        lines
     }
 }
 
@@ -602,10 +598,6 @@ fn select_widget_icon(
 }
 
 fn substitute_env(input: &str) -> String {
-    lazy_static! {
-        static ref ENV_PATTERN: Regex = Regex::new(r"\$\{([A-Z0-9_]+)\}").expect("valid regex");
-    }
-
     // 临时占位符，用于保护转义的美元符号
     const DOLLAR_PLACEHOLDER: &str = "\u{0000}DOLLAR\u{0000}";
 
@@ -613,38 +605,51 @@ fn substitute_env(input: &str) -> String {
     let step1 = input.replace(r"\$", DOLLAR_PLACEHOLDER);
 
     // 2. 替换 ${VAR_NAME} 格式的环境变量
-    let step2 = ENV_PATTERN
-        .replace_all(&step1, |captures: &regex::Captures| {
-            let key = &captures[1];
-            std::env::var(key).unwrap_or_default()
-        })
-        .into_owned();
+    let step2 = match ENV_PATTERN.get_or_init(|| Regex::new(r"\$\{([A-Z0-9_]+)\}")) {
+        Ok(pattern) => pattern
+            .replace_all(&step1, |captures: &regex::Captures| {
+                let key = &captures[1];
+                std::env::var(key).unwrap_or_default()
+            })
+            .into_owned(),
+        Err(err) => {
+            eprintln!("[statusline] failed to compile env regex: {err}");
+            step1
+        }
+    };
 
     // 3. 将占位符替换回美元符号
     step2.replace(DOLLAR_PLACEHOLDER, "$")
 }
 
 fn render_template(template: &str, data: &Value) -> String {
-    lazy_static! {
-        static ref PLACEHOLDER: Regex = Regex::new(r"\{([^{}]+)\}").expect("placeholder regex");
-    }
-
     let mut result = String::new();
     let mut last_index = 0;
 
-    for capture in PLACEHOLDER.captures_iter(template) {
-        if let Some(m) = capture.get(0) {
-            result.push_str(&template[last_index..m.start()]);
-            let expr = capture.get(1).unwrap().as_str();
-            match render_placeholder(expr, data) {
-                Ok(rendered) => result.push_str(&rendered),
-                Err(err) => {
-                    eprintln!("[statusline] 模板渲染失败: {err}");
-                    result.push_str(&format!("{{{expr}}}"));
-                }
+    let Some(pattern) = PLACEHOLDER_PATTERN
+        .get_or_init(|| Regex::new(r"\{([^{}]+)\}"))
+        .as_ref()
+        .ok()
+    else {
+        eprintln!("[statusline] failed to compile placeholder regex");
+        return template.to_string();
+    };
+
+    for capture in pattern.captures_iter(template) {
+        let (Some(m), Some(expr_match)) = (capture.get(0), capture.get(1)) else {
+            continue;
+        };
+
+        result.push_str(&template[last_index..m.start()]);
+        let expr = expr_match.as_str();
+        match render_placeholder(expr, data) {
+            Ok(rendered) => result.push_str(&rendered),
+            Err(err) => {
+                eprintln!("[statusline] 模板渲染失败: {err}");
+                let _ = write!(result, "{{{expr}}}");
             }
-            last_index = m.end();
         }
+        last_index = m.end();
     }
 
     result.push_str(&template[last_index..]);
@@ -652,58 +657,60 @@ fn render_template(template: &str, data: &Value) -> String {
 }
 
 fn render_placeholder(expr: &str, data: &Value) -> Result<String> {
-    let (expr_body, format_spec) = if let Some(idx) = expr.find(':') {
-        (&expr[..idx], Some(&expr[idx + 1..]))
-    } else {
-        (expr, None)
-    };
+    let (expr_body, format_spec) = expr
+        .find(':')
+        .map_or((expr, None), |idx| (&expr[..idx], Some(&expr[idx + 1..])));
 
     let value = evaluate_expression(expr_body.trim(), data)?;
 
-    if let Some(spec) = format_spec {
-        format_value_with_spec(&value, spec.trim())
-    } else {
-        Ok(match value {
+    let default_output = || {
+        Ok(match &value {
             Value::Null => String::new(),
-            Value::String(s) => s,
+            Value::String(s) => s.clone(),
             Value::Number(n) => n.to_string(),
             Value::Bool(b) => b.to_string(),
             other => other.to_string(),
         })
-    }
+    };
+
+    format_spec.map_or_else(default_output, |spec| {
+        format_value_with_spec(&value, spec.trim())
+    })
 }
 
 fn evaluate_expression(expr: &str, data: &Value) -> Result<Value> {
     let trimmed = expr.trim();
 
     if trimmed.eq_ignore_ascii_case("now()") {
-        return Ok(Number::from_f64(now_timestamp_millis())
-            .map_or(Value::Null, Value::Number));
+        return Ok(Number::from_f64(now_timestamp_millis()).map_or(Value::Null, Value::Number));
     }
 
-    lazy_static! {
-        static ref TIME_DIFF_RE: Regex =
-            Regex::new(r"^(.+?)\s*-\s*(.+?)$").expect("time diff regex");
-    }
+    match TIME_DIFF_PATTERN
+        .get_or_init(|| Regex::new(r"^(.+?)\s*-\s*(.+?)$"))
+        .as_ref()
+    {
+        Ok(pattern) => {
+            if let Some(caps) = pattern.captures(trimmed) {
+                let left = caps.get(1).map_or("", |m| m.as_str().trim());
+                let right = caps.get(2).map_or("", |m| m.as_str().trim());
 
-    if let Some(caps) = TIME_DIFF_RE.captures(trimmed) {
-        let left = caps.get(1).map_or("", |m| m.as_str().trim());
-        let right = caps.get(2).map_or("", |m| m.as_str().trim());
-
-        if let (Some(left_dt), Some(right_dt)) = (
-            resolve_time_operand(left, data),
-            resolve_time_operand(right, data),
-        ) {
-            let diff_ms = calculate_time_difference(right_dt, left_dt);
-            return Ok(Number::from_f64(diff_ms)
-                .map_or(Value::Null, Value::Number));
+                if let (Some(left_dt), Some(right_dt)) = (
+                    resolve_time_operand(left, data),
+                    resolve_time_operand(right, data),
+                ) {
+                    let diff_ms = calculate_time_difference(right_dt, left_dt);
+                    return Ok(Number::from_f64(diff_ms).map_or(Value::Null, Value::Number));
+                }
+            }
+        }
+        Err(err) => {
+            eprintln!("[statusline] failed to compile time diff regex: {err}");
         }
     }
 
     if is_math_expression(trimmed) {
         let number = evaluate_math_expression(trimmed, data)?;
-        return Ok(Number::from_f64(number)
-            .map_or(Value::Null, Value::Number));
+        return Ok(Number::from_f64(number).map_or(Value::Null, Value::Number));
     }
 
     extract_value(trimmed, data)
@@ -725,8 +732,7 @@ fn extract_value(path: &str, data: &Value) -> Result<Value> {
     }
 
     if path == "now()" {
-        return Ok(Number::from_f64(now_timestamp_millis())
-            .map_or(Value::Null, Value::Number));
+        return Ok(Number::from_f64(now_timestamp_millis()).map_or(Value::Null, Value::Number));
     }
 
     let mut current = data.clone();
@@ -805,13 +811,18 @@ fn parse_array_segment(segment: &str) -> Option<(&str, &str)> {
 }
 
 fn is_math_expression(expr: &str) -> bool {
-    lazy_static! {
-        static ref IDENT_RE: Regex = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_.]*$").unwrap();
-        static ref MATH_CHARS_RE: Regex = Regex::new(r"[+\-*/()]").unwrap();
-    }
-
     let trimmed = expr.trim();
-    MATH_CHARS_RE.is_match(trimmed) && !IDENT_RE.is_match(trimmed)
+    let math_regex = MATH_CHARS_REGEX
+        .get_or_init(|| Regex::new(r"[+\-*/()]"))
+        .as_ref();
+    let ident_regex = IDENT_REGEX
+        .get_or_init(|| Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_.]*$"))
+        .as_ref();
+
+    match (math_regex, ident_regex) {
+        (Ok(math), Ok(ident)) => math.is_match(trimmed) && !ident.is_match(trimmed),
+        _ => false,
+    }
 }
 
 fn evaluate_math_expression(expr: &str, data: &Value) -> Result<f64> {
@@ -950,14 +961,11 @@ impl<'a> MathParser<'a> {
         }
 
         ident = ident.trim();
-        value_token_to_f64(ident, self.data)
+        Ok(value_token_to_f64(ident, self.data))
     }
 
     fn skip_whitespace(&mut self) {
-        while self
-            .peek_char()
-            .is_some_and(char::is_whitespace)
-        {
+        while self.peek_char().is_some_and(char::is_whitespace) {
             self.pos += 1;
         }
     }
@@ -996,19 +1004,16 @@ const fn is_identifier_part(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_' || ch == '[' || ch == ']'
 }
 
-fn value_token_to_f64(token: &str, data: &Value) -> Result<f64> {
+fn value_token_to_f64(token: &str, data: &Value) -> f64 {
     if let Ok(number) = token.parse::<f64>() {
-        return Ok(number);
+        return number;
     }
 
     if token.eq_ignore_ascii_case("now()") {
-        return Ok(now_timestamp_millis());
+        return now_timestamp_millis();
     }
 
-    match extract_value(token, data) {
-        Ok(value) => Ok(value_to_f64(&value).unwrap_or(0.0)),
-        Err(_) => Ok(0.0),
-    }
+    extract_value(token, data).map_or(0.0, |value| value_to_f64(&value).unwrap_or(0.0))
 }
 
 fn value_to_f64(value: &Value) -> Result<f64> {
@@ -1021,21 +1026,20 @@ fn value_to_f64(value: &Value) -> Result<f64> {
                 return Ok(number);
             }
             if let Some(dt) = parse_date_string(s.trim()) {
-                return Ok(dt.timestamp_millis() as f64);
+                return Ok(millis_to_f64(dt.timestamp_millis()));
             }
             Err(anyhow!("Invalid numeric string: {s}"))
         }
         Value::Bool(b) => Ok(if *b { 1.0 } else { 0.0 }),
         Value::Null => Ok(0.0),
-        other => {
-            if let Some(dt) = parse_date_value(other) {
-                Ok(dt.timestamp_millis() as f64)
-            } else {
+        other => parse_date_value(other).map_or_else(
+            || {
                 Err(anyhow!(
                     "Unsupported value type for numeric conversion: {other}"
                 ))
-            }
-        }
+            },
+            |dt| Ok(millis_to_f64(dt.timestamp_millis())),
+        ),
     }
 }
 
@@ -1050,7 +1054,7 @@ fn format_value_with_spec(value: &Value, spec: &str) -> Result<String> {
     }
 
     if spec == "d" {
-        return Ok(format!("{}", value_to_f64(value)? as i64));
+        return Ok(format!("{}", f64_to_i64(value_to_f64(value)?)));
     }
 
     if spec.starts_with('.') && spec.ends_with('f') {
@@ -1094,13 +1098,7 @@ fn parse_date_value(value: &Value) -> Option<DateTime<Utc>> {
         }
         Value::String(s) => parse_date_string(s),
         Value::Bool(_) | Value::Null => None,
-        other => {
-            if let Some(text) = other.as_str() {
-                parse_date_string(text)
-            } else {
-                None
-            }
-        }
+        other => other.as_str().and_then(parse_date_string),
     }
 }
 
@@ -1109,7 +1107,7 @@ fn parse_numeric_timestamp(num: f64) -> Option<DateTime<Utc>> {
         return None;
     }
     let timestamp = if num >= 1.0e12 { num } else { num * 1000.0 };
-    let millis = timestamp.round() as i64;
+    let millis = f64_to_i64(timestamp.round());
     Utc.timestamp_millis_opt(millis).single()
 }
 
@@ -1139,7 +1137,7 @@ fn parse_date_string(input: &str) -> Option<DateTime<Utc>> {
 }
 
 fn calculate_time_difference(start: DateTime<Utc>, end: DateTime<Utc>) -> f64 {
-    (end - start).num_milliseconds() as f64
+    millis_to_f64((end - start).num_milliseconds())
 }
 
 fn is_time_format(format: &str) -> bool {
@@ -1174,13 +1172,6 @@ fn format_time_difference(diff_ms: f64, format: &str) -> String {
     let sign = if diff_ms < 0.0 { -1.0 } else { 1.0 };
     let abs_ms = diff_ms.abs();
 
-    const SECOND_MS: f64 = 1000.0;
-    const MINUTE_MS: f64 = 60.0 * SECOND_MS;
-    const HOUR_MS: f64 = 60.0 * MINUTE_MS;
-    const DAY_MS: f64 = 24.0 * HOUR_MS;
-    const MONTH_MS: f64 = 30.0 * DAY_MS;
-    const YEAR_MS: f64 = 365.0 * DAY_MS;
-
     let years = (abs_ms / YEAR_MS).floor();
     let months = (abs_ms / MONTH_MS).floor();
     let days = (abs_ms / DAY_MS).floor();
@@ -1208,35 +1199,48 @@ fn format_time_difference(diff_ms: f64, format: &str) -> String {
             let prefix = if sign < 0.0 { "-" } else { "" };
             format!(
                 "{}{}年{}月{}天",
-                prefix, years as i64, months_in_year as i64, days_after_months as i64
+                prefix,
+                f64_to_i64(years),
+                f64_to_i64(months_in_year),
+                f64_to_i64(days_after_months)
             )
         }
         "DHm" | "dhm" => {
             let prefix = if sign < 0.0 { "-" } else { "" };
             format!(
                 "{}{}天{}小时{}分钟",
-                prefix, days as i64, hours_in_day as i64, minutes_in_hour as i64
+                prefix,
+                f64_to_i64(days),
+                f64_to_i64(hours_in_day),
+                f64_to_i64(minutes_in_hour)
             )
         }
         "HmS" => {
             let prefix = if sign < 0.0 { "-" } else { "" };
             format!(
                 "{}{}小时{}分钟{}秒",
-                prefix, hours as i64, minutes_in_hour as i64, seconds_in_minute as i64
+                prefix,
+                f64_to_i64(hours),
+                f64_to_i64(minutes_in_hour),
+                f64_to_i64(seconds_in_minute)
             )
         }
         "mS" => {
             let prefix = if sign < 0.0 { "-" } else { "" };
             format!(
                 "{}{}分钟{}秒",
-                prefix, minutes as i64, seconds_in_minute as i64
+                prefix,
+                f64_to_i64(minutes),
+                f64_to_i64(seconds_in_minute)
             )
         }
         "Hm" | "hm" => {
             let prefix = if sign < 0.0 { "-" } else { "" };
             format!(
                 "{}{}小时{}分钟",
-                prefix, hours as i64, minutes_in_hour as i64
+                prefix,
+                f64_to_i64(hours),
+                f64_to_i64(minutes_in_hour)
             )
         }
         _ => {
@@ -1248,14 +1252,24 @@ fn format_time_difference(diff_ms: f64, format: &str) -> String {
 
 fn format_number(value: f64) -> String {
     if value.fract() == 0.0 {
-        format!("{}", value as i64)
+        format!("{}", f64_to_i64(value))
     } else {
         format!("{value}")
     }
 }
 
 fn now_timestamp_millis() -> f64 {
-    Utc::now().timestamp_millis() as f64
+    millis_to_f64(Utc::now().timestamp_millis())
+}
+
+#[allow(clippy::cast_precision_loss)]
+const fn millis_to_f64(value: i64) -> f64 {
+    value as f64
+}
+
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+fn f64_to_i64(value: f64) -> i64 {
+    value.trunc() as i64
 }
 
 #[cfg(test)]
@@ -1263,23 +1277,31 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::core::InputData;
+    use anyhow::{Context, Result};
     use serde_json::json;
     use std::collections::HashMap;
     use std::sync::Arc;
 
+    type TestResult<T = ()> = Result<T>;
+
     #[tokio::test]
-    async fn test_static_widget_rendering() {
-        let mut config = Config::default();
-        config.multiline = Some(MultilineConfig {
-            enabled: true,
-            max_rows: 5,
-            rows: HashMap::new(),
-        });
+    async fn test_static_widget_rendering() -> TestResult {
+        let mut config = Config {
+            multiline: Some(MultilineConfig {
+                enabled: true,
+                max_rows: 5,
+                rows: HashMap::new(),
+            }),
+            ..Config::default()
+        };
         config.components.order = vec!["usage".to_string()];
 
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = tempfile::tempdir()?;
         let component_path = temp_dir.path().join("components").join("usage.toml");
-        std::fs::create_dir_all(component_path.parent().unwrap()).unwrap();
+        let component_dir = component_path
+            .parent()
+            .context("component path missing parent directory")?;
+        std::fs::create_dir_all(component_dir)?;
         std::fs::write(
             &component_path,
             r#"
@@ -1293,8 +1315,7 @@ emoji_icon = "⭐"
 text_icon = "[*]"
 content = "Hello"
 "#,
-        )
-        .unwrap();
+        )?;
 
         let mut renderer =
             MultiLineRenderer::new(config.clone(), Some(temp_dir.path().to_path_buf()));
@@ -1313,21 +1334,27 @@ content = "Hello"
         assert!(result.success);
         assert_eq!(result.lines.len(), 1);
         assert_eq!(result.lines[0], "⭐ Hello");
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_api_widget_error_does_not_abort() {
-        let mut config = Config::default();
-        config.multiline = Some(MultilineConfig {
-            enabled: true,
-            max_rows: 5,
-            rows: HashMap::new(),
-        });
+    async fn test_api_widget_error_does_not_abort() -> TestResult {
+        let mut config = Config {
+            multiline: Some(MultilineConfig {
+                enabled: true,
+                max_rows: 5,
+                rows: HashMap::new(),
+            }),
+            ..Config::default()
+        };
         config.components.order = vec!["usage".to_string()];
 
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = tempfile::tempdir()?;
         let component_path = temp_dir.path().join("components").join("usage.toml");
-        std::fs::create_dir_all(component_path.parent().unwrap()).unwrap();
+        let component_dir = component_path
+            .parent()
+            .context("component path missing parent directory")?;
+        std::fs::create_dir_all(component_dir)?;
         std::fs::write(
             &component_path,
             r#"
@@ -1344,8 +1371,7 @@ text_icon = "[*]"
 endpoint = "/missing"
 method = "GET"
 "#,
-        )
-        .unwrap();
+        )?;
 
         let mut renderer =
             MultiLineRenderer::new(config.clone(), Some(temp_dir.path().to_path_buf()));
@@ -1359,12 +1385,13 @@ method = "GET"
         let result = renderer.render_extension_lines(&context).await;
         assert!(result.success);
         assert!(result.lines.is_empty());
+        Ok(())
     }
 
     #[test]
     fn test_expression_template_rendering() {
         let data = serde_json::json!({
-            "quota": 500000.0,
+            "quota": 500_000.0,
             "usage": {
                 "prompt_tokens": 1234,
                 "completion_tokens": 567,
@@ -1406,14 +1433,16 @@ method = "GET"
         std::env::set_var("TEST_VAR", "test_value");
 
         // 测试转义的美元符号
-        let input = r"余额:\${quota / 500000:.2f}";
-        let result = substitute_env(input);
-        assert_eq!(result, "余额:${quota / 500000:.2f}");
+        let input = [r"余额:\$", "{", "quota / 500000:.2f", "}"].concat();
+        let result = substitute_env(&input);
+        let expected_escaped = concat!("余额:$", "{quota / 500000:.2f}");
+        assert_eq!(result, expected_escaped);
 
         // 测试混合使用：环境变量和转义的美元符号
-        let input = r"API: ${TEST_VAR}, 余额:\${quota:.2f}";
-        let result = substitute_env(input);
-        assert_eq!(result, "API: test_value, 余额:${quota:.2f}");
+        let input = [r"API: ${TEST_VAR}, 余额:\$", "{", "quota:.2f", "}"].concat();
+        let result = substitute_env(&input);
+        let expected_mixed = concat!("API: test_value, 余额:$", "{quota:.2f}");
+        assert_eq!(result, expected_mixed);
 
         // 测试仅环境变量
         let input = "API: ${TEST_VAR}";

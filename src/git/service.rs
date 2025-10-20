@@ -8,6 +8,7 @@ use super::types::{
 };
 
 #[derive(Debug, Clone, Copy)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct GitCollectionOptions {
     pub include_status: bool,
     pub include_stash: bool,
@@ -35,6 +36,11 @@ pub struct GitService {
 
 impl GitService {
     /// Try to discover a Git repository starting from the provided path.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Git repository discovery fails or if the working
+    /// directory cannot be determined.
     pub fn discover<P: AsRef<Path>>(path: P) -> Result<Self> {
         let repo = Repository::discover(path.as_ref()).with_context(|| {
             format!(
@@ -43,12 +49,14 @@ impl GitService {
             )
         })?;
 
-        let workdir = repo.workdir().map(Path::to_path_buf).unwrap_or_else(|| {
-            repo.path()
-                .parent()
-                .unwrap_or_else(|| Path::new("."))
-                .to_path_buf()
-        });
+        let workdir = repo.workdir().map_or_else(
+            || {
+                repo.path()
+                    .parent()
+                    .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
+            },
+            Path::to_path_buf,
+        );
         let git_dir = repo.path().to_path_buf();
 
         Ok(Self {
@@ -59,12 +67,14 @@ impl GitService {
     }
 
     /// Collect a snapshot of repository state.
-    #[must_use] pub fn collect_info(&self) -> GitInfo {
+    #[must_use]
+    pub fn collect_info(&self) -> GitInfo {
         self.collect_info_with_options(&GitCollectionOptions::default())
     }
 
     /// Collect repository information according to the provided options.
-    #[must_use] pub fn collect_info_with_options(&self, options: &GitCollectionOptions) -> GitInfo {
+    #[must_use]
+    pub fn collect_info_with_options(&self, options: &GitCollectionOptions) -> GitInfo {
         let branch = self.branch_info().unwrap_or_default();
         let status = if options.include_status {
             self.working_status().unwrap_or_default()
@@ -98,11 +108,9 @@ impl GitService {
     }
 
     /// Estimate number of tracked entries (index size) in the repository.
-    #[must_use] pub fn estimate_workdir_entries(&self) -> usize {
-        self.repo
-            .index()
-            .map(|index| index.len())
-            .unwrap_or(0)
+    #[must_use]
+    pub fn estimate_workdir_entries(&self) -> usize {
+        self.repo.index().map(|index| index.len()).unwrap_or(0)
     }
 
     fn branch_info(&self) -> Result<GitBranchInfo> {
@@ -110,7 +118,10 @@ impl GitService {
         let detached = !head.is_branch();
 
         let current = if detached {
-            head.target().map_or_else(|| "HEAD".to_string(), |oid| format!("HEAD@{}", &oid.to_string()[..7]))
+            head.target().map_or_else(
+                || "HEAD".to_string(),
+                |oid| format!("HEAD@{}", &oid.to_string()[..7]),
+            )
         } else {
             head.shorthand().unwrap_or("HEAD").to_string()
         };
@@ -255,7 +266,8 @@ impl GitService {
     }
 
     /// Expose repository workdir for callers that need it.
-    #[must_use] pub fn workdir(&self) -> &Path {
+    #[must_use]
+    pub fn workdir(&self) -> &Path {
         &self.workdir
     }
 }

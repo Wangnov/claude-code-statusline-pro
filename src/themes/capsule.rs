@@ -13,16 +13,16 @@ pub struct CapsuleThemeRenderer;
 impl CapsuleThemeRenderer {
     const LEFT_CAP: char = '\u{e0b6}';
     const RIGHT_CAP: char = '\u{e0b4}';
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 
     fn render_classic_fallback(
-        &self,
         components: &[ComponentOutput],
         context: &RenderContext,
         supports_colors: bool,
-    ) -> Result<String> {
+    ) -> String {
         let style = &context.config.style;
         let (separator_core, apply_padding) = if style.separator.is_empty() {
             (" | ".trim(), true)
@@ -73,7 +73,7 @@ impl CapsuleThemeRenderer {
             }
         }
 
-        Ok(parts.join(&colored_separator))
+        parts.join(&colored_separator)
     }
 
     fn compose_content(component: &ComponentOutput) -> String {
@@ -100,7 +100,7 @@ impl CapsuleThemeRenderer {
                 .any(|word| text.contains(word))
     }
 
-    fn render_capsule(&self, content: &str, color: &str, preserve_internal: bool) -> String {
+    fn render_capsule(content: &str, color: &str, preserve_internal: bool) -> String {
         let mut segment = String::new();
 
         if let Some(fg) = ansi_fg(color).as_ref() {
@@ -162,20 +162,24 @@ impl ThemeRenderer for CapsuleThemeRenderer {
             context.terminal.supports_nerd_font || context.config.terminal.force_nerd_font;
 
         if !supports_colors || !use_capsule {
-            return self.render_classic_fallback(components, context, supports_colors);
+            return Ok(Self::render_classic_fallback(
+                components,
+                context,
+                supports_colors,
+            ));
         }
 
         let mut rendered = Vec::with_capacity(components.len());
         let mut color_iter = colors.iter();
 
         for component in components {
-            let content = Self::compose_content(component);
+            let rendered_content = Self::compose_content(component);
             let color = color_iter
                 .next()
                 .cloned()
                 .unwrap_or_else(|| "bright_blue".to_string());
             let preserve = Self::should_preserve_internal_colors(component);
-            rendered.push(self.render_capsule(&content, &color, preserve));
+            rendered.push(Self::render_capsule(&rendered_content, &color, preserve));
         }
 
         Ok(rendered.join(" "))
@@ -198,7 +202,10 @@ mod tests {
     use crate::components::TerminalCapabilities;
     use crate::config::{AutoDetect, Config};
     use crate::core::InputData;
+    use std::error::Error;
     use std::sync::Arc;
+
+    type TestResult = Result<(), Box<dyn Error>>;
 
     fn create_test_context(nerd_font: bool, colors: bool) -> RenderContext {
         let mut config = Config::default();
@@ -216,7 +223,7 @@ mod tests {
     }
 
     #[test]
-    fn test_capsule_theme_with_nerd_font() {
+    fn test_capsule_theme_with_nerd_font() -> TestResult {
         let theme = CapsuleThemeRenderer::new();
         let ctx = create_test_context(true, true);
 
@@ -226,13 +233,14 @@ mod tests {
         ];
 
         let colors = vec!["blue".to_string(), "green".to_string()];
-        let result = theme.render(&components, &colors, &ctx).unwrap();
+        let result = theme.render(&components, &colors, &ctx)?;
         assert!(result.contains('\u{e0b6}'));
         assert!(result.contains('\u{e0b4}'));
+        Ok(())
     }
 
     #[test]
-    fn test_capsule_theme_without_colors() {
+    fn test_capsule_theme_without_colors() -> TestResult {
         let theme = CapsuleThemeRenderer::new();
         let ctx = create_test_context(true, false);
 
@@ -242,7 +250,8 @@ mod tests {
         ];
 
         let colors = vec!["blue".to_string(), "green".to_string()];
-        let result = theme.render(&components, &colors, &ctx).unwrap();
+        let result = theme.render(&components, &colors, &ctx)?;
         assert_eq!(result, "📁 Project | 🌿 main");
+        Ok(())
     }
 }

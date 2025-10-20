@@ -13,12 +13,13 @@ pub struct ProjectComponent {
 }
 
 impl ProjectComponent {
-    #[must_use] pub const fn new(config: ProjectComponentConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: ProjectComponentConfig) -> Self {
         Self { config }
     }
 
     /// Extract project name from path
-    fn extract_project_name(&self, ctx: &RenderContext) -> Option<String> {
+    fn extract_project_name(ctx: &RenderContext) -> Option<String> {
         // Try to get project directory from input
         let project_dir = ctx.input.project_dir()?;
         let sanitized = project_dir.trim_end_matches(['/', '\\']);
@@ -58,7 +59,7 @@ impl Component for ProjectComponent {
         }
 
         // Extract project name
-        let project_name = self.extract_project_name(ctx);
+        let project_name = Self::extract_project_name(ctx);
 
         // Check if we should show when empty
         if project_name.is_none() && !self.config.show_when_empty {
@@ -99,20 +100,38 @@ impl ComponentFactory for ProjectComponentFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::TerminalCapabilities;
     use crate::core::{InputData, WorkspaceInfo};
     use std::sync::Arc;
 
-    fn create_test_context() -> RenderContext {
+    #[allow(clippy::field_reassign_with_default)]
+    fn build_input(configure: impl FnOnce(&mut InputData)) -> InputData {
         let mut input = InputData::default();
-        input.workspace = Some(WorkspaceInfo {
-            current_dir: Some("/home/user".to_string()),
-            project_dir: Some("/home/user/my-project".to_string()),
+        configure(&mut input);
+        input
+    }
+
+    #[allow(clippy::field_reassign_with_default)]
+    fn build_project_config(
+        configure: impl FnOnce(&mut ProjectComponentConfig),
+    ) -> ProjectComponentConfig {
+        let mut config = ProjectComponentConfig::default();
+        configure(&mut config);
+        config
+    }
+
+    fn create_test_context() -> RenderContext {
+        let input = build_input(|input| {
+            input.workspace = Some(WorkspaceInfo {
+                current_dir: Some("/home/user".to_string()),
+                project_dir: Some("/home/user/my-project".to_string()),
+            });
         });
 
         RenderContext {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
-            terminal: Default::default(),
+            terminal: TerminalCapabilities::default(),
         }
     }
 
@@ -128,8 +147,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_project_disabled() {
-        let mut config = ProjectComponentConfig::default();
-        config.base.enabled = false;
+        let config = build_project_config(|config| {
+            config.base.enabled = false;
+        });
 
         let component = ProjectComponent::new(config);
         let ctx = create_test_context();
@@ -149,7 +169,7 @@ mod tests {
         let ctx = RenderContext {
             input: Arc::new(InputData::default()),
             config: Arc::new(Config::default()),
-            terminal: Default::default(),
+            terminal: TerminalCapabilities::default(),
         };
 
         let output = component.render(&ctx).await;

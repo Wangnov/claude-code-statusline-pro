@@ -87,7 +87,8 @@ pub struct StatusComponent {
 
 impl StatusComponent {
     /// Create a new status component
-    #[must_use] pub const fn new(config: StatusComponentConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: StatusComponentConfig) -> Self {
         Self {
             config,
             transcript_cache: Mutex::new(None),
@@ -102,26 +103,24 @@ impl StatusComponent {
             }
         }
 
-        self.parse_status_from_input(ctx)
+        Self::parse_status_from_input(ctx)
     }
 
     /// Parse status from stdin metadata (legacy path)
-    fn parse_status_from_input(&self, ctx: &RenderContext) -> StatusInfo {
-        if let Some(status_value) = ctx.input.extra.get("status") {
-            if let Some(status_str) = status_value.as_str() {
-                return self.parse_status_string(status_str);
-            }
+    fn parse_status_from_input(ctx: &RenderContext) -> StatusInfo {
+        if let Some(status_str) = ctx.input.extra.get("status").and_then(Value::as_str) {
+            return Self::parse_status_string(status_str);
         }
 
-        if let Some(stop_reason) = ctx.input.extra.get("stop_reason") {
-            if let Some(reason_str) = stop_reason.as_str() {
-                return self.parse_stop_reason(reason_str, None);
-            }
+        if let Some(reason_str) = ctx.input.extra.get("stop_reason").and_then(Value::as_str) {
+            return Self::parse_stop_reason(reason_str, None);
         }
 
         if let Some(error) = ctx.input.extra.get("error") {
-            if error.as_bool().unwrap_or(false) || error.as_str().is_some() {
-                return StatusInfo::error(error.as_str().map(std::string::ToString::to_string));
+            let is_error_flag = error.as_bool().unwrap_or(false);
+            let error_text = error.as_str().map(std::string::ToString::to_string);
+            if is_error_flag || error_text.is_some() {
+                return StatusInfo::error(error_text);
             }
         }
 
@@ -133,7 +132,12 @@ impl StatusComponent {
         let metadata = fs::metadata(path).ok()?;
         let modified = metadata.modified().ok()?;
 
-        if let Some(cache) = self.transcript_cache.lock().unwrap().clone() {
+        if let Some(cache) = self
+            .transcript_cache
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone())
+        {
             if cache.mtime == modified {
                 return Some(cache.info);
             }
@@ -192,22 +196,20 @@ impl StatusComponent {
                 .and_then(|v| v.as_str())
                 .map(std::string::ToString::to_string);
 
-            if self.is_error_entry(&value) {
+            if Self::is_error_entry(&value) {
                 assistant_error = true;
-                assistant_error_detail = self.get_error_details(&value);
+                assistant_error_detail = Self::get_error_details(&value);
             }
 
             break;
         }
 
-        let tool_name = self
-            .collect_recent_tool_name(&lines)
-            .filter(|name| !name.is_empty());
+        let tool_name = Self::collect_recent_tool_name(&lines).filter(|name| !name.is_empty());
 
         let info = if assistant_error {
             StatusInfo::error(assistant_error_detail)
         } else if let Some(reason) = last_stop_reason.as_deref() {
-            self.parse_stop_reason(reason, tool_name)
+            Self::parse_stop_reason(reason, tool_name)
         } else if matches!(last_entry_type.as_deref(), Some("user")) {
             StatusInfo::thinking()
         } else {
@@ -220,13 +222,14 @@ impl StatusComponent {
     }
 
     fn memoize_transcript(&self, mtime: SystemTime, info: StatusInfo) {
-        let mut guard = self.transcript_cache.lock().unwrap();
-        *guard = Some(TranscriptCache { mtime, info });
+        if let Ok(mut guard) = self.transcript_cache.lock() {
+            *guard = Some(TranscriptCache { mtime, info });
+        }
     }
 
-    fn parse_status_string(&self, status: &str) -> StatusInfo {
-        match status.to_lowercase().as_str() {
-            "ready" | "complete" => StatusInfo::ready(),
+    fn parse_status_string(status: &str) -> StatusInfo {
+        let normalized = status.to_lowercase();
+        match normalized.as_str() {
             "thinking" | "processing" => StatusInfo::thinking(),
             "tool" | "tool_use" => StatusInfo::tool(None),
             "error" => StatusInfo::error(None),
@@ -235,9 +238,8 @@ impl StatusComponent {
         }
     }
 
-    fn parse_stop_reason(&self, reason: &str, tool_name: Option<String>) -> StatusInfo {
+    fn parse_stop_reason(reason: &str, tool_name: Option<String>) -> StatusInfo {
         match reason {
-            "end_turn" => StatusInfo::ready(),
             "tool_use" => StatusInfo::tool(tool_name),
             "max_tokens" => {
                 StatusInfo::warning("Max Tokens", Some("Token limit reached".to_string()))
@@ -317,108 +319,142 @@ impl StatusComponent {
         }
     }
 
-    fn is_error_entry(&self, entry: &Value) -> bool {
-        if let Some(tool_use_result) = entry.get("toolUseResult") {
-            if let Some(error_value) = tool_use_result.get("error") {
-                if let Some(error_msg) = error_value.as_str() {
-                    if error_msg.contains("was blocked") || error_msg.contains("For security") {
-                        return false;
-                    }
-                }
-                return true;
-            }
-
-            if tool_use_result
-                .get("type")
-                .and_then(|v| v.as_str())
-                .is_some_and(|ty| ty.eq_ignore_ascii_case("error"))
-            {
-                return true;
-            }
+    fn is_error_entry(entry: &Value) -> bool {
+        if entry
+            .get("toolUseResult")
+            .is_some_and(Self::tool_use_indicates_error)
+        {
+            return true;
         }
 
         if let Some(message) = entry.get("message") {
-            if message.get("stop_reason").and_then(|v| v.as_str()) == Some("stop_sequence") {
-                if let Some(content) = message.get("content").and_then(|v| v.as_array()) {
-                    for item in content {
-                        if item.get("type").and_then(|v| v.as_str()) != Some("text") {
-                            continue;
-                        }
-                        if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                            if (text.starts_with("API Error: 403")
-                                && text.contains("user quota is not enough"))
-                                || text.contains("filter")
-                            {
-                                return true;
-                            }
-                        }
-                    }
-                }
+            if Self::is_stop_sequence_message(message)
+                && Self::message_contains_matching_text(message, Self::text_indicates_error)
+            {
+                return true;
             }
         }
 
         false
     }
 
-    fn get_error_details(&self, entry: &Value) -> Option<String> {
+    fn get_error_details(entry: &Value) -> Option<String> {
         if let Some(tool_use_result) = entry.get("toolUseResult") {
-            if let Some(error_msg) = tool_use_result.get("error").and_then(|v| v.as_str()) {
-                return Some(error_msg.to_string());
+            if let Some(error_msg) = tool_use_result.get("error").and_then(Value::as_str) {
+                return Self::error_detail_from_message(error_msg);
             }
         }
 
-        if let Some(message) = entry.get("message") {
-            if message.get("stop_reason").and_then(|v| v.as_str()) == Some("stop_sequence") {
-                if let Some(content) = message.get("content").and_then(|v| v.as_array()) {
-                    for item in content {
-                        if item.get("type").and_then(|v| v.as_str()) != Some("text") {
-                            continue;
-                        }
-                        if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                            if text.starts_with("API Error: 403")
-                                && text.contains("user quota is not enough")
-                            {
-                                return Some("403 quota insufficient".to_string());
-                            }
-                            if text.contains("filter") {
-                                return Some("Filter error".to_string());
-                            }
-                        }
-                    }
-                }
+        entry.get("message").and_then(|message| {
+            if Self::is_stop_sequence_message(message) {
+                Self::message_error_detail(message)
+            } else {
+                None
             }
-        }
-
-        None
+        })
     }
 
-    fn collect_recent_tool_name(&self, lines: &[&str]) -> Option<String> {
+    fn collect_recent_tool_name(lines: &[&str]) -> Option<String> {
         const RECENT_WINDOW: usize = 5;
 
-        for line in lines.iter().rev().take(RECENT_WINDOW) {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
+        lines
+            .iter()
+            .rev()
+            .take(RECENT_WINDOW)
+            .map(|line| line.trim())
+            .filter(|trimmed| !trimmed.is_empty())
+            .filter_map(|trimmed| serde_json::from_str::<Value>(trimmed).ok())
+            .find_map(|value| Self::extract_tool_use_name(&value))
+    }
 
-            let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
-                continue;
-            };
-
-            if let Some(message) = value.get("message") {
-                if let Some(content) = message.get("content").and_then(|v| v.as_array()) {
-                    for item in content {
-                        if item.get("type").and_then(|v| v.as_str()) == Some("tool_use") {
-                            if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
-                                return Some(name.to_string());
-                            }
-                        }
-                    }
-                }
-            }
+    fn tool_use_indicates_error(tool_use_result: &Value) -> bool {
+        if let Some(error_msg) = tool_use_result.get("error").and_then(Value::as_str) {
+            return !Self::is_blocked_error_message(error_msg);
         }
 
-        None
+        tool_use_result
+            .get("type")
+            .and_then(Value::as_str)
+            .is_some_and(|ty| ty.eq_ignore_ascii_case("error"))
+    }
+
+    fn is_stop_sequence_message(message: &Value) -> bool {
+        message
+            .get("stop_reason")
+            .and_then(Value::as_str)
+            .is_some_and(|reason| reason == "stop_sequence")
+    }
+
+    fn message_contains_matching_text(message: &Value, predicate: impl Fn(&str) -> bool) -> bool {
+        message
+            .get("content")
+            .and_then(Value::as_array)
+            .is_some_and(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| {
+                        let item_type = item.get("type").and_then(Value::as_str)?;
+                        if item_type != "text" {
+                            return None;
+                        }
+                        item.get("text").and_then(Value::as_str)
+                    })
+                    .any(predicate)
+            })
+    }
+
+    fn text_indicates_error(text: &str) -> bool {
+        (text.starts_with("API Error: 403") && text.contains("user quota is not enough"))
+            || text.contains("filter")
+    }
+
+    fn error_detail_from_message(error_msg: &str) -> Option<String> {
+        if Self::is_blocked_error_message(error_msg) {
+            None
+        } else {
+            Some(error_msg.to_string())
+        }
+    }
+
+    fn message_error_detail(message: &Value) -> Option<String> {
+        let items = message.get("content").and_then(Value::as_array)?;
+
+        items.iter().find_map(|item| {
+            let item_type = item.get("type").and_then(Value::as_str)?;
+            if item_type != "text" {
+                return None;
+            }
+
+            let text = item.get("text").and_then(Value::as_str)?;
+            if text.starts_with("API Error: 403") && text.contains("user quota is not enough") {
+                Some("403 quota insufficient".to_string())
+            } else if text.contains("filter") {
+                Some("Filter error".to_string())
+            } else {
+                None
+            }
+        })
+    }
+
+    fn extract_tool_use_name(value: &Value) -> Option<String> {
+        let content = value
+            .get("message")
+            .and_then(|message| message.get("content"))
+            .and_then(Value::as_array)?;
+
+        content.iter().find_map(|item| {
+            let item_type = item.get("type").and_then(Value::as_str)?;
+            if item_type != "tool_use" {
+                return None;
+            }
+            item.get("name")
+                .and_then(Value::as_str)
+                .map(std::string::ToString::to_string)
+        })
+    }
+
+    fn is_blocked_error_message(message: &str) -> bool {
+        message.contains("was blocked") || message.contains("For security")
     }
 }
 
@@ -490,14 +526,34 @@ mod tests {
     use super::*;
     use crate::components::TerminalCapabilities;
     use crate::core::InputData;
+    use anyhow::{Context, Result};
     use serde_json::json;
     use std::io::Write;
     use std::sync::Arc;
     use tempfile::NamedTempFile;
 
-    fn create_test_context(extra: serde_json::Value) -> RenderContext {
+    type TestResult = Result<()>;
+
+    #[allow(clippy::field_reassign_with_default)]
+    fn build_status_config(
+        configure: impl FnOnce(&mut StatusComponentConfig),
+    ) -> StatusComponentConfig {
+        let mut config = StatusComponentConfig::default();
+        configure(&mut config);
+        config
+    }
+
+    #[allow(clippy::field_reassign_with_default)]
+    fn build_input(configure: impl FnOnce(&mut InputData)) -> InputData {
         let mut input = InputData::default();
-        input.extra = extra;
+        configure(&mut input);
+        input
+    }
+
+    fn create_test_context(extra: serde_json::Value) -> RenderContext {
+        let input = build_input(|input| {
+            input.extra = extra;
+        });
 
         RenderContext {
             input: Arc::new(input),
@@ -507,9 +563,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_status_ready() {
-        let mut config = StatusComponentConfig::default();
-        config.show_when_idle = true;
+    async fn test_status_ready() -> TestResult {
+        let config = build_status_config(|config| {
+            config.show_when_idle = true;
+        });
 
         let component = StatusComponent::new(config);
         let ctx = create_test_context(json!({
@@ -519,11 +576,12 @@ mod tests {
         let output = component.render(&ctx).await;
         assert!(output.visible);
         assert_eq!(output.text, "Ready");
-        assert_eq!(output.icon.unwrap(), "✅");
+        assert_eq!(output.icon.as_deref(), Some("✅"));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_status_error_flag() {
+    async fn test_status_error_flag() -> TestResult {
         let component = StatusComponent::new(StatusComponentConfig::default());
         let ctx = create_test_context(json!({
             "error": true
@@ -533,20 +591,22 @@ mod tests {
         assert!(output.visible);
         assert_eq!(output.text, "Error");
         assert_eq!(output.icon_color, Some("red".to_string()));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_status_hide_when_idle() {
+    async fn test_status_hide_when_idle() -> TestResult {
         let component = StatusComponent::new(StatusComponentConfig::default());
         let ctx = create_test_context(json!({}));
 
         let output = component.render(&ctx).await;
         assert!(!output.visible);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_status_from_transcript_tool() {
-        let mut file = NamedTempFile::new().unwrap();
+    async fn test_status_from_transcript_tool() -> TestResult {
+        let mut file = NamedTempFile::new()?;
         writeln!(
             file,
             "{}",
@@ -559,10 +619,11 @@ mod tests {
                 }
             })
         )
-        .unwrap();
+        .context("failed to write tool transcript")?;
 
-        let mut input = InputData::default();
-        input.transcript_path = Some(file.path().to_string_lossy().to_string());
+        let input = build_input(|input| {
+            input.transcript_path = Some(file.path().to_string_lossy().to_string());
+        });
 
         let ctx = RenderContext {
             input: Arc::new(input),
@@ -575,11 +636,12 @@ mod tests {
 
         assert!(output.visible);
         assert_eq!(output.text, "Tool (git_status)");
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_status_from_transcript_error_details() {
-        let mut file = NamedTempFile::new().unwrap();
+    async fn test_status_from_transcript_error_details() -> TestResult {
+        let mut file = NamedTempFile::new()?;
         writeln!(
             file,
             "{}",
@@ -595,10 +657,11 @@ mod tests {
                 }
             })
         )
-        .unwrap();
+        .context("failed to write error transcript")?;
 
-        let mut input = InputData::default();
-        input.transcript_path = Some(file.path().to_string_lossy().to_string());
+        let input = build_input(|input| {
+            input.transcript_path = Some(file.path().to_string_lossy().to_string());
+        });
 
         let ctx = RenderContext {
             input: Arc::new(input),
@@ -615,5 +678,6 @@ mod tests {
             "Error (API Error: 403 user quota is not enough)"
         );
         assert_eq!(output.icon_color, Some("red".to_string()));
+        Ok(())
     }
 }

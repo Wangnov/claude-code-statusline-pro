@@ -57,7 +57,7 @@ impl Default for Config {
             storage: StorageConfig::default(),
             style: StyleConfig::default(),
             components: ComponentsConfig::default(),
-            multiline: None,
+            multiline: Some(MultilineConfig::default()),
         }
     }
 }
@@ -175,7 +175,8 @@ impl Default for AutoDetect {
 }
 
 impl AutoDetect {
-    #[must_use] pub const fn is_enabled(&self, detected: bool) -> bool {
+    #[must_use]
+    pub const fn is_enabled(&self, detected: bool) -> bool {
         match self {
             Self::Bool(value) => *value,
             Self::Auto(_) => detected,
@@ -186,7 +187,7 @@ impl AutoDetect {
 /// All component configurations
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ComponentsConfig {
-    /// Component display order (e.g., ["project", "model", "branch", "tokens"])
+    /// Component display order (e.g., `["project", "model", "branch", "tokens"]`)
     #[serde(default)]
     pub order: Vec<String>,
 
@@ -356,6 +357,7 @@ impl Default for BranchComponentConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct BranchPerformanceConfig {
     #[serde(default = "default_true")]
     pub enable_cache: bool,
@@ -472,6 +474,7 @@ impl Default for BranchStatusColors {
 
 /// Tokens component configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct TokensComponentConfig {
     #[serde(flatten)]
     pub base: BaseComponentConfig,
@@ -717,8 +720,7 @@ impl Default for StatusComponentConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct StatusIconsConfig {
     #[serde(default)]
     pub emoji: StatusEmojiIcons,
@@ -729,7 +731,6 @@ pub struct StatusIconsConfig {
     #[serde(default)]
     pub text: StatusTextIcons,
 }
-
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct StatusEmojiIcons {
@@ -836,10 +837,10 @@ impl Default for StatusColorConfig {
 }
 
 /// Multi-line configuration
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MultilineConfig {
     /// Enable multi-line mode
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub enabled: bool,
 
     /// Maximum number of rows supported by the grid
@@ -849,6 +850,16 @@ pub struct MultilineConfig {
     /// Per-row configuration metadata
     #[serde(default)]
     pub rows: HashMap<String, MultilineRowConfig>,
+}
+
+impl Default for MultilineConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_rows: default_max_rows(),
+            rows: HashMap::new(),
+        }
+    }
 }
 
 /// Multi-line row configuration

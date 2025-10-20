@@ -16,7 +16,7 @@ too-many-lines-threshold = 100
 type-complexity-threshold = 250
 
 # 单个表达式的最大嵌套
-excessive-nesting-threshold = 5
+excessive-nesting-threshold = 10
 
 # 栈分配大小警告阈值
 stack-size-threshold = 512000

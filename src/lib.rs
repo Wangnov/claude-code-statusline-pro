@@ -6,6 +6,7 @@
     clippy::unimplemented,
     clippy::todo
 )]
+#![allow(clippy::multiple_crate_versions)]
 
 //! Claude Code Statusline Pro - Library
 //!

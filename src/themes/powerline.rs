@@ -15,16 +15,16 @@ impl PowerlineThemeRenderer {
     const POWERLINE_SEPARATOR: char = '\u{e0b0}';
     const POWERLINE_START: char = '\u{e0d7}';
 
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 
     fn render_classic_fallback(
-        &self,
         components: &[ComponentOutput],
         context: &RenderContext,
         supports_colors: bool,
-    ) -> Result<String> {
+    ) -> String {
         let style = &context.config.style;
         let (separator_core, apply_padding) = if style.separator.is_empty() {
             (" | ".trim(), true)
@@ -74,7 +74,7 @@ impl PowerlineThemeRenderer {
             }
         }
 
-        Ok(parts.join(&colored_separator))
+        parts.join(&colored_separator)
     }
 
     fn compose_content(component: &ComponentOutput) -> String {
@@ -120,7 +120,6 @@ impl PowerlineThemeRenderer {
     }
 
     fn render_segment(
-        &self,
         content: &str,
         bg_color: &str,
         next_bg: Option<&str>,
@@ -150,23 +149,19 @@ impl PowerlineThemeRenderer {
         }
         segment.push(' ');
 
+        segment.push_str(ANSI_RESET);
         if let Some(next) = next_bg {
-            segment.push_str(ANSI_RESET);
             if let Some(bg) = ansi_bg(next).as_ref() {
                 segment.push_str(bg);
             }
             if let Some(fg) = ansi_fg(bg_color).as_ref() {
                 segment.push_str(fg);
             }
-            segment.push(Self::POWERLINE_SEPARATOR);
-        } else {
-            segment.push_str(ANSI_RESET);
-            if let Some(fg) = ansi_fg(bg_color).as_ref() {
-                segment.push_str(fg);
-            }
-            segment.push(Self::POWERLINE_SEPARATOR);
-            segment.push_str(ANSI_RESET);
+        } else if let Some(fg) = ansi_fg(bg_color).as_ref() {
+            segment.push_str(fg);
         }
+        segment.push(Self::POWERLINE_SEPARATOR);
+        segment.push_str(ANSI_RESET);
 
         segment
     }
@@ -193,7 +188,11 @@ impl ThemeRenderer for PowerlineThemeRenderer {
             context.terminal.supports_nerd_font || context.config.terminal.force_nerd_font;
 
         if !supports_colors || !use_nerd_font {
-            return self.render_classic_fallback(components, context, supports_colors);
+            return Ok(Self::render_classic_fallback(
+                components,
+                context,
+                supports_colors,
+            ));
         }
 
         let mut prepared = Vec::with_capacity(components.len());
@@ -230,20 +229,21 @@ impl ThemeRenderer for PowerlineThemeRenderer {
         }
 
         for idx in 0..prepared.len() {
-            let (ref content, ref color_opt, preserve_internal) = prepared[idx];
+            let (ref segment_content, ref color_opt, preserve_internal) = prepared[idx];
             if color_opt.is_none() {
-                rendered.push_str(content);
+                rendered.push_str(segment_content);
                 continue;
             }
 
-            let color = color_opt.as_ref().unwrap();
-            let next_color = Self::next_visible_color(&prepared, idx);
-            rendered.push_str(&self.render_segment(
-                content,
-                color,
-                next_color.as_deref(),
-                preserve_internal,
-            ));
+            if let Some(color) = color_opt.as_deref() {
+                let next_color = Self::next_visible_color(&prepared, idx);
+                rendered.push_str(&Self::render_segment(
+                    segment_content,
+                    color,
+                    next_color.as_deref(),
+                    preserve_internal,
+                ));
+            }
         }
 
         Ok(rendered)
@@ -266,7 +266,10 @@ mod tests {
     use crate::components::TerminalCapabilities;
     use crate::config::{AutoDetect, Config};
     use crate::core::InputData;
+    use std::error::Error;
     use std::sync::Arc;
+
+    type TestResult = Result<(), Box<dyn Error>>;
 
     fn create_test_context(nerd_font: bool, colors: bool) -> RenderContext {
         let mut config = Config::default();
@@ -284,7 +287,7 @@ mod tests {
     }
 
     #[test]
-    fn test_powerline_theme_with_nerd_font() {
+    fn test_powerline_theme_with_nerd_font() -> TestResult {
         let theme = PowerlineThemeRenderer::new();
         let ctx = create_test_context(true, true);
 
@@ -294,13 +297,14 @@ mod tests {
         ];
 
         let colors = vec!["blue".to_string(), "green".to_string()];
-        let result = theme.render(&components, &colors, &ctx).unwrap();
+        let result = theme.render(&components, &colors, &ctx)?;
         assert!(result.contains('\u{e0b0}'));
         assert!(result.contains('\u{e0d7}'));
+        Ok(())
     }
 
     #[test]
-    fn test_powerline_theme_without_colors() {
+    fn test_powerline_theme_without_colors() -> TestResult {
         let theme = PowerlineThemeRenderer::new();
         let ctx = create_test_context(true, false);
 
@@ -310,7 +314,8 @@ mod tests {
         ];
 
         let colors = vec!["blue".to_string(), "green".to_string()];
-        let result = theme.render(&components, &colors, &ctx).unwrap();
+        let result = theme.render(&components, &colors, &ctx)?;
         assert_eq!(result, "📁 Project | 🌿 main");
+        Ok(())
     }
 }

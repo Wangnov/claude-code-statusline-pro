@@ -10,6 +10,7 @@ use anyhow::{anyhow, Context, Result};
 use dirs;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tokio::task;
 use toml::{self, Value};
 use toml_edit::{value as toml_value, DocumentMut};
 
@@ -99,7 +100,8 @@ pub struct ConfigLoader {
 
 impl ConfigLoader {
     /// Create a new `ConfigLoader` instance
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             cached_config: None,
             config_source: None,
@@ -112,25 +114,48 @@ impl ConfigLoader {
     /// 2. Project-level config
     /// 3. User-level config
     /// 4. Default configuration
+    /// # Errors
+    ///
+    /// Returns an error if configuration files cannot be read or parsed, or
+    /// if a custom configuration path is provided but does not exist on disk.
     pub async fn load(&mut self, custom_path: Option<&str>) -> Result<Config> {
-        // Reuse cached configuration when appropriate
-        if let Some(ref cached) = self.cached_config {
-            match custom_path {
-                None => return Ok(cached.clone()),
-                Some(path) => {
-                    if let Some(source) = &self.config_source {
-                        if source.source_type == ConfigSourceType::Custom {
-                            if let Some(ref cached_path) = source.path {
-                                if cached_path == Path::new(path) {
-                                    return Ok(cached.clone());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        if let Some(cached) = self.try_reuse_cached_config(custom_path) {
+            return Ok(cached);
         }
 
+        let custom_path_owned = custom_path.map(str::to_owned);
+        let (config, source, report) =
+            task::spawn_blocking(move || Self::load_config_layers(custom_path_owned.as_deref()))
+                .await
+                .map_err(|err| anyhow!("Blocking configuration load failed: {err}"))??;
+
+        self.cached_config = Some(config.clone());
+        self.config_source = Some(source);
+        self.merge_report = Some(report);
+
+        Ok(config)
+    }
+
+    fn try_reuse_cached_config(&self, custom_path: Option<&str>) -> Option<Config> {
+        let cached = self.cached_config.as_ref()?;
+        let can_reuse = custom_path.map_or(true, |path| {
+            self.config_source
+                .as_ref()
+                .filter(|source| source.source_type == ConfigSourceType::Custom)
+                .and_then(|source| source.path.as_ref())
+                .is_some_and(|p| p == Path::new(path))
+        });
+
+        if can_reuse {
+            Some(cached.clone())
+        } else {
+            None
+        }
+    }
+
+    fn load_config_layers(
+        custom_path: Option<&str>,
+    ) -> Result<(Config, ConfigSource, MergeReport)> {
         let mut merged_value = Value::try_from(Config::default())?;
         let mut source = ConfigSource {
             path: None,
@@ -138,12 +163,11 @@ impl ConfigLoader {
         };
         let mut layers: Vec<MergeLayer> = Vec::new();
 
-        // Apply user-level configuration first so it can be overridden later
-        if let Some(user_config_path) = self.get_user_config_path() {
+        if let Some(user_config_path) = Self::get_user_config_path() {
             if user_config_path.exists() {
-                let user_value = self.load_toml_value(&user_config_path)?;
+                let user_value = Self::load_toml_value(&user_config_path)?;
                 let before = merged_value.clone();
-                self.merge_value(&mut merged_value, user_value);
+                Self::merge_value(&mut merged_value, user_value);
                 let (added, updated) = collect_diffs(&before, &merged_value);
                 layers.push(MergeLayer {
                     source_type: ConfigSourceType::User,
@@ -158,12 +182,11 @@ impl ConfigLoader {
             }
         }
 
-        // Apply project-level configuration next
-        if let Ok(project_config_path) = self.get_project_config_path() {
+        if let Ok(project_config_path) = Self::get_project_config_path() {
             if project_config_path.exists() {
-                let project_value = self.load_toml_value(&project_config_path)?;
+                let project_value = Self::load_toml_value(&project_config_path)?;
                 let before = merged_value.clone();
-                self.merge_value(&mut merged_value, project_value);
+                Self::merge_value(&mut merged_value, project_value);
                 let (added, updated) = collect_diffs(&before, &merged_value);
                 layers.push(MergeLayer {
                     source_type: ConfigSourceType::Project,
@@ -178,13 +201,12 @@ impl ConfigLoader {
             }
         }
 
-        // Apply custom configuration last (highest priority)
         if let Some(path) = custom_path {
             let custom_path_buf = PathBuf::from(path);
             if custom_path_buf.exists() {
-                let custom_value = self.load_toml_value(&custom_path_buf)?;
+                let custom_value = Self::load_toml_value(&custom_path_buf)?;
                 let before = merged_value.clone();
-                self.merge_value(&mut merged_value, custom_value);
+                Self::merge_value(&mut merged_value, custom_value);
                 let (added, updated) = collect_diffs(&before, &merged_value);
                 layers.push(MergeLayer {
                     source_type: ConfigSourceType::Custom,
@@ -205,18 +227,17 @@ impl ConfigLoader {
             .try_into()
             .context("Failed to build configuration from merged values")?;
 
-        // Cache the configuration
-        self.cached_config = Some(config.clone());
-        self.config_source = Some(source);
-        self.merge_report = Some(MergeReport { layers });
-
-        Ok(config)
+        Ok((config, source, MergeReport { layers }))
     }
 
     /// Load configuration with project ID
+    /// # Errors
+    ///
+    /// Returns an error if the derived configuration file path cannot be
+    /// represented as UTF-8 or if underlying configuration loading fails.
     pub async fn load_with_project_id(&mut self, project_id: &str) -> Result<Config> {
         // Try to load project-specific config first
-        let project_config_path = self.get_project_config_path_with_id(project_id);
+        let project_config_path = Self::get_project_config_path_with_id(project_id);
         if project_config_path.exists() {
             let path_str = project_config_path
                 .to_str()
@@ -229,10 +250,11 @@ impl ConfigLoader {
     }
 
     /// Create default configuration file using the provided options
-    pub fn create_default_config(
-        &self,
-        options: CreateConfigOptions<'_>,
-    ) -> Result<CreateConfigResult> {
+    /// # Errors
+    ///
+    /// Returns an error when the target directory cannot be created or when
+    /// writing the generated configuration to disk fails.
+    pub fn create_default_config(options: CreateConfigOptions<'_>) -> Result<CreateConfigResult> {
         let target_path = if let Some(path) = options.target_path {
             path.to_path_buf()
         } else {
@@ -246,14 +268,16 @@ impl ConfigLoader {
                 .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
         }
 
-        let template_path = self.get_template_path();
+        let template_path = Self::get_template_path();
         let mut document = if template_path.exists() {
-            match fs::read_to_string(&template_path) {
-                Ok(content) => content
-                    .parse::<DocumentMut>()
-                    .unwrap_or_else(|_| default_config_document()),
-                Err(_) => default_config_document(),
-            }
+            fs::read_to_string(&template_path).map_or_else(
+                |_| default_config_document(),
+                |content| {
+                    content
+                        .parse::<DocumentMut>()
+                        .unwrap_or_else(|_| default_config_document())
+                },
+            )
         } else {
             default_config_document()
         };
@@ -273,7 +297,7 @@ impl ConfigLoader {
 
         let copy_stats = if options.copy_components {
             if let Some(dir) = target_path.parent() {
-                Some(self.copy_component_configs(dir, options.force)?)
+                Some(Self::copy_component_configs(dir, options.force)?)
             } else {
                 None
             }
@@ -288,29 +312,40 @@ impl ConfigLoader {
     }
 
     /// Reset configuration to defaults
+    /// # Errors
+    ///
+    /// Returns an error if the default configuration cannot be generated or
+    /// the destination path cannot be resolved.
     pub async fn reset_to_defaults(&self, path: Option<&str>) -> Result<()> {
         let target_path = if let Some(p) = path {
             PathBuf::from(p)
         } else {
-            self.get_user_config_path()
-                .ok_or_else(|| anyhow::anyhow!("Cannot determine user config path"))?
+            Self::get_user_config_path()
+                .ok_or_else(|| anyhow!("Cannot determine user config path"))?
         };
 
-        let _ = self.create_default_config(CreateConfigOptions {
-            target_path: Some(target_path.as_path()),
-            ..Default::default()
-        })?;
+        task::spawn_blocking(move || {
+            let options = CreateConfigOptions {
+                target_path: Some(target_path.as_path()),
+                ..Default::default()
+            };
+            Self::create_default_config(options).map(|_| ())
+        })
+        .await
+        .map_err(|err| anyhow!("Failed to reset configuration: {err}"))??;
 
         Ok(())
     }
 
     /// Get configuration source information
-    #[must_use] pub const fn get_config_source(&self) -> Option<&ConfigSource> {
+    #[must_use]
+    pub const fn get_config_source(&self) -> Option<&ConfigSource> {
         self.config_source.as_ref()
     }
 
     /// Retrieve the latest merge report.
-    #[must_use] pub const fn merge_report(&self) -> Option<&MergeReport> {
+    #[must_use]
+    pub const fn merge_report(&self) -> Option<&MergeReport> {
         self.merge_report.as_ref()
     }
 
@@ -322,28 +357,49 @@ impl ConfigLoader {
     }
 
     /// Return the path to the user-level configuration file
-    #[must_use] pub fn user_config_path(&self) -> Option<PathBuf> {
-        self.get_user_config_path()
+    #[must_use]
+    pub fn user_config_path(&self) -> Option<PathBuf> {
+        self.config_source
+            .as_ref()
+            .and_then(|source| {
+                (source.source_type == ConfigSourceType::User)
+                    .then(|| source.path.clone())
+                    .flatten()
+            })
+            .or_else(Self::get_user_config_path)
     }
 
     /// 获取当前目录的项目级配置路径（`./statusline.config.toml`）
+    /// # Errors
+    ///
+    /// Returns an error when the current working directory cannot be
+    /// determined or converted into UTF-8.
     pub fn project_config_path(&self) -> Result<PathBuf> {
-        self.get_project_config_path()
+        if let Some(source) = &self.config_source {
+            if source.source_type == ConfigSourceType::Project {
+                if let Some(path) = &source.path {
+                    return Ok(path.clone());
+                }
+            }
+        }
+
+        Self::get_project_config_path()
     }
 
     /// Compute the project config path for a specific project directory
-    #[must_use] pub fn project_config_path_for_path(&self, project_path: &str) -> PathBuf {
+    #[must_use]
+    pub fn project_config_path_for_path(project_path: &str) -> PathBuf {
         let project_id = ProjectResolver::hash_global_path(project_path);
-        self.get_project_config_path_with_id(&project_id)
+        Self::get_project_config_path_with_id(&project_id)
     }
 
     /// Copy component configuration templates into the provided directory
-    pub fn copy_component_configs(
-        &self,
-        target_dir: &Path,
-        force: bool,
-    ) -> Result<ComponentCopyStats> {
-        let Some(template_dir) = self.find_component_template_dir() else {
+    /// # Errors
+    ///
+    /// Returns an error when template directories cannot be read, component
+    /// files cannot be copied, or supporting directories cannot be created.
+    pub fn copy_component_configs(target_dir: &Path, force: bool) -> Result<ComponentCopyStats> {
+        let Some(template_dir) = Self::find_component_template_dir() else {
             return Ok(ComponentCopyStats::default());
         };
 
@@ -375,13 +431,12 @@ impl ConfigLoader {
             let target_name = file_name.replace(".template", "");
             let target_path = target_components_dir.join(&target_name);
 
-            if target_path.exists()
-                && !force {
-                    // Skip without prompting, just count as skipped
-                    stats.skipped += 1;
-                    continue;
-                }
-                // Force mode: overwrite the file
+            if target_path.exists() && !force {
+                // Skip without prompting, just count as skipped
+                stats.skipped += 1;
+                continue;
+            }
+            // Force mode: overwrite the file
 
             fs::copy(&path, &target_path).with_context(|| {
                 format!(
@@ -397,6 +452,10 @@ impl ConfigLoader {
     }
 
     /// Apply a theme to the current configuration file and persist it
+    /// # Errors
+    ///
+    /// Returns an error if configuration loading or persistence fails during
+    /// theme application.
     pub async fn apply_theme(&mut self, theme: &str) -> Result<PathBuf> {
         let mut config = self.load(None).await?;
         config.theme = theme.to_string();
@@ -406,6 +465,10 @@ impl ConfigLoader {
     }
 
     /// Persist the provided configuration to disk (overriding cached path if provided)
+    /// # Errors
+    ///
+    /// Returns an error when the configuration cannot be serialized or when
+    /// writing to the target location fails.
     pub fn persist(&mut self, config: &Config, override_path: Option<&Path>) -> Result<PathBuf> {
         let path = self.write_config(config, override_path)?;
         self.clear_cache();
@@ -414,14 +477,14 @@ impl ConfigLoader {
 
     // Private helper methods
 
-    fn load_toml_value<P: AsRef<Path>>(&self, path: P) -> Result<Value> {
+    fn load_toml_value<P: AsRef<Path>>(path: P) -> Result<Value> {
         let path = path.as_ref();
         let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config file: {path:?}"))?;
+            .with_context(|| format!("Failed to read config file: {}", path.display()))?;
 
         let mut value: Value = content
             .parse::<Value>()
-            .with_context(|| format!("Failed to parse TOML config: {path:?}"))?;
+            .with_context(|| format!("Failed to parse TOML config: {}", path.display()))?;
 
         Self::normalize_value(&mut value);
 
@@ -431,13 +494,12 @@ impl ConfigLoader {
     fn normalize_value(value: &mut Value) {
         match value {
             Value::Table(table) => {
-                if let Some(storage_value) = table.get_mut("storage") {
-                    if let Value::Table(storage_table) = storage_value {
-                        if let Some(auto_value) = storage_table.remove("autoCleanupDays") {
-                            if !storage_table.contains_key("sessionExpiryDays") {
-                                storage_table.insert("sessionExpiryDays".to_string(), auto_value);
-                            }
-                        }
+                if let Some(storage_table) = table.get_mut("storage").and_then(Value::as_table_mut)
+                {
+                    if let Some(auto_value) = storage_table.remove("autoCleanupDays") {
+                        storage_table
+                            .entry("sessionExpiryDays".to_string())
+                            .or_insert(auto_value);
                     }
                 }
 
@@ -454,12 +516,12 @@ impl ConfigLoader {
         }
     }
 
-    fn merge_value(&self, base: &mut Value, overlay: Value) {
+    fn merge_value(base: &mut Value, overlay: Value) {
         match (base, overlay) {
             (Value::Table(base_table), Value::Table(overlay_table)) => {
                 for (key, overlay_value) in overlay_table {
                     match base_table.get_mut(&key) {
-                        Some(base_value) => self.merge_value(base_value, overlay_value),
+                        Some(base_value) => Self::merge_value(base_value, overlay_value),
                         None => {
                             base_table.insert(key, overlay_value);
                         }
@@ -472,16 +534,16 @@ impl ConfigLoader {
         }
     }
 
-    fn get_project_config_path(&self) -> Result<PathBuf> {
+    fn get_project_config_path() -> Result<PathBuf> {
         let cwd = std::env::current_dir()?;
         let cwd_str = cwd
             .to_str()
             .ok_or_else(|| anyhow!("Current directory path is not valid UTF-8"))?;
         let project_id = ProjectResolver::hash_global_path(cwd_str);
-        Ok(self.get_project_config_path_with_id(&project_id))
+        Ok(Self::get_project_config_path_with_id(&project_id))
     }
 
-    fn get_project_config_path_with_id(&self, project_id: &str) -> PathBuf {
+    fn get_project_config_path_with_id(project_id: &str) -> PathBuf {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         home.join(".claude")
             .join("projects")
@@ -490,7 +552,7 @@ impl ConfigLoader {
             .join("config.toml")
     }
 
-    fn get_user_config_path(&self) -> Option<PathBuf> {
+    fn get_user_config_path() -> Option<PathBuf> {
         dirs::home_dir().map(|home| {
             home.join(".claude")
                 .join("statusline-pro")
@@ -498,7 +560,7 @@ impl ConfigLoader {
         })
     }
 
-    fn get_template_path(&self) -> PathBuf {
+    fn get_template_path() -> PathBuf {
         // Try to find the template in the project directory
         let exe_path = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
         let exe_dir = exe_path.parent().unwrap_or_else(|| Path::new("."));
@@ -520,7 +582,7 @@ impl ConfigLoader {
         PathBuf::from("configs").join("config.template.toml")
     }
 
-    fn find_component_template_dir(&self) -> Option<PathBuf> {
+    fn find_component_template_dir() -> Option<PathBuf> {
         let exe_path = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
         let exe_dir = exe_path.parent().unwrap_or_else(|| Path::new("."));
 
@@ -530,13 +592,7 @@ impl ConfigLoader {
             PathBuf::from("../configs").join("components"),
         ];
 
-        for candidate in candidates {
-            if candidate.exists() {
-                return Some(candidate);
-            }
-        }
-
-        None
+        candidates.into_iter().find(|candidate| candidate.exists())
     }
 
     fn resolve_target_path(&self, override_path: Option<&Path>) -> Result<PathBuf> {
@@ -550,8 +606,7 @@ impl ConfigLoader {
             }
         }
 
-        self.get_user_config_path()
-            .ok_or_else(|| anyhow!("Cannot determine configuration path"))
+        Self::get_user_config_path().ok_or_else(|| anyhow!("Cannot determine configuration path"))
     }
 
     fn write_config(&self, config: &Config, override_path: Option<&Path>) -> Result<PathBuf> {
@@ -626,29 +681,31 @@ fn collect_diffs_impl(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Result;
     use std::env;
     use tempfile::tempdir;
 
     #[tokio::test]
-    async fn test_load_default_config() {
+    async fn test_load_default_config() -> Result<()> {
         // Create a temporary directory for the test
-        let temp_dir = tempdir().unwrap();
+        let temp_dir = tempdir()?;
         let temp_path = temp_dir.path();
 
         // Set HOME to temp dir to avoid loading real user config
         env::set_var("HOME", temp_path);
 
         let mut loader = ConfigLoader::new();
-        let config = loader.load(None).await.unwrap();
+        let config = loader.load(None).await?;
 
         // These should be the defaults from Config::default()
         assert_eq!(config.preset, Some("PMBTUS".to_string()));
         assert!(!config.debug);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_config_with_custom_file() {
-        let temp_dir = tempdir().unwrap();
+    async fn test_config_with_custom_file() -> Result<()> {
+        let temp_dir = tempdir()?;
         let config_path = temp_dir.path().join("test_config.toml");
 
         // Create a test config file
@@ -657,27 +714,31 @@ mod tests {
             theme = "powerline"
             debug = true
         "#;
-        std::fs::write(&config_path, test_config).unwrap();
+        std::fs::write(&config_path, test_config)?;
 
         let mut loader = ConfigLoader::new();
-        let config = loader
-            .load(Some(config_path.to_str().unwrap()))
-            .await
-            .unwrap();
+        let config_path_str = config_path
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("config path contains invalid UTF-8"))?;
+
+        let config = loader.load(Some(config_path_str)).await?;
 
         assert_eq!(config.preset, Some("PMB".to_string()));
         assert_eq!(config.theme, "powerline");
         assert!(config.debug);
 
         // Check source type
-        let source = loader.get_config_source().unwrap();
+        let source = loader
+            .get_config_source()
+            .ok_or_else(|| anyhow::anyhow!("expected custom config source"))?;
         assert_eq!(source.source_type, ConfigSourceType::Custom);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_clear_cache() {
+    async fn test_clear_cache() -> Result<()> {
         let mut loader = ConfigLoader::new();
-        loader.load(None).await.unwrap();
+        loader.load(None).await?;
 
         assert!(loader.cached_config.is_some());
 
@@ -685,5 +746,6 @@ mod tests {
 
         assert!(loader.cached_config.is_none());
         assert!(loader.config_source.is_none());
+        Ok(())
     }
 }

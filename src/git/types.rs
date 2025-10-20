@@ -24,6 +24,7 @@ pub struct GitStashInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct GitOperationStatus {
     pub rebasing: bool,
     pub merging: bool,

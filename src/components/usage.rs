@@ -5,6 +5,8 @@
 //! Following Dennis Ritchie's philosophy of building tools that work together,
 //! this component integrates seamlessly with the storage system.
 
+use std::fmt::Write;
+
 use async_trait::async_trait;
 use serde_json;
 
@@ -60,7 +62,8 @@ pub struct UsageComponent {
 
 impl UsageComponent {
     /// Create new usage component
-    #[must_use] pub const fn new(name: String, config: UsageComponentConfig) -> Self {
+    #[must_use]
+    pub const fn new(name: String, config: UsageComponentConfig) -> Self {
         Self { name, config }
     }
 
@@ -89,8 +92,8 @@ impl UsageComponent {
             },
             "cost": {
                 "total_cost_usd": 0.1234,
-                "total_duration_ms": 120000,
-                "total_api_duration_ms": 30000,
+                "total_duration_ms": 120_000,
+                "total_api_duration_ms": 30_000,
                 "total_lines_added": 25,
                 "total_lines_removed": 8
             },
@@ -132,7 +135,7 @@ impl UsageComponent {
             .and_then(|c| c.get("total_cost_usd"))
             .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0);
-        let color = self.get_usage_color(cost);
+        let color = Self::get_usage_color(cost);
 
         ComponentOutput::new(display_text)
             .with_icon_color(color.clone())
@@ -160,7 +163,7 @@ impl UsageComponent {
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
 
-        let mut text = self.format_cost(cost, self.config.precision);
+        let mut text = Self::format_cost(cost, self.config.precision);
 
         // 根据显示模式和配置添加代码行数 | Add code lines based on display mode and config
         if self.config.display_mode == "conversation"
@@ -177,7 +180,7 @@ impl UsageComponent {
             }
 
             if !line_parts.is_empty() {
-                text.push_str(&format!(" {}", line_parts.join(" ")));
+                let _ = write!(text, " {}", line_parts.join(" "));
             }
         }
 
@@ -185,12 +188,12 @@ impl UsageComponent {
     }
 
     /// 格式化成本显示 | Format cost display
-    fn format_cost(&self, cost: f64, precision: u32) -> String {
+    fn format_cost(cost: f64, precision: u32) -> String {
         format!("${:.1$}", cost, precision as usize)
     }
 
     /// 获取使用信息的颜色 | Get usage info color based on cost amount
-    fn get_usage_color(&self, cost: f64) -> String {
+    fn get_usage_color(cost: f64) -> String {
         if cost > 1.0 {
             "red".to_string() // 高成本 | High cost
         } else if cost > 0.1 {
@@ -214,7 +217,7 @@ impl UsageComponent {
         match storage::get_conversation_cost_display(session_id).await {
             Ok(cost) => {
                 if cost > 0.0 {
-                    let formatted_cost = self.format_cost(cost, self.config.precision);
+                    let formatted_cost = Self::format_cost(cost, self.config.precision);
 
                     ComponentOutput::new(formatted_cost)
                         .with_icon_color("cyan".to_string())
@@ -299,7 +302,8 @@ impl Default for UsageComponentFactory {
 }
 
 impl UsageComponentFactory {
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 }

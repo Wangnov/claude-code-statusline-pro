@@ -8,7 +8,7 @@
    统一代码风格；CI 会用 `cargo fmt --all -- --check` 验证格式已正确。
 3. `cargo clippy --fix --workspace --all-features --allow-dirty -- -D warnings`  
    对所有目标和特性执行静态检查，先应用能够自动修复的建议。
-4. `cargo clippy --workspace --all-targets --all-features --allow-dirty -- -D warnings`  
+4. `cargo clippy --workspace --all-targets --all-features -- -D warnings`  
    再次运行静态检查，确保没有残留 lint。
 5. `cargo check --workspace --all-targets --all-features`  
    确认所有目标在当前特性组合下均可编译。

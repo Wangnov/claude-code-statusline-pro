@@ -165,12 +165,20 @@ pub struct CostInfo {
 
 impl InputData {
     /// Parse `InputData` from JSON string
+    /// # Errors
+    ///
+    /// Returns an error when the provided JSON payload cannot be parsed into
+    /// the expected input schema.
     pub fn from_json(json: &str) -> anyhow::Result<Self> {
         let data: Self = serde_json::from_str(json)?;
         Ok(data)
     }
 
     /// Parse `InputData` from stdin
+    /// # Errors
+    ///
+    /// Returns an error when stdin cannot be read or the streamed data fails
+    /// to deserialize into structured input metadata.
     pub fn from_stdin() -> anyhow::Result<Self> {
         use std::io::{self, Read};
         let mut buffer = String::new();
@@ -187,7 +195,8 @@ impl InputData {
     /// Get the effective project directory
     ///
     /// Returns the project directory from workspace, or falls back to cwd
-    #[must_use] pub fn project_dir(&self) -> Option<&str> {
+    #[must_use]
+    pub fn project_dir(&self) -> Option<&str> {
         self.workspace
             .as_ref()
             .and_then(|w| w.project_dir.as_deref())
@@ -197,7 +206,8 @@ impl InputData {
     /// Get the effective git branch
     ///
     /// Prefers git.branch over the legacy `git_branch` field
-    #[must_use] pub fn branch(&self) -> Option<&str> {
+    #[must_use]
+    pub fn branch(&self) -> Option<&str> {
         self.git
             .as_ref()
             .and_then(|g| g.branch.as_deref())
@@ -208,16 +218,20 @@ impl InputData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::{Context, Result};
+
+    type TestResult = Result<()>;
 
     #[test]
-    fn test_parse_empty_json() {
-        let data = InputData::from_json("{}").unwrap();
+    fn test_parse_empty_json() -> TestResult {
+        let data = InputData::from_json("{}")?;
         assert!(data.session_id.is_none());
         assert!(data.model.is_none());
+        Ok(())
     }
 
     #[test]
-    fn test_parse_with_camel_case() {
+    fn test_parse_with_camel_case() -> TestResult {
         let json = r#"{
             "sessionId": "test-123",
             "model": {
@@ -230,23 +244,24 @@ mod tests {
             }
         }"#;
 
-        let data = InputData::from_json(json).unwrap();
+        let data = InputData::from_json(json)?;
         assert_eq!(data.session_id, Some("test-123".to_string()));
 
-        let model = data.model.unwrap();
+        let model = data.model.context("expected model information")?;
         assert_eq!(model.id, Some("claude-3".to_string()));
         assert_eq!(model.display_name, Some("Claude 3".to_string()));
 
-        let workspace = data.workspace.unwrap();
+        let workspace = data.workspace.context("expected workspace information")?;
         assert_eq!(workspace.current_dir, Some("/home/user".to_string()));
         assert_eq!(
             workspace.project_dir,
             Some("/home/user/project".to_string())
         );
+        Ok(())
     }
 
     #[test]
-    fn test_parse_with_snake_case() {
+    fn test_parse_with_snake_case() -> TestResult {
         let json = r#"{
             "session_id": "test-456",
             "git": {
@@ -256,32 +271,34 @@ mod tests {
             }
         }"#;
 
-        let data = InputData::from_json(json).unwrap();
+        let data = InputData::from_json(json)?;
         assert_eq!(data.session_id, Some("test-456".to_string()));
 
-        let git = data.git.unwrap();
+        let git = data.git.context("expected git info")?;
         assert_eq!(git.branch, Some("main".to_string()));
         assert_eq!(git.ahead, Some(2));
         assert_eq!(git.behind, Some(1));
+        Ok(())
     }
 
     #[test]
-    fn test_extra_fields() {
+    fn test_extra_fields() -> TestResult {
         let json = r#"{
             "session_id": "test",
             "unknown_field": "value",
             "another_field": 123
         }"#;
 
-        let data = InputData::from_json(json).unwrap();
+        let data = InputData::from_json(json)?;
         assert_eq!(data.session_id, Some("test".to_string()));
 
         // Extra fields should be captured
-        assert!(data.extra.get("unknown_field").is_some());
-        assert_eq!(
-            data.extra.get("unknown_field").unwrap().as_str(),
-            Some("value")
-        );
+        let unknown = data
+            .extra
+            .get("unknown_field")
+            .context("missing unknown_field")?;
+        assert_eq!(unknown.as_str(), Some("value"));
+        Ok(())
     }
 
     #[test]

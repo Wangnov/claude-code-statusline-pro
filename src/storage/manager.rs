@@ -28,6 +28,10 @@ pub struct StorageManager {
 
 impl StorageManager {
     /// Create new `StorageManager` using runtime configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if required storage directories cannot be created.
     pub fn new() -> Result<Self> {
         let config = current_runtime_config();
         let project_id = current_runtime_project_id();
@@ -35,8 +39,12 @@ impl StorageManager {
     }
 
     /// Create new `StorageManager` with custom configuration and project context
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if required storage directories cannot be created.
     pub fn with_config(config: StorageConfig, project_id: Option<String>) -> Result<Self> {
-        let paths = Self::initialize_paths(&config, project_id.as_deref())?;
+        let paths = Self::initialize_paths(&config, project_id.as_deref());
 
         let manager = Self {
             config,
@@ -49,31 +57,34 @@ impl StorageManager {
     }
 
     /// Initialize storage paths based on current project
-    fn initialize_paths(config: &StorageConfig, project_id: Option<&str>) -> Result<StoragePaths> {
+    fn initialize_paths(config: &StorageConfig, project_id: Option<&str>) -> StoragePaths {
         let base_path = config.storage_path.clone().unwrap_or_else(|| {
             dirs::home_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
                 .join(".claude")
         });
 
-        let project_hash = if let Some(id) = project_id {
-            id.to_string()
-        } else {
-            ProjectResolver::get_global_project_id(None)
-        };
+        let project_hash = project_id.map_or_else(
+            || ProjectResolver::get_global_project_id(None),
+            str::to_string,
+        );
 
         let project_dir = base_path.join("projects").join(&project_hash);
 
-        Ok(StoragePaths {
+        StoragePaths {
             user_config_dir: base_path.join("statusline-pro"),
             project_config_dir: project_dir.join("statusline-pro"),
             sessions_dir: project_dir.join("statusline-pro").join("sessions"),
             user_config_path: base_path.join("statusline-pro").join("config.toml"),
             project_config_path: project_dir.join("statusline-pro").join("config.toml"),
-        })
+        }
     }
 
     /// Ensure all required directories exist
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage directories cannot be created.
     pub fn ensure_directories(&self) -> Result<()> {
         let dirs = [
             &self.paths.user_config_dir,
@@ -92,16 +103,14 @@ impl StorageManager {
     }
 
     /// Set project ID and reinitialize paths
-    pub fn set_project_id(&mut self, project_id: String) {
-        self.project_id = Some(project_id.clone());
+    pub fn set_project_id(&mut self, project_id: &str) {
+        self.project_id = Some(project_id.to_string());
 
         set_runtime_project_id(self.project_id.clone());
-        ProjectResolver::set_global_project_id(Some(&project_id));
+        ProjectResolver::set_global_project_id(Some(project_id));
 
-        if let Ok(paths) = Self::initialize_paths(&self.config, Some(&project_id)) {
-            self.paths = paths;
-            let _ = self.ensure_directories();
-        }
+        self.paths = Self::initialize_paths(&self.config, Some(project_id));
+        let _ = self.ensure_directories();
     }
 
     fn session_file_path(&self, session_id: &str) -> PathBuf {
@@ -157,7 +166,7 @@ impl StorageManager {
         Ok(())
     }
 
-    fn determine_project_path(&self, input: &Value, existing: &Option<String>) -> Option<String> {
+    fn determine_project_path(input: &Value, existing: Option<&str>) -> Option<String> {
         if let Some(workspace) = input
             .get("workspace")
             .or_else(|| input.get("workspaceInfo"))
@@ -180,7 +189,7 @@ impl StorageManager {
         }
 
         if let Some(existing) = existing {
-            return Some(existing.clone());
+            return Some(existing.to_string());
         }
 
         std::env::current_dir()
@@ -242,13 +251,18 @@ impl StorageManager {
         let file_len = metadata.len();
 
         let mut offset = snapshot.transcript_state.processed_offset;
-        let mut processed_messages = snapshot.transcript_state.processed_messages;
+        let needs_reset = snapshot.transcript_state.transcript_path.as_deref()
+            != Some(transcript_path)
+            || offset > file_len;
 
-        if snapshot.transcript_state.transcript_path.as_deref() != Some(transcript_path)
-            || offset > file_len
-        {
+        let mut processed_messages = if needs_reset {
+            0
+        } else {
+            snapshot.transcript_state.processed_messages
+        };
+
+        if needs_reset {
             offset = 0;
-            processed_messages = 0;
         }
 
         let mut file = File::open(path)
@@ -260,100 +274,141 @@ impl StorageManager {
         let mut buffer = String::new();
         let mut current_offset = offset;
         let mut latest_tokens = snapshot.history.tokens.clone();
-
-        loop {
-            buffer.clear();
-            let bytes_read = reader
-                .read_line(&mut buffer)
-                .with_context(|| format!("Failed to read transcript line: {transcript_path}"))?;
-            if bytes_read == 0 {
-                break;
-            }
-
-            current_offset += bytes_read as u64;
-
-            let trimmed = buffer.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-
-            processed_messages += 1;
-
-            let value: Value = match serde_json::from_str(trimmed) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-
-            if value
-                .get("isCompactSummary")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false)
-            {
-                let mut entry = TokenHistory::default();
-                entry.last_timestamp = value
-                    .get("timestamp")
-                    .and_then(|v| v.as_str())
-                    .map(std::string::ToString::to_string);
-                latest_tokens = Some(entry);
-                continue;
-            }
-
-            if value
-                .get("type")
-                .and_then(|ty| ty.as_str())
-                .is_some_and(|ty| ty == "assistant")
-            {
-                if let Some(message) = value.get("message") {
-                    if let Some(usage) = message.get("usage") {
-                        let input = usage
-                            .get("input_tokens")
-                            .and_then(serde_json::Value::as_u64)
-                            .unwrap_or(0);
-                        let output = usage
-                            .get("output_tokens")
-                            .and_then(serde_json::Value::as_u64)
-                            .unwrap_or(0);
-                        let cache_creation = usage
-                            .get("cache_creation_input_tokens")
-                            .and_then(serde_json::Value::as_u64)
-                            .unwrap_or(0);
-                        let cache_read = usage
-                            .get("cache_read_input_tokens")
-                            .and_then(serde_json::Value::as_u64)
-                            .unwrap_or(0);
-
-                        let mut entry = latest_tokens.unwrap_or_default();
-                        entry.input = input;
-                        entry.output = output;
-                        entry.cache_creation_input = cache_creation;
-                        entry.cache_read_input = cache_read;
-                        entry.context_used = input + output + cache_creation + cache_read;
-                        entry.last_message_uuid = value
-                            .get("uuid")
-                            .and_then(|v| v.as_str())
-                            .map(std::string::ToString::to_string);
-                        entry.last_timestamp = value
-                            .get("timestamp")
-                            .and_then(|v| v.as_str())
-                            .map(std::string::ToString::to_string);
-
-                        latest_tokens = Some(entry);
-                    }
-                }
-            }
-        }
+        Self::process_transcript_stream(
+            &mut reader,
+            transcript_path,
+            &mut buffer,
+            &mut current_offset,
+            &mut processed_messages,
+            &mut latest_tokens,
+        )?;
 
         snapshot.transcript_state.transcript_path = Some(transcript_path.to_string());
         snapshot.transcript_state.processed_offset = current_offset;
         snapshot.transcript_state.processed_messages = processed_messages;
 
         if let Some(tokens) = latest_tokens {
-            snapshot.transcript_state.last_message_uuid = tokens.last_message_uuid.clone();
-            snapshot.transcript_state.last_timestamp = tokens.last_timestamp.clone();
+            snapshot
+                .transcript_state
+                .last_message_uuid
+                .clone_from(&tokens.last_message_uuid);
+            snapshot
+                .transcript_state
+                .last_timestamp
+                .clone_from(&tokens.last_timestamp);
             snapshot.history.tokens = Some(tokens);
         }
 
         Ok(())
+    }
+
+    fn process_transcript_stream(
+        reader: &mut BufReader<File>,
+        transcript_path: &str,
+        buffer: &mut String,
+        current_offset: &mut u64,
+        processed_messages: &mut u64,
+        latest_tokens: &mut Option<TokenHistory>,
+    ) -> Result<()> {
+        loop {
+            buffer.clear();
+            let bytes_read = reader
+                .read_line(buffer)
+                .with_context(|| format!("Failed to read transcript line: {transcript_path}"))?;
+            if bytes_read == 0 {
+                break;
+            }
+
+            *current_offset += bytes_read as u64;
+
+            let trimmed = buffer.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            *processed_messages += 1;
+
+            let value: Value = match serde_json::from_str(trimmed) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+
+            if Self::is_compact_summary(&value) {
+                *latest_tokens = Some(Self::token_entry_from_summary(&value));
+                continue;
+            }
+
+            if let Some(entry) = Self::token_entry_from_message(&value) {
+                *latest_tokens = Some(entry);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn is_compact_summary(value: &Value) -> bool {
+        value
+            .get("isCompactSummary")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    fn token_entry_from_summary(value: &Value) -> TokenHistory {
+        TokenHistory {
+            last_timestamp: value
+                .get("timestamp")
+                .and_then(|v| v.as_str())
+                .map(std::string::ToString::to_string),
+            ..TokenHistory::default()
+        }
+    }
+
+    fn token_entry_from_message(value: &Value) -> Option<TokenHistory> {
+        let is_assistant = value
+            .get("type")
+            .and_then(|ty| ty.as_str())
+            .is_some_and(|ty| ty == "assistant");
+        if !is_assistant {
+            return None;
+        }
+
+        let message = value.get("message")?;
+        let usage = message.get("usage")?;
+
+        let input = usage
+            .get("input_tokens")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+        let output = usage
+            .get("output_tokens")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+        let cache_creation = usage
+            .get("cache_creation_input_tokens")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+        let cache_read = usage
+            .get("cache_read_input_tokens")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+
+        let entry = TokenHistory {
+            input,
+            output,
+            cache_creation_input: cache_creation,
+            cache_read_input: cache_read,
+            context_used: input + output + cache_creation + cache_read,
+            last_message_uuid: value
+                .get("uuid")
+                .and_then(|v| v.as_str())
+                .map(std::string::ToString::to_string),
+            last_timestamp: value
+                .get("timestamp")
+                .and_then(|v| v.as_str())
+                .map(std::string::ToString::to_string),
+        };
+
+        Some(entry)
     }
 
     fn extract_session_id(input_data: &Value) -> Option<&str> {
@@ -390,6 +445,11 @@ impl StorageManager {
     }
 
     /// Update snapshot from Claude Code input JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when snapshots cannot be persisted, transcript data
+    /// cannot be read, or JSON payloads fail to deserialize.
     pub fn update_snapshot_from_value(&self, input_data: &Value) -> Result<SessionSnapshot> {
         if !self.config.enable_cost_persistence {
             return Ok(SessionSnapshot::new("disabled"));
@@ -404,7 +464,7 @@ impl StorageManager {
 
         snapshot.meta.session_id = session_id.to_string();
         snapshot.meta.project_path =
-            self.determine_project_path(input_data, &snapshot.meta.project_path);
+            Self::determine_project_path(input_data, snapshot.meta.project_path.as_deref());
         snapshot.meta.last_update_time = Some(Utc::now());
         if snapshot.meta.created_at.is_none() {
             snapshot.meta.created_at = Some(Utc::now());
@@ -421,9 +481,7 @@ impl StorageManager {
 
         if let Some(transcript_path) = Self::extract_transcript_path(input_data) {
             if let Err(err) = Self::read_tokens_from_transcript(&mut snapshot, transcript_path) {
-                eprintln!(
-                    "[storage] Failed to update token usage for session {session_id}: {err}"
-                );
+                eprintln!("[storage] Failed to update token usage for session {session_id}: {err}");
             }
         }
 
@@ -441,11 +499,20 @@ impl StorageManager {
         Ok(snapshot)
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if the snapshot cannot be loaded from disk or the
+    /// underlying storage fails while deserializing previous state.
     pub fn get_snapshot(&self, session_id: &str) -> Result<Option<SessionSnapshot>> {
         self.load_snapshot(session_id)
     }
 
     /// Clean up old session snapshots based on retention configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored session metadata cannot be listed or if
+    /// removing expired snapshots fails.
     pub async fn cleanup_old_sessions(&self) -> Result<()> {
         if !self.config.enable_startup_cleanup {
             return Ok(());
@@ -512,32 +579,30 @@ fn sanitize_latest_value(value: &mut Value) {
 }
 
 fn sanitize_object(map: &mut Map<String, Value>) {
-    if let Some(cost_value) = map.get_mut("cost") {
-        if let Value::Object(cost_map) = cost_value {
-            for key in [
-                "input_tokens",
-                "output_tokens",
-                "total_tokens",
-                "cache_read_tokens",
-                "cache_write_tokens",
-            ] {
-                cost_map.remove(key);
-            }
-            let cost_keys: Vec<String> = cost_map.keys().cloned().collect();
-            for key in cost_keys {
-                if let Some(value) = cost_map.get_mut(&key) {
-                    sanitize_latest_value(value);
-                    if value.is_null()
-                        || matches!(value, Value::Object(obj) if obj.is_empty())
-                        || matches!(value, Value::Array(arr) if arr.is_empty())
-                    {
-                        cost_map.remove(&key);
-                    }
+    if let Some(Value::Object(cost_map)) = map.get_mut("cost") {
+        for key in [
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+        ] {
+            cost_map.remove(key);
+        }
+        let cost_keys: Vec<String> = cost_map.keys().cloned().collect();
+        for key in cost_keys {
+            if let Some(value) = cost_map.get_mut(&key) {
+                sanitize_latest_value(value);
+                if value.is_null()
+                    || matches!(value, Value::Object(obj) if obj.is_empty())
+                    || matches!(value, Value::Array(arr) if arr.is_empty())
+                {
+                    cost_map.remove(&key);
                 }
             }
-            if cost_map.is_empty() {
-                map.remove("cost");
-            }
+        }
+        if cost_map.is_empty() {
+            map.remove("cost");
         }
     }
 

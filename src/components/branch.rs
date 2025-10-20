@@ -3,7 +3,8 @@
 //! Displays Git branch information with optional status indicators.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::fmt::Write as _;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -20,14 +21,15 @@ pub struct BranchComponent {
 }
 
 impl BranchComponent {
-    #[must_use] pub fn new(config: BranchComponentConfig) -> Self {
+    #[must_use]
+    pub fn new(config: BranchComponentConfig) -> Self {
         Self {
             config,
             git_cache: Mutex::new(HashMap::new()),
         }
     }
 
-    fn resolve_repo_path(&self, ctx: &RenderContext) -> Option<PathBuf> {
+    fn resolve_repo_path(ctx: &RenderContext) -> Option<PathBuf> {
         if let Some(project_dir) = ctx.input.project_dir() {
             return Some(PathBuf::from(project_dir));
         }
@@ -48,14 +50,14 @@ impl BranchComponent {
     }
 
     async fn load_git_info(&self, ctx: &RenderContext) -> Option<GitInfo> {
-        let repo_path = self.resolve_repo_path(ctx)?;
+        let repo_path = Self::resolve_repo_path(ctx)?;
         let performance = self.config.performance.clone();
         let status_config = self.config.status.clone();
         let include_status = self.status_required();
         let include_stash = status_config.show_stash_count;
 
         if performance.enable_cache {
-            if let Some(info) = self.cached_git_info(&repo_path) {
+            if let Some(info) = self.cached_git_info(repo_path.as_path()) {
                 return Some(info);
             }
         }
@@ -97,9 +99,9 @@ impl BranchComponent {
         }
     }
 
-    fn cached_git_info(&self, path: &PathBuf) -> Option<GitInfo> {
+    fn cached_git_info(&self, path: &Path) -> Option<GitInfo> {
+        let mut guard = self.git_cache.lock().ok()?;
         let now = Instant::now();
-        let mut guard = self.git_cache.lock().unwrap();
         if let Some(entry) = guard.get(path) {
             if entry.expires_at > now {
                 return Some(entry.info.clone());
@@ -114,8 +116,9 @@ impl BranchComponent {
             return;
         }
         let expires_at = Instant::now() + ttl;
-        let mut guard = self.git_cache.lock().unwrap();
-        guard.insert(path, CachedGitEntry { expires_at, info });
+        if let Ok(mut guard) = self.git_cache.lock() {
+            guard.insert(path, CachedGitEntry { expires_at, info });
+        }
     }
 
     fn prepare_branch_name(&self, raw: &str) -> String {
@@ -159,7 +162,7 @@ impl BranchComponent {
 
         // Add status indicators
         if status.is_dirty {
-            let icon = self.select_status_icon(
+            let icon = Self::select_status_icon(
                 ctx,
                 &self.config.status_icons.dirty_emoji,
                 &self.config.status_icons.dirty_nerd,
@@ -169,33 +172,33 @@ impl BranchComponent {
         }
 
         if status.ahead > 0 {
-            let icon = self.select_status_icon(
+            let icon = Self::select_status_icon(
                 ctx,
                 &self.config.status_icons.ahead_emoji,
                 &self.config.status_icons.ahead_nerd,
                 &self.config.status_icons.ahead_text,
             );
-            result.push_str(&format!("{}{}", icon, status.ahead));
+            let _ = write!(&mut result, "{}{}", icon, status.ahead);
         }
 
         if status.behind > 0 {
-            let icon = self.select_status_icon(
+            let icon = Self::select_status_icon(
                 ctx,
                 &self.config.status_icons.behind_emoji,
                 &self.config.status_icons.behind_nerd,
                 &self.config.status_icons.behind_text,
             );
-            result.push_str(&format!("{}{}", icon, status.behind));
+            let _ = write!(&mut result, "{}{}", icon, status.behind);
         }
 
         if status.stash_count > 0 {
-            let icon = self.select_status_icon(
+            let icon = Self::select_status_icon(
                 ctx,
                 &self.config.status_icons.stash_emoji,
                 &self.config.status_icons.stash_nerd,
                 &self.config.status_icons.stash_text,
             );
-            result.push_str(&format!("{}{}", icon, status.stash_count));
+            let _ = write!(&mut result, "{}{}", icon, status.stash_count);
         }
 
         result
@@ -211,7 +214,6 @@ impl BranchComponent {
     }
 
     fn select_status_icon<'a>(
-        &self,
         ctx: &RenderContext,
         emoji_icon: &'a str,
         nerd_icon: &'a str,
@@ -285,7 +287,7 @@ impl Component for BranchComponent {
             if !info.is_repo {
                 return self.render_no_git(ctx);
             }
-            return self.render_from_git_info(ctx, info);
+            return self.render_from_git_info(ctx, &info);
         }
 
         // 回退到stdin的git信息(如果存在)
@@ -337,12 +339,12 @@ impl BranchComponent {
         )
     }
 
-    fn render_from_git_info(&self, ctx: &RenderContext, info: GitInfo) -> ComponentOutput {
+    fn render_from_git_info(&self, ctx: &RenderContext, info: &GitInfo) -> ComponentOutput {
         let mut status = BranchStatus::default();
         status.is_dirty = !info.status.clean;
-        status.ahead = info.branch.ahead as i32;
-        status.behind = info.branch.behind as i32;
-        status.stash_count = info.stash.count as i32;
+        status.ahead = Self::usize_to_i32(info.branch.ahead);
+        status.behind = Self::usize_to_i32(info.branch.behind);
+        status.stash_count = Self::usize_to_i32(info.stash.count);
 
         let branch_name = self.prepare_branch_name(&info.branch.current);
         let text = self.format_branch(branch_name, &status, ctx);
@@ -355,6 +357,10 @@ impl BranchComponent {
 impl BranchComponent {
     const fn status_required(&self) -> bool {
         self.config.status.show_dirty || self.config.status.show_ahead_behind
+    }
+
+    fn usize_to_i32(value: usize) -> i32 {
+        i32::try_from(value).unwrap_or(i32::MAX)
     }
 }
 
@@ -380,25 +386,43 @@ struct CachedGitEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::TerminalCapabilities;
     use crate::core::{GitInfo, InputData};
     use std::sync::Arc;
 
-    fn create_test_context_with_git(branch: &str, ahead: i32, behind: i32) -> RenderContext {
+    #[allow(clippy::field_reassign_with_default)]
+    fn build_input(configure: impl FnOnce(&mut InputData)) -> InputData {
         let mut input = InputData::default();
-        input.git = Some(GitInfo {
-            branch: Some(branch.to_string()),
-            status: None,
-            ahead: Some(ahead),
-            behind: Some(behind),
-            staged: None,
-            unstaged: None,
-            untracked: None,
+        configure(&mut input);
+        input
+    }
+
+    #[allow(clippy::field_reassign_with_default)]
+    fn build_branch_config(
+        configure: impl FnOnce(&mut BranchComponentConfig),
+    ) -> BranchComponentConfig {
+        let mut config = BranchComponentConfig::default();
+        configure(&mut config);
+        config
+    }
+
+    fn create_test_context_with_git(branch: &str, ahead: i32, behind: i32) -> RenderContext {
+        let input = build_input(|input| {
+            input.git = Some(GitInfo {
+                branch: Some(branch.to_string()),
+                status: None,
+                ahead: Some(ahead),
+                behind: Some(behind),
+                staged: None,
+                unstaged: None,
+                untracked: None,
+            });
         });
 
         RenderContext {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
-            terminal: Default::default(),
+            terminal: TerminalCapabilities::default(),
         }
     }
 
@@ -415,8 +439,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_branch_with_ahead_behind() {
-        let mut config = BranchComponentConfig::default();
-        config.status.show_ahead_behind = true;
+        let config = build_branch_config(|config| {
+            config.status.show_ahead_behind = true;
+        });
 
         let component = BranchComponent::new(config);
         let ctx = create_test_context_with_git("feature", 3, 2);
@@ -430,25 +455,27 @@ mod tests {
 
     #[tokio::test]
     async fn test_branch_dirty() {
-        let mut config = BranchComponentConfig::default();
-        config.status.show_dirty = true;
+        let config = build_branch_config(|config| {
+            config.status.show_dirty = true;
+        });
 
-        let mut input = InputData::default();
-        input.git = Some(GitInfo {
-            branch: Some("develop".to_string()),
-            status: Some("dirty".to_string()),
-            ahead: None,
-            behind: None,
-            staged: None,
-            unstaged: None,
-            untracked: None,
+        let input = build_input(|input| {
+            input.git = Some(GitInfo {
+                branch: Some("develop".to_string()),
+                status: Some("dirty".to_string()),
+                ahead: None,
+                behind: None,
+                staged: None,
+                unstaged: None,
+                untracked: None,
+            });
         });
 
         let component = BranchComponent::new(config);
         let ctx = RenderContext {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
-            terminal: Default::default(),
+            terminal: TerminalCapabilities::default(),
         };
 
         let output = component.render(&ctx).await;
@@ -459,8 +486,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_branch_disabled() {
-        let mut config = BranchComponentConfig::default();
-        config.base.enabled = false;
+        let config = build_branch_config(|config| {
+            config.base.enabled = false;
+        });
 
         let component = BranchComponent::new(config);
         let ctx = create_test_context_with_git("main", 0, 0);
@@ -471,19 +499,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_branch_truncates_long_name() {
-        let mut config = BranchComponentConfig::default();
-        config.max_length = 6;
+        let config = build_branch_config(|config| {
+            config.max_length = 6;
+        });
 
-        let mut input = InputData::default();
-        input.git = Some(GitInfo {
-            branch: Some("very-long-branch".to_string()),
-            ..Default::default()
+        let input = build_input(|input| {
+            input.git = Some(GitInfo {
+                branch: Some("very-long-branch".to_string()),
+                ..Default::default()
+            });
         });
 
         let ctx = RenderContext {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
-            terminal: Default::default(),
+            terminal: TerminalCapabilities::default(),
         };
 
         let component = BranchComponent::new(config);
@@ -493,16 +523,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_branch_show_when_no_git() {
-        let mut config = BranchComponentConfig::default();
-        config.show_when_no_git = true;
+        let config = build_branch_config(|config| {
+            config.show_when_no_git = true;
+        });
 
-        let mut input = InputData::default();
-        input.git = None;
+        let input = build_input(|input| {
+            input.git = None;
+        });
 
         let ctx = RenderContext {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
-            terminal: Default::default(),
+            terminal: TerminalCapabilities::default(),
         };
 
         let component = BranchComponent::new(config);

@@ -12,10 +12,11 @@
 # 4. 内置默认值（最低优先级）
 #
 # 使用方法：
-# 1. 运行 `npx claude-code-statusline-pro@latest config init` 初始化配置
-# 或 `npx claude-code-statusline-pro@latest config init -g` 初始化全局配置
+# 1. 运行 `npx ccstatus@latest config init` 初始化配置
+#    旧命令 `npx claude-code-statusline-pro@latest` 仍可用，但会提示迁移
+#    或 `npx ccstatus@latest config init -g` 初始化全局配置
 # 2. 根据需要修改配置项
-# 3. 运行 `npx claude-code-statusline-pro@latest validate` 验证配置
+# 3. 运行 `npx ccstatus@latest validate` 验证配置
 #
 # ====================================================================
 
@@ -454,8 +455,8 @@ custom_color_codes = {}
 # 多行状态栏系统配置 - 支持Widget扩展功能
 [multiline]
 # 是否启用多行显示 | Enable multiline display
-# 启用后可以显示多行扩展信息，如API数据、统计信息等
-enabled = false
+# 启用后可以显示多行扩展信息，如API数据、统计信息等（默认已启用，可改为 false 关闭）
+enabled = true
 
 # 最大行数 | Maximum rows - 限制多行显示的最大行数
 max_rows = 5
@@ -477,8 +478,8 @@ enable_experimental = false
 # ====================================================================
 #
 # 关键提醒：
-# 1. 修改配置后建议运行 `npx claude-code-statusline-pro@latest validate` 验证
-# 2. 多行功能需要设置 multiline.enabled = true 才能使用Widget系统
+# 1. 修改配置后建议运行 `npx ccstatus@latest validate` 验证
+# 2. 多行功能默认开启，如需关闭可设置 multiline.enabled = false
 # 3. API密钥等敏感信息建议配置在 ~/.claude/settings.json 的 envs 字段
 # 4. 终端字体不支持时会自动回退到兼容性更好的图标类型，但终端能力检测有局限性。可以使用force强制设定图标
 # 5. 所有颜色设置支持标准终端颜色名称

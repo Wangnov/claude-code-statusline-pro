@@ -10,7 +10,9 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
+
+const UNC_PREFIXES: [&str; 2] = ["\\\\\\\\?\\", "\\\\?\\"];
 
 lazy_static! {
     static ref INSTANCE: Arc<Mutex<ProjectResolver>> = Arc::new(Mutex::new(ProjectResolver::new()));
@@ -31,7 +33,8 @@ impl ProjectResolver {
     }
 
     /// Get singleton instance
-    #[must_use] pub fn instance() -> Arc<Mutex<Self>> {
+    #[must_use]
+    pub fn instance() -> Arc<Mutex<Self>> {
         INSTANCE.clone()
     }
 
@@ -41,7 +44,7 @@ impl ProjectResolver {
     /// Example: /Users/xxx/.claude/projects/C--Users-xxx-project/xxx.jsonl
     pub fn set_project_id_from_transcript(&mut self, transcript_path: Option<&str>) {
         if let Some(path) = transcript_path {
-            if let Some(project_id) = self.extract_project_id_from_transcript(path) {
+            if let Some(project_id) = Self::extract_project_id_from_transcript(path) {
                 self.cached_project_id = Some(project_id);
 
                 // Debug log for development
@@ -60,7 +63,8 @@ impl ProjectResolver {
     /// Priority:
     /// 1. Use cached project ID (from stdin)
     /// 2. Generate from provided path or current directory
-    #[must_use] pub fn get_project_id(&self, fallback_path: Option<&str>) -> String {
+    #[must_use]
+    pub fn get_project_id(&self, fallback_path: Option<&str>) -> String {
         // Priority 1: Use cached project ID
         if let Some(ref cached_id) = self.cached_project_id {
             return cached_id.clone();
@@ -68,14 +72,15 @@ impl ProjectResolver {
 
         // Priority 2: Generate from path or current directory
         let path_to_hash = fallback_path.unwrap_or(".");
-        self.hash_project_path(path_to_hash)
+        Self::hash_project_path(path_to_hash)
     }
 
     /// Directly hash specified path (no cache)
     ///
     /// Used for temporary project ID generation, like config -i command
-    #[must_use] pub fn hash_path(&self, project_path: &str) -> String {
-        self.hash_project_path(project_path)
+    #[must_use]
+    pub fn hash_path(project_path: &str) -> String {
+        Self::hash_project_path(project_path)
     }
 
     /// Directly set the cached project ID (primarily for runtime coordination)
@@ -91,14 +96,9 @@ impl ProjectResolver {
     }
 
     /// Extract project ID from transcript path using regex
-    fn extract_project_id_from_transcript(&self, transcript_path: &str) -> Option<String> {
-        lazy_static! {
-            static ref PROJECTS_REGEX: Regex =
-                Regex::new(r"[/\\]projects[/\\]([^/\\]+)[/\\]").unwrap();
-        }
-
-        PROJECTS_REGEX
-            .captures(transcript_path)
+    fn extract_project_id_from_transcript(transcript_path: &str) -> Option<String> {
+        Self::projects_regex()
+            .and_then(|regex| regex.captures(transcript_path))
             .and_then(|caps| caps.get(1))
             .map(|m| m.as_str().to_string())
     }
@@ -109,14 +109,8 @@ impl ProjectResolver {
     ///
     /// macOS/Unix: /Users/name/project -> -Users-name-project
     /// Windows: C:\Users\name\project -> C--Users-name-project
-    fn hash_project_path(&self, project_path: &str) -> String {
+    fn hash_project_path(project_path: &str) -> String {
         assert!(!project_path.is_empty(), "Project path cannot be empty");
-
-        lazy_static! {
-            static ref WINDOWS_DRIVE_BACKSLASH: Regex = Regex::new(r"^([A-Za-z]):\\").unwrap();
-            static ref WINDOWS_DRIVE_SLASH: Regex = Regex::new(r"^([A-Za-z]):/").unwrap();
-            static ref MULTIPLE_DASHES: Regex = Regex::new(r"-+").unwrap();
-        }
 
         let path = Path::new(project_path);
         let mut result = path
@@ -125,7 +119,6 @@ impl ProjectResolver {
             .to_string_lossy()
             .to_string();
 
-        const UNC_PREFIXES: [&str; 2] = ["\\\\\\\\?\\", "\\\\?\\"];
         let mut unc_stripped = false;
         for prefix in UNC_PREFIXES {
             if result.starts_with(prefix) {
@@ -141,19 +134,29 @@ impl ProjectResolver {
 
         let mut has_drive_prefix = false;
 
-        if WINDOWS_DRIVE_BACKSLASH.is_match(&result) {
-            has_drive_prefix = true;
-            result = WINDOWS_DRIVE_BACKSLASH
-                .replace(&result, |caps: &regex::Captures| format!("{}--", &caps[1]))
-                .to_string();
-            result = result.replace('\\', "-");
-        } else if WINDOWS_DRIVE_SLASH.is_match(&result) {
-            has_drive_prefix = true;
-            result = WINDOWS_DRIVE_SLASH
-                .replace(&result, |caps: &regex::Captures| format!("{}--", &caps[1]))
-                .to_string();
-            result = result.replace('/', "-");
-        } else {
+        if let Some(regex) = Self::windows_drive_backslash_regex() {
+            if regex.is_match(&result) {
+                has_drive_prefix = true;
+                result = regex
+                    .replace(&result, |caps: &regex::Captures| format!("{}--", &caps[1]))
+                    .to_string();
+                result = result.replace('\\', "-");
+            }
+        }
+
+        if !has_drive_prefix {
+            if let Some(regex) = Self::windows_drive_slash_regex() {
+                if regex.is_match(&result) {
+                    has_drive_prefix = true;
+                    result = regex
+                        .replace(&result, |caps: &regex::Captures| format!("{}--", &caps[1]))
+                        .to_string();
+                    result = result.replace('/', "-");
+                }
+            }
+        }
+
+        if !has_drive_prefix {
             result = result.replace(['\\', '/', ':'], "-");
         }
 
@@ -163,7 +166,7 @@ impl ProjectResolver {
 
         if has_drive_prefix && result.len() >= 3 {
             let (prefix, rest) = result.split_at(3);
-            let mut normalized_rest = MULTIPLE_DASHES.replace_all(rest, "-").to_string();
+            let mut normalized_rest = Self::collapse_dashes(rest);
             while normalized_rest.starts_with('-') {
                 normalized_rest.remove(0);
             }
@@ -174,7 +177,7 @@ impl ProjectResolver {
             };
             combined.trim_end_matches('-').to_string()
         } else {
-            MULTIPLE_DASHES.replace_all(&result, "-").to_string()
+            Self::collapse_dashes(&result)
         }
     }
 
@@ -184,7 +187,8 @@ impl ProjectResolver {
     }
 
     /// Get current cached project ID (for debugging)
-    #[must_use] pub const fn get_cached_project_id(&self) -> Option<&String> {
+    #[must_use]
+    pub const fn get_cached_project_id(&self) -> Option<&String> {
         self.cached_project_id.as_ref()
     }
 }
@@ -192,31 +196,90 @@ impl ProjectResolver {
 /// Convenience functions for global access
 impl ProjectResolver {
     /// Static method to get project ID
-    #[must_use] pub fn get_global_project_id(fallback_path: Option<&str>) -> String {
-        let resolver = Self::instance();
-        let resolver = resolver.lock().unwrap();
-        resolver.get_project_id(fallback_path)
+    #[must_use]
+    pub fn get_global_project_id(fallback_path: Option<&str>) -> String {
+        Self::with_resolver(|resolver| resolver.get_project_id(fallback_path))
     }
 
     /// Static method to set project ID from transcript
     pub fn set_global_project_id_from_transcript(transcript_path: Option<&str>) {
-        let resolver = Self::instance();
-        let mut resolver = resolver.lock().unwrap();
-        resolver.set_project_id_from_transcript(transcript_path);
+        Self::with_resolver(|resolver| resolver.set_project_id_from_transcript(transcript_path));
     }
 
     /// Static method to set project ID directly
     pub fn set_global_project_id(project_id: Option<&str>) {
-        let resolver = Self::instance();
-        let mut resolver = resolver.lock().unwrap();
-        resolver.set_project_id(project_id);
+        Self::with_resolver(|resolver| resolver.set_project_id(project_id));
     }
 
     /// Static method to hash path
-    #[must_use] pub fn hash_global_path(project_path: &str) -> String {
+    #[must_use]
+    pub fn hash_global_path(project_path: &str) -> String {
+        Self::hash_project_path(project_path)
+    }
+
+    fn with_resolver<R>(mut f: impl FnMut(&mut Self) -> R) -> R {
         let resolver = Self::instance();
-        let resolver = resolver.lock().unwrap();
-        resolver.hash_path(project_path)
+        let mut guard = match resolver.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        f(&mut guard)
+    }
+
+    fn projects_regex() -> Option<&'static Regex> {
+        static PROJECTS_REGEX: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+        PROJECTS_REGEX
+            .get_or_init(|| Regex::new(r"[/\\]projects[/\\]([^/\\]+)[/\\]"))
+            .as_ref()
+            .ok()
+    }
+
+    fn windows_drive_backslash_regex() -> Option<&'static Regex> {
+        static WINDOWS_DRIVE_BACKSLASH: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+        WINDOWS_DRIVE_BACKSLASH
+            .get_or_init(|| Regex::new(r"^([A-Za-z]):\\"))
+            .as_ref()
+            .ok()
+    }
+
+    fn windows_drive_slash_regex() -> Option<&'static Regex> {
+        static WINDOWS_DRIVE_SLASH: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+        WINDOWS_DRIVE_SLASH
+            .get_or_init(|| Regex::new(r"^([A-Za-z]):/"))
+            .as_ref()
+            .ok()
+    }
+
+    fn multiple_dashes_regex() -> Option<&'static Regex> {
+        static MULTIPLE_DASHES: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+        MULTIPLE_DASHES
+            .get_or_init(|| Regex::new(r"-+"))
+            .as_ref()
+            .ok()
+    }
+
+    fn collapse_dashes(input: &str) -> String {
+        Self::multiple_dashes_regex().map_or_else(
+            || {
+                let mut collapsed = String::with_capacity(input.len());
+                let mut previous_was_dash = false;
+
+                for ch in input.chars() {
+                    if ch == '-' {
+                        if !previous_was_dash {
+                            collapsed.push('-');
+                            previous_was_dash = true;
+                        }
+                    } else {
+                        previous_was_dash = false;
+                        collapsed.push(ch);
+                    }
+                }
+
+                collapsed
+            },
+            |regex| regex.replace_all(input, "-").to_string(),
+        )
     }
 }
 
@@ -226,23 +289,20 @@ mod tests {
 
     #[test]
     fn hashes_unix_path_with_normalized_dashes() {
-        let resolver = ProjectResolver::new();
-        let hashed = resolver.hash_project_path("/Users/example//project");
+        let hashed = ProjectResolver::hash_project_path("/Users/example//project");
         assert_eq!(hashed, "-Users-example-project");
     }
 
     #[test]
     fn preserves_drive_prefix_for_windows_paths() {
-        let resolver = ProjectResolver::new();
-        let hashed = resolver.hash_project_path(r"E:\\Users\\example\\project");
+        let hashed = ProjectResolver::hash_project_path(r"E:\\Users\\example\\project");
         assert!(hashed.starts_with("E--"), "hashed={hashed}");
         assert!(!hashed.starts_with("E---"), "hashed={hashed}");
     }
 
     #[test]
     fn strips_unc_prefix_before_hashing() {
-        let resolver = ProjectResolver::new();
-        let hashed = resolver.hash_project_path(r"\\\\?\\C:\\Users\\example\\project");
+        let hashed = ProjectResolver::hash_project_path(r"\\\\?\\C:\\Users\\example\\project");
         assert!(hashed.starts_with("C--"), "hashed={hashed}");
     }
 }

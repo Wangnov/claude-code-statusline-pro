@@ -17,13 +17,11 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 use tokio::task;
 
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 struct StorageRuntimeState {
     config: types::StorageConfig,
     project_id: Option<String>,
 }
-
 
 lazy_static! {
     static ref STORAGE_RUNTIME: RwLock<StorageRuntimeState> =
@@ -33,7 +31,7 @@ lazy_static! {
 fn runtime_config() -> types::StorageConfig {
     STORAGE_RUNTIME
         .read()
-        .expect("storage runtime state poisoned")
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .config
         .clone()
 }
@@ -41,7 +39,7 @@ fn runtime_config() -> types::StorageConfig {
 fn runtime_project_id() -> Option<String> {
     STORAGE_RUNTIME
         .read()
-        .expect("storage runtime state poisoned")
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .project_id
         .clone()
 }
@@ -73,6 +71,11 @@ fn convert_settings(settings: &SettingsConfig) -> types::StorageConfig {
 }
 
 /// Initialize the storage system with optional project ID and configuration settings
+///
+/// # Errors
+///
+/// Returns an error if storage directories cannot be created or if cleanup of
+/// existing sessions fails.
 pub async fn initialize_storage_with_settings(
     project_id: Option<String>,
     settings: &SettingsConfig,
@@ -87,7 +90,7 @@ pub async fn initialize_storage_with_settings(
     let mut manager = StorageManager::new()?;
 
     if let Some(id) = project_id.clone() {
-        manager.set_project_id(id);
+        manager.set_project_id(&id);
     }
 
     manager.ensure_directories()?;
@@ -100,6 +103,10 @@ pub async fn initialize_storage_with_settings(
 }
 
 /// Initialize the storage system using default settings
+///
+/// # Errors
+///
+/// Propagates errors from [`initialize_storage_with_settings`].
 pub async fn initialize_storage(project_id: Option<String>) -> Result<()> {
     initialize_storage_with_settings(project_id, &SettingsConfig::default()).await
 }
@@ -117,6 +124,11 @@ pub(crate) fn set_runtime_project_id(project_id: Option<String>) {
 }
 
 /// Update session snapshot from Claude Code input data.
+///
+/// # Errors
+///
+/// Returns an error when snapshot persistence fails or when storage manager
+/// operations encounter I/O errors.
 pub async fn update_session_snapshot(input_data: &serde_json::Value) -> Result<()> {
     let payload = input_data.clone();
     task::spawn_blocking(move || {
@@ -129,6 +141,12 @@ pub async fn update_session_snapshot(input_data: &serde_json::Value) -> Result<(
 }
 
 /// Get session cost display (single session mode)
+/// Retrieve cost metrics for a given session.
+///
+/// # Errors
+///
+/// Returns an error when the underlying storage manager fails to load
+/// snapshot data or when snapshot updates cannot be persisted.
 pub async fn get_session_cost_display(session_id: &str) -> Result<f64> {
     let session_id = session_id.to_string();
     let snapshot = task::spawn_blocking(move || {
@@ -141,11 +159,22 @@ pub async fn get_session_cost_display(session_id: &str) -> Result<f64> {
 }
 
 /// Get conversation cost display (conversation mode)
+/// Retrieve conversation-level cost metrics.
+///
+/// # Errors
+///
+/// Returns an error when snapshot loading or persistence fails within the
+/// storage manager.
 pub async fn get_conversation_cost_display(session_id: &str) -> Result<f64> {
     get_session_cost_display(session_id).await
 }
 
 /// Retrieve cached token usage for a session.
+/// Retrieve token history for a given session.
+///
+/// # Errors
+///
+/// Returns an error when snapshot data cannot be loaded or parsed from disk.
 pub async fn get_session_tokens(session_id: &str) -> Result<Option<TokenHistory>> {
     let session_id = session_id.to_string();
     let snapshot = task::spawn_blocking(move || {

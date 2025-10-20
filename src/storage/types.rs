@@ -60,7 +60,8 @@ pub struct SessionSnapshot {
 }
 
 impl SessionSnapshot {
-    #[must_use] pub fn new(session_id: &str) -> Self {
+    #[must_use]
+    pub fn new(session_id: &str) -> Self {
         Self {
             meta: SessionMeta {
                 session_id: session_id.to_string(),
@@ -177,7 +178,8 @@ pub struct CostMetrics {
 }
 
 impl CostMetrics {
-    #[must_use] pub fn from_cost_value(value: &serde_json::Value) -> Self {
+    #[must_use]
+    pub fn from_cost_value(value: &serde_json::Value) -> Self {
         Self {
             total_cost_usd: value
                 .get("total_cost_usd")

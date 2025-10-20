@@ -12,7 +12,8 @@ pub struct ModelComponent {
 }
 
 impl ModelComponent {
-    #[must_use] pub const fn new(config: ModelComponentConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: ModelComponentConfig) -> Self {
         Self { config }
     }
 
@@ -35,7 +36,7 @@ impl ModelComponent {
             }
 
             // Priority 2: Try intelligent parsing fallback
-            if let Some(parsed) = self.parse_model_id(id) {
+            if let Some(parsed) = Self::parse_model_id(id) {
                 return Some(if self.config.show_full_name {
                     parsed.long_name()
                 } else {
@@ -55,13 +56,11 @@ impl ModelComponent {
     ///
     /// Format: {provider}-{series}-{major}-{minor}-{date}[{params}]
     /// Example: claude-sonnet-4-5-20250929[1m]
-    fn parse_model_id(&self, id: &str) -> Option<ParsedModelId> {
+    fn parse_model_id(id: &str) -> Option<ParsedModelId> {
         // Extract params (e.g., "[1m]") if present
-        let (base_id, params) = if let Some(bracket_start) = id.find('[') {
+        let (base_id, params) = id.find('[').map_or((id, ""), |bracket_start| {
             (&id[..bracket_start], &id[bracket_start..])
-        } else {
-            (id, "")
-        };
+        });
 
         // Split by '-' to get parts
         let parts: Vec<&str> = base_id.split('-').collect();
@@ -146,14 +145,11 @@ impl ParsedModelId {
 /// Capitalize first letter of a string
 fn capitalize(s: &str) -> String {
     let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(first) => {
-            let mut result = first.to_uppercase().to_string();
-            result.push_str(&chars.as_str().to_lowercase());
-            result
-        }
-    }
+    chars.next().map_or_else(String::new, |first| {
+        let mut result = first.to_uppercase().to_string();
+        result.push_str(&chars.as_str().to_lowercase());
+        result
+    })
 }
 
 #[async_trait]
@@ -173,14 +169,9 @@ impl Component for ModelComponent {
         }
 
         // Get model name
-        let model_name = self.get_model_name(ctx);
-
-        // If no model, hide component
-        if model_name.is_none() {
+        let Some(text) = self.get_model_name(ctx) else {
             return ComponentOutput::hidden();
-        }
-
-        let text = model_name.unwrap();
+        };
 
         // Select icon
         let icon = self.select_icon(ctx);
@@ -213,75 +204,89 @@ impl ComponentFactory for ModelComponentFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::TerminalCapabilities;
     use crate::core::{InputData, ModelInfo};
+    use anyhow::{anyhow, Result};
     use std::sync::Arc;
+
+    type TestResult = Result<()>;
+
+    #[allow(clippy::field_reassign_with_default)]
+    fn build_model_config(
+        configure: impl FnOnce(&mut ModelComponentConfig),
+    ) -> ModelComponentConfig {
+        let mut config = ModelComponentConfig::default();
+        configure(&mut config);
+        config
+    }
+
+    #[allow(clippy::field_reassign_with_default)]
+    fn build_input(configure: impl FnOnce(&mut InputData)) -> InputData {
+        let mut input = InputData::default();
+        configure(&mut input);
+        input
+    }
 
     fn create_test_context_with_model(
         id: Option<String>,
         display_name: Option<String>,
     ) -> RenderContext {
-        let mut input = InputData::default();
-        input.model = Some(ModelInfo { id, display_name });
+        let input = build_input(|input| {
+            input.model = Some(ModelInfo { id, display_name });
+        });
 
         RenderContext {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
-            terminal: Default::default(),
+            terminal: TerminalCapabilities::default(),
         }
     }
 
     // ==================== 智能解析测试 ====================
 
     #[test]
-    fn test_parse_model_id_with_minor_version_and_params() {
-        let component = ModelComponent::new(ModelComponentConfig::default());
-        let parsed = component
-            .parse_model_id("claude-sonnet-4-5-20250929[1m]")
-            .expect("Should parse successfully");
+    fn test_parse_model_id_with_minor_version_and_params() -> TestResult {
+        let parsed = ModelComponent::parse_model_id("claude-sonnet-4-5-20250929[1m]")
+            .ok_or_else(|| anyhow!("failed to parse model id"))?;
 
         assert_eq!(parsed.provider, "claude");
         assert_eq!(parsed.series, "sonnet");
         assert_eq!(parsed.version, "4.5");
         assert_eq!(parsed.params, "[1m]");
+        Ok(())
     }
 
     #[test]
-    fn test_parse_model_id_major_version_only() {
-        let component = ModelComponent::new(ModelComponentConfig::default());
-        let parsed = component
-            .parse_model_id("claude-haiku-3-20240307")
-            .expect("Should parse successfully");
+    fn test_parse_model_id_major_version_only() -> TestResult {
+        let parsed = ModelComponent::parse_model_id("claude-haiku-3-20240307")
+            .ok_or_else(|| anyhow!("failed to parse model id"))?;
 
         assert_eq!(parsed.provider, "claude");
         assert_eq!(parsed.series, "haiku");
         assert_eq!(parsed.version, "3");
         assert_eq!(parsed.params, "");
+        Ok(())
     }
 
     #[test]
-    fn test_parse_model_id_with_minor_no_params() {
-        let component = ModelComponent::new(ModelComponentConfig::default());
-        let parsed = component
-            .parse_model_id("claude-opus-4-1-20250805")
-            .expect("Should parse successfully");
+    fn test_parse_model_id_with_minor_no_params() -> TestResult {
+        let parsed = ModelComponent::parse_model_id("claude-opus-4-1-20250805")
+            .ok_or_else(|| anyhow!("failed to parse model id"))?;
 
         assert_eq!(parsed.provider, "claude");
         assert_eq!(parsed.series, "opus");
         assert_eq!(parsed.version, "4.1");
         assert_eq!(parsed.params, "");
+        Ok(())
     }
 
     #[test]
     fn test_parse_model_id_invalid_format() {
-        let component = ModelComponent::new(ModelComponentConfig::default());
-
         // Too few parts
-        assert!(component.parse_model_id("claude-sonnet").is_none());
+        assert!(ModelComponent::parse_model_id("claude-sonnet").is_none());
 
         // Non-numeric version
-        assert!(component
-            .parse_model_id("claude-sonnet-abc-20250929")
-            .is_none());
+        assert!(ModelComponent::parse_model_id("claude-sonnet-abc-20250929").is_none());
     }
 
     // ==================== 短名称生成测试 ====================
@@ -324,8 +329,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_long_name_with_params() {
-        let mut config = ModelComponentConfig::default();
-        config.show_full_name = true;
+        let config = build_model_config(|config| {
+            config.show_full_name = true;
+        });
 
         let component = ModelComponent::new(config);
         let ctx = create_test_context_with_model(
@@ -340,8 +346,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_long_name_major_only() {
-        let mut config = ModelComponentConfig::default();
-        config.show_full_name = true;
+        let config = build_model_config(|config| {
+            config.show_full_name = true;
+        });
 
         let component = ModelComponent::new(config);
         let ctx = create_test_context_with_model(Some("claude-haiku-3-20240307".to_string()), None);
@@ -353,8 +360,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_long_name_opus() {
-        let mut config = ModelComponentConfig::default();
-        config.show_full_name = true;
+        let config = build_model_config(|config| {
+            config.show_full_name = true;
+        });
 
         let component = ModelComponent::new(config);
         let ctx =
@@ -369,11 +377,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_custom_mapping_overrides_parsing() {
-        let mut config = ModelComponentConfig::default();
-        config.mapping.insert(
-            "claude-sonnet-4-5-20250929[1m]".to_string(),
-            "CustomS4.5".to_string(),
-        );
+        let config = build_model_config(|config| {
+            config.mapping.insert(
+                "claude-sonnet-4-5-20250929[1m]".to_string(),
+                "CustomS4.5".to_string(),
+            );
+        });
 
         let component = ModelComponent::new(config);
         let ctx = create_test_context_with_model(
@@ -388,12 +397,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_long_name_mapping_overrides_parsing() {
-        let mut config = ModelComponentConfig::default();
-        config.show_full_name = true;
-        config.long_name_mapping.insert(
-            "claude-opus-4-1-20250805".to_string(),
-            "Custom Opus".to_string(),
-        );
+        let config = build_model_config(|config| {
+            config.show_full_name = true;
+            config.long_name_mapping.insert(
+                "claude-opus-4-1-20250805".to_string(),
+                "Custom Opus".to_string(),
+            );
+        });
 
         let component = ModelComponent::new(config);
         let ctx =
@@ -431,8 +441,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_model_disabled() {
-        let mut config = ModelComponentConfig::default();
-        config.base.enabled = false;
+        let config = build_model_config(|config| {
+            config.base.enabled = false;
+        });
 
         let component = ModelComponent::new(config);
         let ctx =
@@ -445,13 +456,14 @@ mod tests {
     #[tokio::test]
     async fn test_no_model_info() {
         let component = ModelComponent::new(ModelComponentConfig::default());
-        let mut input = InputData::default();
-        input.model = None;
+        let input = build_input(|input| {
+            input.model = None;
+        });
 
         let ctx = RenderContext {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
-            terminal: Default::default(),
+            terminal: TerminalCapabilities::default(),
         };
 
         let output = component.render(&ctx).await;

@@ -14,14 +14,16 @@ pub struct ClassicThemeRenderer {
 
 impl ClassicThemeRenderer {
     /// Create a new classic theme renderer
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             separator: " | ".to_string(),
         }
     }
 
     /// Create with custom separator
-    #[must_use] pub const fn with_separator(separator: String) -> Self {
+    #[must_use]
+    pub const fn with_separator(separator: String) -> Self {
         Self { separator }
     }
 }
@@ -118,7 +120,10 @@ mod tests {
     use crate::components::TerminalCapabilities;
     use crate::config::{AutoDetect, Config};
     use crate::core::InputData;
+    use std::error::Error;
     use std::sync::Arc;
+
+    type TestResult = Result<(), Box<dyn Error>>;
 
     fn create_test_context() -> RenderContext {
         let mut config = Config::default();
@@ -135,7 +140,7 @@ mod tests {
     }
 
     #[test]
-    fn test_classic_theme_basic() {
+    fn test_classic_theme_basic() -> TestResult {
         let theme = ClassicThemeRenderer::new();
         let ctx = create_test_context();
 
@@ -145,12 +150,13 @@ mod tests {
         ];
 
         let colors = vec![];
-        let result = theme.render(&components, &colors, &ctx).unwrap();
+        let result = theme.render(&components, &colors, &ctx)?;
         assert_eq!(result, "📁 Project | 🌿 main");
+        Ok(())
     }
 
     #[test]
-    fn test_classic_theme_no_icon() {
+    fn test_classic_theme_no_icon() -> TestResult {
         let theme = ClassicThemeRenderer::new();
         let ctx = create_test_context();
 
@@ -160,12 +166,13 @@ mod tests {
         ];
 
         let colors = vec![];
-        let result = theme.render(&components, &colors, &ctx).unwrap();
+        let result = theme.render(&components, &colors, &ctx)?;
         assert_eq!(result, "Project | main");
+        Ok(())
     }
 
     #[test]
-    fn test_classic_theme_hidden_components() {
+    fn test_classic_theme_hidden_components() -> TestResult {
         let theme = ClassicThemeRenderer::new();
         let ctx = create_test_context();
 
@@ -176,12 +183,13 @@ mod tests {
         ];
 
         let colors = vec![];
-        let result = theme.render(&components, &colors, &ctx).unwrap();
+        let result = theme.render(&components, &colors, &ctx)?;
         assert_eq!(result, "Visible | Also Visible");
+        Ok(())
     }
 
     #[test]
-    fn test_classic_theme_custom_separator() {
+    fn test_classic_theme_custom_separator() -> TestResult {
         let theme = ClassicThemeRenderer::with_separator(" / ".to_string());
         let mut config = Config::default();
         config.style.separator = " / ".to_string();
@@ -202,7 +210,8 @@ mod tests {
         ];
 
         let colors = vec![];
-        let result = theme.render(&components, &colors, &ctx).unwrap();
+        let result = theme.render(&components, &colors, &ctx)?;
         assert_eq!(result, "One / Two");
+        Ok(())
     }
 }

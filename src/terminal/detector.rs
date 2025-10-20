@@ -13,12 +13,14 @@ pub struct TerminalDetector;
 
 impl TerminalDetector {
     /// Create a new terminal detector
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 
     /// Detect terminal capabilities
-    #[must_use] pub fn detect(
+    #[must_use]
+    pub fn detect(
         &self,
         enable_colors: &AutoDetect,
         enable_emoji: &AutoDetect,
@@ -40,7 +42,7 @@ impl TerminalDetector {
         let supports_colors = if force_nerd_font || force_emoji {
             true // If we're forcing special fonts, assume color support
         } else {
-            self.detect_color_support(enable_colors)
+            Self::detect_color_support(enable_colors)
         };
 
         let supports_emoji = if force_emoji {
@@ -48,13 +50,13 @@ impl TerminalDetector {
         } else if force_nerd_font {
             false // Nerd Font takes precedence
         } else {
-            self.detect_emoji_support(enable_emoji)
+            Self::detect_emoji_support(enable_emoji)
         };
 
         let supports_nerd_font = if force_nerd_font {
             true
         } else {
-            self.detect_nerd_font_support(enable_nerd_font)
+            Self::detect_nerd_font_support(enable_nerd_font)
         };
 
         // Debug output to help troubleshoot detection issues
@@ -75,43 +77,43 @@ impl TerminalDetector {
     }
 
     /// Detect color support
-    fn detect_color_support(&self, enable_colors: &AutoDetect) -> bool {
+    fn detect_color_support(enable_colors: &AutoDetect) -> bool {
         match enable_colors {
             AutoDetect::Bool(false) => false,
             AutoDetect::Bool(true) => true,
             AutoDetect::Auto(_) => {
                 // Auto-detect based on environment
-                self.check_color_env_vars()
+                Self::check_color_env_vars()
             }
         }
     }
 
     /// Detect emoji support
-    fn detect_emoji_support(&self, enable_emoji: &AutoDetect) -> bool {
+    fn detect_emoji_support(enable_emoji: &AutoDetect) -> bool {
         match enable_emoji {
             AutoDetect::Bool(false) => false,
             AutoDetect::Bool(true) => true,
             AutoDetect::Auto(_) => {
                 // Auto-detect based on terminal type
-                self.check_emoji_capable_terminal()
+                Self::check_emoji_capable_terminal()
             }
         }
     }
 
     /// Detect Nerd Font support
-    fn detect_nerd_font_support(&self, enable_nerd_font: &AutoDetect) -> bool {
+    fn detect_nerd_font_support(enable_nerd_font: &AutoDetect) -> bool {
         match enable_nerd_font {
             AutoDetect::Bool(false) => false,
             AutoDetect::Bool(true) => true,
             AutoDetect::Auto(_) => {
                 // Auto-detect based on font environment
-                self.check_nerd_font_env()
+                Self::check_nerd_font_env()
             }
         }
     }
 
     /// Check environment variables for color support
-    fn check_color_env_vars(&self) -> bool {
+    fn check_color_env_vars() -> bool {
         // Check COLORTERM for truecolor support
         if let Ok(colorterm) = env::var("COLORTERM") {
             if colorterm == "truecolor" || colorterm == "24bit" {
@@ -160,7 +162,7 @@ impl TerminalDetector {
     }
 
     /// Check if terminal supports emoji
-    fn check_emoji_capable_terminal(&self) -> bool {
+    fn check_emoji_capable_terminal() -> bool {
         // Check terminal type
         if let Ok(term_program) = env::var("TERM_PROGRAM") {
             match term_program.as_str() {
@@ -207,7 +209,7 @@ impl TerminalDetector {
     }
 
     /// Check if Nerd Font is likely installed
-    fn check_nerd_font_env(&self) -> bool {
+    fn check_nerd_font_env() -> bool {
         // Check for explicit Nerd Font environment variable
         if env::var("NERD_FONT").is_ok() || env::var("NERD_FONTS").is_ok() {
             return true;
