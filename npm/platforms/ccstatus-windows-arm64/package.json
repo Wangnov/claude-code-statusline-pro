@@ -3,8 +3,24 @@
   "version": "3.0.0",
   "description": "ccstatus prebuilt binary for Windows arm64",
   "license": "MIT",
-  "os": ["win32"],
-  "cpu": ["arm64"],
-  "files": ["index.js", "bin/"],
-  "main": "index.js"
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "index.js",
+    "bin/"
+  ],
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Wangnov/claude-code-statusline-pro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Wangnov/claude-code-statusline-pro/issues"
+  },
+  "homepage": "https://github.com/Wangnov/claude-code-statusline-pro",
+  "author": "wangnov"
 }
