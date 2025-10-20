@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   actions: write
+  id-token: write  # 添加此权限以启用 OIDC
 
 jobs:
   build:
@@ -256,19 +257,20 @@ jobs:
             fi
           done
 
-      - name: Publish npm packages
+      - name: Publish npm packages with provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           npm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}"
 
+          # 使用 --provenance 标志发布，启用自动溯源
           for file in npm/platforms/*/*.tgz; do
-            npm publish "$file" --access public
+            npm publish "$file" --access public --provenance
           done
 
-          npm publish "$(ls npm/ccstatus/*.tgz)" --access public
-          npm publish "$(ls npm/claude-code-statusline-pro/*.tgz)" --access public
+          npm publish "$(ls npm/ccstatus/*.tgz)" --access public --provenance
+          npm publish "$(ls npm/claude-code-statusline-pro/*.tgz)" --access public --provenance
 
       - name: Upload npm tarballs
         uses: actions/upload-artifact@v4
