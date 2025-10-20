@@ -1,24 +1,46 @@
 #!/usr/bin/env node
 "use strict";
 
+const fs = require("node:fs");
 const path = require("node:path");
+const { spawn } = require("node:child_process");
 
-function runCcstatus(argv) {
-  const ccstatusPath = require.resolve("ccstatus/index.js");
-  require(ccstatusPath);
-}
+const BIN_DIR = path.join(__dirname, "bin");
+const isWindows = process.platform === "win32";
+const binaryName = isWindows ? "ccstatus.exe" : "ccstatus";
+const binaryPath = path.join(BIN_DIR, binaryName);
 
-function warnDeprecation() {
-  console.warn(
-    "[claude-code-statusline-pro] This package is deprecated. Please migrate to 'ccstatus' and use 'npx ccstatus'."
+function ensureBinary() {
+  if (fs.existsSync(binaryPath)) {
+    return binaryPath;
+  }
+
+  console.error(
+    "[ccstatus] Prebuilt binary not found. Try reinstalling with 'npm install --force ccstatus' or compile it manually via 'cargo build --release'."
   );
+  process.exitCode = 1;
+  return process.exit();
 }
 
-if (process.argv.includes("--check-install")) {
-  // Invoked during postinstall -> just warn once.
-  warnDeprecation();
-  process.exit(0);
+function run() {
+  const executable = ensureBinary();
+  const args = process.argv.slice(2);
+
+  const child = spawn(executable, args, {
+    stdio: "inherit",
+    env: process.env
+  });
+
+  child.on("exit", (code, signal) => {
+    if (typeof code === "number") {
+      process.exit(code);
+    } else if (signal) {
+      // Mirror termination signal
+      process.kill(process.pid, signal);
+    } else {
+      process.exit(1);
+    }
+  });
 }
 
-warnDeprecation();
-runCcstatus(process.argv.slice(2));
+run();

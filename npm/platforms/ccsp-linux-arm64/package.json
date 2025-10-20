@@ -1,7 +1,7 @@
 {
-  "name": "@wangnov/ccstatus-linux-arm64",
+  "name": "@wangnov/ccsp-linux-arm64",
   "version": "3.0.0",
-  "description": "ccstatus prebuilt binary for Linux arm64",
+  "description": "ccsp prebuilt binary for Linux arm64",
   "license": "MIT",
   "os": [
     "linux"

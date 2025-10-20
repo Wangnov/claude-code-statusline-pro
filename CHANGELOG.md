@@ -35,15 +35,15 @@
 - **智能成本追踪**: Session 和 Conversation 两种模式
 
 #### 包管理
-- **新包名**: 从 `claude-code-statusline-pro` 迁移到 `ccstatus`
+- **新包名**: 从 `claude-code-statusline-pro` 迁移到 `ccsp`
 - **兼容包**: 保留旧包名作为兼容层，自动转发到新包
 - **多平台二进制**: 支持 6 个平台（linux/macos/windows × x64/arm64）
 
 ### 🔄 变更 (Changed)
 
-- **包名变更**: 主包名从 `claude-code-statusline-pro` 改为 `ccstatus`
+- **包名变更**: 主包名从 `claude-code-statusline-pro` 改为 `ccsp`
   - 旧命令 `npx claude-code-statusline-pro@latest` 仍可用，但会显示迁移提示
-  - 建议更新为 `npx ccstatus@latest`
+  - 建议更新为 `npx ccsp@latest`
 - **配置文件格式**: 从 JSON 迁移到 TOML 格式
 - **配置文件路径**:
   - 项目级: `~/.claude/projects/{project-hash}/statusline-pro/config.toml`
@@ -106,14 +106,14 @@
    {
      "statusLine": {
        "type": "command",
-       "command": "npx ccstatus@latest"
+       "command": "npx ccsp@latest"
      }
    }
    ```
 
 2. **初始化新配置**:
    ```bash
-   npx ccstatus@latest config init -w
+   npx ccsp@latest config init -w
    ```
 
 3. **迁移旧配置**:
@@ -122,7 +122,7 @@
 ### 🔗 链接
 
 - [GitHub 仓库](https://github.com/wangnov/claude-code-statusline-pro)
-- [NPM 包 (ccstatus)](https://www.npmjs.com/package/ccstatus)
+- [NPM 包 (ccsp)](https://www.npmjs.com/package/ccsp)
 - [NPM 包 (旧名)](https://www.npmjs.com/package/claude-code-statusline-pro)
 - [问题反馈](https://github.com/wangnov/claude-code-statusline-pro/issues)
 

@@ -1,13 +1,13 @@
 {
-  "name": "@wangnov/ccstatus-macos-x64",
+  "name": "@wangnov/ccsp-windows-arm64",
   "version": "3.0.0",
-  "description": "ccstatus prebuilt binary for macOS x64",
+  "description": "ccsp prebuilt binary for Windows arm64",
   "license": "MIT",
   "os": [
-    "darwin"
+    "win32"
   ],
   "cpu": [
-    "x64"
+    "arm64"
   ],
   "files": [
     "index.js",

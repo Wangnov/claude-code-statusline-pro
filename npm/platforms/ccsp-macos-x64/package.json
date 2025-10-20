@@ -1,10 +1,10 @@
 {
-  "name": "@wangnov/ccstatus-windows-x64",
+  "name": "@wangnov/ccsp-macos-x64",
   "version": "3.0.0",
-  "description": "ccstatus prebuilt binary for Windows x64",
+  "description": "ccsp prebuilt binary for macOS x64",
   "license": "MIT",
   "os": [
-    "win32"
+    "darwin"
   ],
   "cpu": [
     "x64"

@@ -1,7 +1,7 @@
 {
-  "name": "@wangnov/ccstatus-macos-arm64",
+  "name": "@wangnov/ccsp-macos-arm64",
   "version": "3.0.0",
-  "description": "ccstatus prebuilt binary for macOS arm64",
+  "description": "ccsp prebuilt binary for macOS arm64",
   "license": "MIT",
   "os": [
     "darwin"

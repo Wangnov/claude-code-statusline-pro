@@ -152,17 +152,17 @@ jobs:
           set -euo pipefail
 
           declare -a PLATFORMS=(
-            "macos-arm64:claude-code-statusline-pro:ccstatus"
-            "macos-x64:claude-code-statusline-pro:ccstatus"
-            "linux-x64:claude-code-statusline-pro:ccstatus"
-            "linux-arm64:claude-code-statusline-pro:ccstatus"
-            "windows-x64:claude-code-statusline-pro.exe:ccstatus.exe"
-            "windows-arm64:claude-code-statusline-pro.exe:ccstatus.exe"
+            "macos-arm64:claude-code-statusline-pro:ccsp"
+            "macos-x64:claude-code-statusline-pro:ccsp"
+            "linux-x64:claude-code-statusline-pro:ccsp"
+            "linux-arm64:claude-code-statusline-pro:ccsp"
+            "windows-x64:claude-code-statusline-pro.exe:ccsp.exe"
+            "windows-arm64:claude-code-statusline-pro.exe:ccsp.exe"
           )
 
           for entry in "${PLATFORMS[@]}"; do
             IFS=":" read -r platform sourceBinary destBinary <<<"$entry"
-            pkg_dir="npm/platforms/ccstatus-${platform}/bin"
+            pkg_dir="npm/platforms/ccsp-${platform}/bin"
             mkdir -p "${pkg_dir}"
 
             artifact_path="dist/artifacts/${platform}/${sourceBinary}"
@@ -186,12 +186,12 @@ jobs:
         run: |
           set -euo pipefail
           packages=(
-            ccstatus-macos-arm64
-            ccstatus-macos-x64
-            ccstatus-linux-x64
-            ccstatus-linux-arm64
-            ccstatus-windows-x64
-            ccstatus-windows-arm64
+            ccsp-macos-arm64
+            ccsp-macos-x64
+            ccsp-linux-x64
+            ccsp-linux-arm64
+            ccsp-windows-x64
+            ccsp-windows-arm64
           )
           for pkg in "${packages[@]}"; do
             pkg_dir="npm/platforms/${pkg}"
@@ -199,13 +199,13 @@ jobs:
             (cd "${pkg_dir}" && npm pack)
           done
 
-      - name: Pack ccstatus
+      - name: Pack main package (ccsp)
         run: |
           set -euo pipefail
-          rm -f npm/ccstatus/*.tgz
-          (cd npm/ccstatus && npm pack)
+          rm -f npm/ccsp/*.tgz
+          (cd npm/ccsp && npm pack)
 
-      - name: Pack legacy package
+      - name: Pack legacy package (claude-code-statusline-pro)
         run: |
           set -euo pipefail
           rm -f npm/claude-code-statusline-pro/*.tgz
@@ -215,14 +215,14 @@ jobs:
         id: release-version
         run: |
           set -euo pipefail
-          VERSION=$(node -p "require('./npm/ccstatus/package.json').version")
+          VERSION=$(node -p "require('./npm/ccsp/package.json').version")
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Smoke test assembled packages (linux-x64)
         run: |
           set -euo pipefail
-          PLATFORM_TARBALL=$(ls npm/platforms/ccstatus-linux-x64/*.tgz)
-          MAIN_TARBALL=$(ls npm/ccstatus/*.tgz)
+          PLATFORM_TARBALL=$(ls npm/platforms/ccsp-linux-x64/*.tgz)
+          MAIN_TARBALL=$(ls npm/ccsp/*.tgz)
           LEGACY_TARBALL=$(ls npm/claude-code-statusline-pro/*.tgz)
 
           TMP_DIR=$(mktemp -d)
@@ -232,8 +232,8 @@ jobs:
           npm install --prefix "$TMP_DIR" --no-save "$MAIN_TARBALL"
           npm install --prefix "$TMP_DIR" --no-save "$LEGACY_TARBALL"
 
-          NODE_PATH="$TMP_DIR/node_modules" node "$TMP_DIR/node_modules/claude-code-statusline-pro/index.js" --version
-          NODE_PATH="$TMP_DIR/node_modules" node "$TMP_DIR/node_modules/ccstatus/index.js" --help >/dev/null
+          NODE_PATH="$TMP_DIR/node_modules" node "$TMP_DIR/node_modules/ccsp/index.js" --version
+          NODE_PATH="$TMP_DIR/node_modules" node "$TMP_DIR/node_modules/claude-code-statusline-pro/index.js" --help >/dev/null
 
       - name: Ensure npm versions are unpublished
         env:
@@ -241,14 +241,14 @@ jobs:
         run: |
           set -euo pipefail
           packages=(
-            ccstatus
+            ccsp
             claude-code-statusline-pro
-            @wangnov/ccstatus-linux-x64
-            @wangnov/ccstatus-linux-arm64
-            @wangnov/ccstatus-macos-x64
-            @wangnov/ccstatus-macos-arm64
-            @wangnov/ccstatus-windows-x64
-            @wangnov/ccstatus-windows-arm64
+            @wangnov/ccsp-linux-x64
+            @wangnov/ccsp-linux-arm64
+            @wangnov/ccsp-macos-x64
+            @wangnov/ccsp-macos-arm64
+            @wangnov/ccsp-windows-x64
+            @wangnov/ccsp-windows-arm64
           )
           for pkg in "${packages[@]}"; do
             if npm view "${pkg}@${VERSION}" > /dev/null 2>&1; then
@@ -269,7 +269,7 @@ jobs:
             npm publish "$file" --access public --provenance
           done
 
-          npm publish "$(ls npm/ccstatus/*.tgz)" --access public --provenance
+          npm publish "$(ls npm/ccsp/*.tgz)" --access public --provenance
           npm publish "$(ls npm/claude-code-statusline-pro/*.tgz)" --access public --provenance
 
       - name: Upload npm tarballs
@@ -278,5 +278,5 @@ jobs:
           name: npm-packages
           path: |
             npm/platforms/*/*.tgz
-            npm/ccstatus/*.tgz
+            npm/ccsp/*.tgz
             npm/claude-code-statusline-pro/*.tgz

@@ -1,18 +1,46 @@
 {
   "name": "claude-code-statusline-pro",
   "version": "3.0.0",
-  "description": "Legacy npm entry that delegates to ccstatus",
+  "description": "Claude Code Statusline Pro - Enhanced statusline with Rust engine (supports short command: ccstatus)",
   "license": "MIT",
   "bin": {
-    "claude-code-statusline-pro": "index.js"
+    "claude-code-statusline-pro": "index.js",
+    "ccstatus": "index.js"
   },
   "files": [
-    "index.js"
+    "index.js",
+    "install.js",
+    "bin/"
   ],
-  "dependencies": {
-    "ccstatus": "^3.0.0"
-  },
   "scripts": {
-    "postinstall": "node index.js --check-install"
+    "postinstall": "node install.js"
+  },
+  "keywords": [
+    "cli",
+    "statusline",
+    "claude",
+    "rust",
+    "terminal",
+    "ccstatus"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wangnov/claude-code-statusline-pro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wangnov/claude-code-statusline-pro/issues"
+  },
+  "homepage": "https://github.com/wangnov/claude-code-statusline-pro",
+  "author": "wangnov",
+  "engines": {
+    "node": ">=16"
+  },
+  "optionalDependencies": {
+    "@wangnov/ccstatus-macos-arm64": "^3.0.0",
+    "@wangnov/ccstatus-macos-x64": "^3.0.0",
+    "@wangnov/ccstatus-linux-x64": "^3.0.0",
+    "@wangnov/ccstatus-linux-arm64": "^3.0.0",
+    "@wangnov/ccstatus-windows-x64": "^3.0.0",
+    "@wangnov/ccstatus-windows-arm64": "^3.0.0"
   }
 }

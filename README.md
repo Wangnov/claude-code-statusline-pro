@@ -1,9 +1,9 @@
 # Claude Code Statusline Pro
 
-[![npm version](https://badge.fury.io/js/claude-code-statusline-pro.svg)](https://badge.fury.io/js/claude-code-statusline-pro)
+[![npm version](https://badge.fury.io/js/ccsp.svg)](https://badge.fury.io/js/ccsp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/wangnov/claude-code-statusline-pro)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/wangnov/ccsp)
 
 [中文](#使用指南) | [English](#user-guide)
 
@@ -69,12 +69,12 @@ npm --version
 {
   "statusLine": {
     "type": "command", 
-    "command": "npx ccstatus@latest"
+    "command": "npx ccsp@latest"
   }
 }
 ```
 
-> 💡 **兼容说明**：旧命令 `npx claude-code-statusline-pro@latest` 仍会继续工作并自动调用新包，但将显示迁移提示。建议尽快将现有配置更新为 `npx ccstatus@latest` 以保持一致。
+> 💡 **兼容说明**：旧命令 `npx ccsp@latest` 仍会继续工作并自动调用新包，但将显示迁移提示。建议尽快将现有配置更新为 `npx ccsp@latest` 以保持一致。
 
 保存文件后，重新打开Claude Code即可看到专业版状态栏！
 
@@ -105,13 +105,13 @@ npm --version
 
 ```bash
 # 显示所有组件（推荐）
-npx ccstatus@latest --preset PMBTUS --theme powerline
+npx ccsp@latest --preset PMBTUS --theme powerline
 
 # 只显示模型、Token和使用量
-npx ccstatus@latest --preset MTU --theme classic
+npx ccsp@latest --preset MTU --theme classic
 
 # 只显示分支和Token信息
-npx ccstatus@latest --preset BT --theme capsule
+npx ccsp@latest --preset BT --theme capsule
 ```
 
 ### 🧩 多行小组件系统
@@ -133,7 +133,7 @@ npx ccstatus@latest --preset BT --theme capsule
 enabled = true
 ```
 
-执行 `npx ccstatus@latest config init -w` 可以一次性生成主配置并复制所有小组件模板。
+执行 `npx ccsp@latest config init -w` 可以一次性生成主配置并复制所有小组件模板。
 
 ### 🎨 三大主题系统
 
@@ -177,13 +177,13 @@ Classic主题支持三种图标模式，默认会根据终端能力自动选择�
 
 ```bash
 # 强制启用Nerd Font图标（需要安装字体，否则会显示乱码）
-npx ccstatus@latest --force-nerd-font
+npx ccsp@latest --force-nerd-font
 
 # 强制启用Emoji图标（需要终端确实支持Emoji，如MacOS，否则会显示乱码）
-npx ccstatus@latest --force-emoji  
+npx ccsp@latest --force-emoji  
 
 # 强制启用纯文本模式
-npx ccstatus@latest --force-text
+npx ccsp@latest --force-text
 ```
 
 ### 📊 Token计算准确性
@@ -261,15 +261,15 @@ cost = (inputTokens * inputPrice + outputTokens * outputPrice +
 
 - 路径: `~/.claude/projects/{project-hash}/statusline-pro/config.toml`
 - 适用: 特定项目的个性化配置
-- 初始化: `npx ccstatus@latest config init`
-- 初始化并复制组件模板: `npx ccstatus@latest config init -w`
+- 初始化: `npx ccsp@latest config init`
+- 初始化并复制组件模板: `npx ccsp@latest config init -w`
 
 **用户级配置** (优先级: 低)
 
 - 路径: `~/.claude/statusline-pro/config.toml`
 - 适用: 全局默认配置，适用于所有项目
-- 初始化: `npx ccstatus@latest config init -g`
-- 初始化并复制组件模板: `npx ccstatus@latest config init -w -g`
+- 初始化: `npx ccsp@latest config init -g`
+- 初始化并复制组件模板: `npx ccsp@latest config init -w -g`
 
 ##### ⚡ 智能终端检测和配置初始化
 
@@ -277,16 +277,16 @@ cost = (inputTokens * inputPrice + outputTokens * outputPrice +
 
 ```bash
 # 初始化项目级配置（推荐）
-npx ccstatus@latest config init
+npx ccsp@latest config init
 
 # 初始化项目级配置并复制组件模板
-npx ccstatus@latest config init -w
+npx ccsp@latest config init -w
 
 # 初始化全局配置
-npx ccstatus@latest config init -g
+npx ccsp@latest config init -g
 
 # 强制重新初始化（覆盖现有配置）
-npx ccstatus@latest config init --force
+npx ccsp@latest config init --force
 ```
 
 > 提示：`-w` 等同于 `--with-components`，会把组件多行模板一并复制到配置目录，方便直接在本地调整。
@@ -356,7 +356,7 @@ force_text = false          # 强制文本模式
 ##### **Q: 状态栏完全不显示或显示错误**
 
 ```bash
-# 错误示例：status line command failed: npx ccstatus@latest
+# 错误示例：status line command failed: npx ccsp@latest
 # 解决方案：升级Claude Code到最新版本
 npm install -g @anthropic-ai/claude-code@latest
 ```
@@ -397,14 +397,14 @@ npm install -g @anthropic-ai/claude-code@latest
 
 ```bash
 # 检查终端是否支持Nerd Font，强制使用Emoji模式
-npx ccstatus@latest --force-emoji
+npx ccsp@latest --force-emoji
 ```
 
 ##### **Q: 颜色显示异常**
 
 ```bash
 # 检查终端颜色支持，可以禁用颜色
-npx ccstatus@latest --no-color
+npx ccsp@latest --no-color
 ```
 
 ##### **Q: 状态栏不更新**
@@ -418,10 +418,10 @@ cat ~/.claude/settings.json
 
 ```bash
 # 测试基本功能
-echo '{"model":{"id":"claude-sonnet-4"}}' | npx ccstatus@latest
+echo '{"model":{"id":"claude-sonnet-4"}}' | npx ccsp@latest
 
 # 测试特定预设和主题
-echo '{"model":{"id":"claude-sonnet-4"}}' | npx ccstatus@latest --preset MT --theme classic
+echo '{"model":{"id":"claude-sonnet-4"}}' | npx ccsp@latest --preset MT --theme classic
 ```
 
 ---
@@ -486,12 +486,12 @@ Simply add one line to your Claude Code configuration file, no pre-installation 
 {
   "statusLine": {
     "type": "command", 
-    "command": "npx ccstatus@latest"
+    "command": "npx ccsp@latest"
   }
 }
 ```
 
-> 💡 **Compatibility Note**: The legacy command `npx claude-code-statusline-pro@latest` still works and forwards to the new package, but will emit a migration warning. Updating existing configs to `npx ccstatus@latest` keeps future upgrades smooth.
+> 💡 **Compatibility Note**: The legacy command `npx ccsp@latest` still works and forwards to the new package, but will emit a migration warning. Updating existing configs to `npx ccsp@latest` keeps future upgrades smooth.
 
 Save the file and restart Claude Code to see the professional status bar!
 
@@ -522,13 +522,13 @@ Note: These commands are all written in settings.json, not executed directly in 
 
 ```bash
 # Show all components (recommended)
-npx ccstatus@latest --preset PMBTUS --theme powerline
+npx ccsp@latest --preset PMBTUS --theme powerline
 
 # Show only model, tokens, and usage
-npx ccstatus@latest --preset MTU --theme classic
+npx ccsp@latest --preset MTU --theme classic
 
 # Show only branch and token information
-npx ccstatus@latest --preset BT --theme capsule
+npx ccsp@latest --preset BT --theme capsule
 ```
 
 ### 🧩 Multiline Widget System
@@ -550,7 +550,7 @@ Enable multiline mode in `config.toml` and point to your widget file:
 enabled = true
 ```
 
-Run `npx ccstatus@latest config init -w` to generate the main config and copy all widget templates in one step.
+Run `npx ccsp@latest config init -w` to generate the main config and copy all widget templates in one step.
 
 ### 🎨 Three Theme System
 
@@ -594,13 +594,13 @@ If your terminal already supports certain icons (e.g., Nerd Font) but doesn't au
 
 ```bash
 # Force enable Nerd Font icons (requires font installation, otherwise will show garbled text)
-npx ccstatus@latest --force-nerd-font
+npx ccsp@latest --force-nerd-font
 
 # Force enable Emoji icons (terminal must actually support Emoji like macOS, otherwise will show garbled text)
-npx ccstatus@latest --force-emoji  
+npx ccsp@latest --force-emoji  
 
 # Force enable plain text mode
-npx ccstatus@latest --force-text
+npx ccsp@latest --force-text
 ```
 
 ### 📊 Token Calculation Accuracy
@@ -678,15 +678,15 @@ The status bar uses a two-level configuration system for flexible configuration 
 
 - Path: `~/.claude/projects/{project-hash}/statusline-pro/config.toml`
 - Application: Personalized configuration for specific projects
-- Initialization: `npx ccstatus@latest config init`
-- Initialization with component templates: `npx ccstatus@latest config init -w`
+- Initialization: `npx ccsp@latest config init`
+- Initialization with component templates: `npx ccsp@latest config init -w`
 
 **User-level Configuration** (Priority: Low)
 
 - Path: `~/.claude/statusline-pro/config.toml`
 - Application: Global default configuration for all projects
-- Initialization: `npx ccstatus@latest config init -g`
-- Initialization with component templates: `npx ccstatus@latest config init -w -g`
+- Initialization: `npx ccsp@latest config init -g`
+- Initialization with component templates: `npx ccsp@latest config init -w -g`
 
 #### ⚡ Smart Terminal Detection and Configuration Initialization
 
@@ -694,16 +694,16 @@ When running initialization commands, the system automatically detects your term
 
 ```bash
 # Initialize project-level configuration (recommended)
-npx ccstatus@latest config init
+npx ccsp@latest config init
 
 # Initialize project-level configuration and copy component templates
-npx ccstatus@latest config init -w
+npx ccsp@latest config init -w
 
 # Initialize global configuration
-npx ccstatus@latest config init -g
+npx ccsp@latest config init -g
 
 # Force re-initialization (overwrite existing configuration)
-npx ccstatus@latest config init --force
+npx ccsp@latest config init --force
 ```
 
 > Tip: `-w` is the short form of `--with-components`; it copies the bundled multiline widget templates into your config folder so you can customize them locally.
@@ -773,7 +773,7 @@ Smart detection and automatic adaptation for different terminal environments:
 #### **Q: Status bar not displaying or showing errors**
 
 ```bash
-# Error example: status line command failed: npx ccstatus@latest
+# Error example: status line command failed: npx ccsp@latest
 # Solution: Upgrade Claude Code to the latest version
 npm install -g @anthropic-ai/claude-code@latest
 ```
@@ -814,14 +814,14 @@ npm install -g @anthropic-ai/claude-code@latest
 
 ```bash
 # Check if terminal supports Nerd Font, force use Emoji mode
-npx ccstatus@latest --force-emoji
+npx ccsp@latest --force-emoji
 ```
 
 #### **Q: Color display issues**
 
 ```bash
 # Check terminal color support, can disable colors
-npx ccstatus@latest --no-color
+npx ccsp@latest --no-color
 ```
 
 #### **Q: Status bar not updating**
@@ -835,8 +835,8 @@ cat ~/.claude/settings.json
 
 ```bash
 # Test basic functionality
-echo '{"model":{"id":"claude-sonnet-4"}}' | npx ccstatus@latest
+echo '{"model":{"id":"claude-sonnet-4"}}' | npx ccsp@latest
 
 # Test specific preset and theme
-echo '{"model":{"id":"claude-sonnet-4"}}' | npx ccstatus@latest --preset MT --theme classic
+echo '{"model":{"id":"claude-sonnet-4"}}' | npx ccsp@latest --preset MT --theme classic
 ```
