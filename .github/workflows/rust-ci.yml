@@ -5,6 +5,7 @@ on:
     branches: [main, dev]
     paths:
       - ".github/workflows/rust-ci.yml"
+      - ".gitattributes"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -16,6 +17,7 @@ on:
     branches: [main, dev]
     paths:
       - ".github/workflows/rust-ci.yml"
+      - ".gitattributes"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
