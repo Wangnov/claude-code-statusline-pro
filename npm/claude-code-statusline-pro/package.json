@@ -4,8 +4,7 @@
   "description": "Claude Code Statusline Pro - Enhanced statusline with Rust engine (supports short command: ccsp)",
   "license": "MIT",
   "bin": {
-    "claude-code-statusline-pro": "index.js",
-    "ccsp": "index.js"
+    "claude-code-statusline-pro": "index.js"
   },
   "files": [
     "index.js",

@@ -228,9 +228,8 @@ jobs:
           TMP_DIR=$(mktemp -d)
           trap 'rm -rf "$TMP_DIR"' EXIT
 
-          npm install --prefix "$TMP_DIR" --no-save "$PLATFORM_TARBALL"
-          npm install --prefix "$TMP_DIR" --no-save "$MAIN_TARBALL"
-          npm install --prefix "$TMP_DIR" --no-save "$LEGACY_TARBALL"
+          # Install all packages in one command to let npm handle dependencies correctly
+          npm install --prefix "$TMP_DIR" --no-save "$PLATFORM_TARBALL" "$MAIN_TARBALL" "$LEGACY_TARBALL"
 
           NODE_PATH="$TMP_DIR/node_modules" node "$TMP_DIR/node_modules/ccsp/index.js" --version
           NODE_PATH="$TMP_DIR/node_modules" node "$TMP_DIR/node_modules/claude-code-statusline-pro/index.js" --help >/dev/null
