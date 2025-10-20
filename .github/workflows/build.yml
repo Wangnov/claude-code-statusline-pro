@@ -202,12 +202,16 @@ jobs:
       - name: Pack main package (ccsp)
         run: |
           set -euo pipefail
+          # Copy README for npm display
+          cp README.md npm/ccsp/
           rm -f npm/ccsp/*.tgz
           (cd npm/ccsp && npm pack)
 
       - name: Pack legacy package (claude-code-statusline-pro)
         run: |
           set -euo pipefail
+          # Copy README for npm display
+          cp README.md npm/claude-code-statusline-pro/
           rm -f npm/claude-code-statusline-pro/*.tgz
           (cd npm/claude-code-statusline-pro && npm pack)
 

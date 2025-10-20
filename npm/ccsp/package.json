@@ -9,7 +9,8 @@
   "files": [
     "index.js",
     "install.js",
-    "bin/"
+    "bin/",
+    "README.md"
   ],
   "scripts": {
     "postinstall": "node install.js"
