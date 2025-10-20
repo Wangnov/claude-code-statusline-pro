@@ -1,7 +1,7 @@
 {
   "private": true,
   "workspaces": [
-    "npm/ccstatus",
+    "npm/ccsp",
     "npm/claude-code-statusline-pro",
     "npm/platforms/*"
   ],

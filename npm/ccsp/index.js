@@ -7,7 +7,7 @@ const { spawn } = require("node:child_process");
 
 const BIN_DIR = path.join(__dirname, "bin");
 const isWindows = process.platform === "win32";
-const binaryName = isWindows ? "ccstatus.exe" : "ccstatus";
+const binaryName = isWindows ? "ccsp.exe" : "ccsp";
 const binaryPath = path.join(BIN_DIR, binaryName);
 
 function ensureBinary() {
@@ -16,7 +16,7 @@ function ensureBinary() {
   }
 
   console.error(
-    "[ccstatus] Prebuilt binary not found. Try reinstalling with 'npm install --force ccstatus' or compile it manually via 'cargo build --release'."
+    "[ccsp] Prebuilt binary not found. Try reinstalling with 'npm install --force ccsp' or compile it manually via 'cargo build --release'."
   );
   process.exitCode = 1;
   return process.exit();

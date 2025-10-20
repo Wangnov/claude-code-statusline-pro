@@ -12,11 +12,11 @@
 # 4. 内置默认值（最低优先级）
 #
 # 使用方法：
-# 1. 运行 `npx ccstatus@latest config init` 初始化配置
+# 1. 运行 `npx ccsp@latest config init` 初始化配置
 #    旧命令 `npx claude-code-statusline-pro@latest` 仍可用，但会提示迁移
-#    或 `npx ccstatus@latest config init -g` 初始化全局配置
+#    或 `npx ccsp@latest config init -g` 初始化全局配置
 # 2. 根据需要修改配置项
-# 3. 运行 `npx ccstatus@latest validate` 验证配置
+# 3. 运行 `npx ccsp@latest validate` 验证配置
 #
 # ====================================================================
 
@@ -478,7 +478,7 @@ enable_experimental = false
 # ====================================================================
 #
 # 关键提醒：
-# 1. 修改配置后建议运行 `npx ccstatus@latest validate` 验证
+# 1. 修改配置后建议运行 `npx ccsp@latest validate` 验证
 # 2. 多行功能默认开启，如需关闭可设置 multiline.enabled = false
 # 3. API密钥等敏感信息建议配置在 ~/.claude/settings.json 的 envs 字段
 # 4. 终端字体不支持时会自动回退到兼容性更好的图标类型，但终端能力检测有局限性。可以使用force强制设定图标

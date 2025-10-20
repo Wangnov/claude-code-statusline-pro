@@ -77,7 +77,7 @@ cd claude-code-statusline-pro
 cargo build
 
 # 如果需要测试 npm 包
-cd npm/ccstatus
+cd npm/ccsp
 npm install
 cd ../..
 ```
@@ -539,7 +539,7 @@ cd claude-code-statusline-pro
 cargo build
 
 # If you need to test npm packages
-cd npm/ccstatus
+cd npm/ccsp
 npm install
 cd ../..
 ```

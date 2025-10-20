@@ -1,11 +1,11 @@
 {
   "name": "claude-code-statusline-pro",
   "version": "3.0.0",
-  "description": "Claude Code Statusline Pro - Enhanced statusline with Rust engine (supports short command: ccstatus)",
+  "description": "Claude Code Statusline Pro - Enhanced statusline with Rust engine (supports short command: ccsp)",
   "license": "MIT",
   "bin": {
     "claude-code-statusline-pro": "index.js",
-    "ccstatus": "index.js"
+    "ccsp": "index.js"
   },
   "files": [
     "index.js",
@@ -21,7 +21,7 @@
     "claude",
     "rust",
     "terminal",
-    "ccstatus"
+    "ccsp"
   ],
   "repository": {
     "type": "git",
@@ -36,11 +36,11 @@
     "node": ">=16"
   },
   "optionalDependencies": {
-    "@wangnov/ccstatus-macos-arm64": "^3.0.0",
-    "@wangnov/ccstatus-macos-x64": "^3.0.0",
-    "@wangnov/ccstatus-linux-x64": "^3.0.0",
-    "@wangnov/ccstatus-linux-arm64": "^3.0.0",
-    "@wangnov/ccstatus-windows-x64": "^3.0.0",
-    "@wangnov/ccstatus-windows-arm64": "^3.0.0"
+    "@wangnov/ccsp-macos-arm64": "^3.0.0",
+    "@wangnov/ccsp-macos-x64": "^3.0.0",
+    "@wangnov/ccsp-linux-x64": "^3.0.0",
+    "@wangnov/ccsp-linux-arm64": "^3.0.0",
+    "@wangnov/ccsp-windows-x64": "^3.0.0",
+    "@wangnov/ccsp-windows-arm64": "^3.0.0"
   }
 }
