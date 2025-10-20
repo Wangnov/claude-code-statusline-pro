@@ -1,242 +1,162 @@
-# CHANGELOG | 更新日志
+# Changelog
 
-所有重要变更都将记录在此文件中。该项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
+所有关于本项目的重要更改将被记录在此文件中。
 
-All notable changes to this project will be documented in this file. The project adheres to [Semantic Versioning](https://semver.org/).
-
-## [2.0.0] - 2025-08-15
-
-### 🎉 正式版发布 | Official Release
-
-#### ✨ 新增功能 | New Features
-
-##### 🔍 智能终端能力检测 | Smart Terminal Capability Detection
-- **VS Code/Cursor settings.json字体检测** | VS Code/Cursor settings.json font detection
-  - 自动读取编辑器配置文件 | Automatically read editor configuration files
-  - 支持terminal.integrated.fontFamily | Support terminal.integrated.fontFamily
-  - 自动回退到editor.fontFamily | Automatic fallback to editor.fontFamily
-  - 支持Windows/macOS/Linux全平台 | Support Windows/macOS/Linux platforms
-- **增强的Nerd Font检测** | Enhanced Nerd Font detection
-  - 50+种Nerd Font字体模式识别 | 50+ Nerd Font pattern recognition
-  - 支持VS Code Portable版本 | Support VS Code Portable version
-  - 支持工作区和全局配置 | Support workspace and global configuration
-- **智能三级图标回退机制** | Smart three-level icon fallback mechanism
-  - Nerd Font图标（最佳体验）| Nerd Font icons (best experience)
-  - Emoji图标（良好兼容性）| Emoji icons (good compatibility)
-  - 文本图标（最大兼容性）| Text icons (maximum compatibility)
-
-##### 🔧 终端检测修复 | Terminal Detection Fixes
-- **修复macOS下emoji回退机制** | Fixed emoji fallback on macOS
-- **修复参数传递错误** | Fixed parameter passing errors
-- **优化VS Code/Cursor终端检测** | Optimized VS Code/Cursor terminal detection
-
-### 📝 配置改进 | Configuration Improvements
-- **自动配置检测优化** | Automatic configuration detection optimization
-- **更智能的默认值处理** | Smarter default value handling
-- **配置文件注释支持** | Configuration file comment support
-
-### 🐛 问题修复 | Bug Fixes
-- **修复detect()函数参数顺序问题** | Fixed detect() function parameter order issue
-- **修复配置参数映射错误** | Fixed configuration parameter mapping errors
-- **修复Windows路径处理问题** | Fixed Windows path handling issues
-
-### 📚 文档更新 | Documentation Updates
-- **更新终端适配文档** | Updated terminal adaptation documentation
-- **添加VS Code/Cursor配置说明** | Added VS Code/Cursor configuration instructions
-- **完善开发指南** | Improved development guide
+格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
+本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 ---
 
-## [2.0.0-beta.1] - 2025-08-15
+## [3.0.0] - 2025-01-20
 
-### 🚀 重大更新 | Major Updates
+这是一个重大版本更新，使用 Rust 完全重写了核心引擎，性能提升 10 倍。
 
-#### 🛠️ 交互式配置编辑器 | Interactive Configuration Editor
-- **新增完整的可视化配置界面** | Added complete visual configuration interface
-- **实时预览功能** | Real-time preview functionality 
-- **分类配置管理** | Categorized configuration management
-- **中英双语界面支持** | Bilingual Chinese/English interface support
+### 🎉 新增功能 (Added)
 
-#### 🏗️ CLI模块重构 | CLI Module Refactoring
-- **模块化编辑器系统** | Modular editor system
-  - `src/cli/editors/` - 专用组件编辑器 | Dedicated component editors
-  - `src/cli/utils/` - CLI工具集 | CLI utilities
-- **新增核心模块** | New core modules
-  - `config-category-ui.ts` - 配置分类界面 | Configuration category UI
-  - `component-config-mapper.ts` - 组件配置映射器 | Component configuration mapper
-  - `preset-manager.ts` - 预设管理器 | Preset manager
-- **国际化支持** | Internationalization support
-  - `i18n.ts` - 中英双语消息系统 | Bilingual messaging system
+#### 核心架构
+- **Rust 重写**: 使用 Rust 完全重写核心引擎，性能提升 10x
+- **原生 Git 集成**: 使用 `git2` 库直接分析仓库，避免频繁的 Shell 调用
+- **多层缓存体系**:
+  - 组件级内存缓存
+  - 会话持久化存储
+  - 减少重复解析和 I/O 操作
+- **异步运行时**: 基于 Tokio 的多线程异步调度，提升稳定性
+- **增量 Transcript 解析**: 按偏移量增量读取 `.jsonl` 文件，避免全量扫描
 
-#### 📈 使用量组件 | Usage Component
-- **新增usage组件** | Added usage component
-- **显示Claude使用统计** | Display Claude usage statistics
-- **支持图标和文本模式** | Support for icon and text modes
-- **集成到预设系统** | Integrated into preset system (PMBTUS)
+#### 功能特性
+- **三大主题系统**: Classic、Powerline、Capsule 主题
+- **智能终端检测**: 自动检测 Nerd Font、Emoji、颜色支持
+- **预设系统**: 通过字母组合（PMBTUS）快速配置组件
+- **多行小组件系统**:
+  - 网格布局支持
+  - 静态和 API 数据源
+  - 自动检测和过滤器
+- **精准 Token 计算**: 与 Claude 官方 API 完全一致
+- **智能成本追踪**: Session 和 Conversation 两种模式
 
-### 🔧 CLI增强 | CLI Enhancements
+#### 包管理
+- **新包名**: 从 `claude-code-statusline-pro` 迁移到 `ccsp`
+- **兼容包**: 保留旧包名作为兼容层，自动转发到新包
+- **多平台二进制**: 支持 6 个平台（linux/macos/windows × x64/arm64）
 
-#### 📂 专用编辑器 | Dedicated Editors
-- **tokens-editor.ts** - Token组件专用配置界面 | Tokens component configuration
-- **branch-editor.ts** - Git分支组件配置 | Git branch component configuration  
-- **model-editor.ts** - 模型组件配置 | Model component configuration
-- **status-editor.ts** - 状态组件配置 | Status component configuration
-- **usage-editor.ts** - 使用量组件配置 | Usage component configuration
-- **preset-editor.ts** - 预设创建和管理 | Preset creation and management
-- **theme-editor.ts** - 主题配置 | Theme configuration
-- **style-editor.ts** - 样式配置 | Style configuration
+### 🔄 变更 (Changed)
 
-#### 🔄 预览和验证系统 | Preview and Validation System
-- **preview-manager.ts** - 实时预览管理 | Real-time preview management
-- **suggestion-manager.ts** - 配置建议系统 | Configuration suggestion system
-- **validation-manager.ts** - 配置验证管理 | Configuration validation management
+- **包名变更**: 主包名从 `claude-code-statusline-pro` 改为 `ccsp`
+  - 旧命令 `npx claude-code-statusline-pro@latest` 仍可用，但会显示迁移提示
+  - 建议更新为 `npx ccsp@latest`
+- **配置文件格式**: 从 JSON 迁移到 TOML 格式
+- **配置文件路径**:
+  - 项目级: `~/.claude/projects/{project-hash}/statusline-pro/config.toml`
+  - 用户级: `~/.claude/statusline-pro/config.toml`
+- **更新间隔**: 优化到 300ms，符合 Claude Code 官方建议
 
-### ⚙️ 技术改进 | Technical Improvements
+### 🐛 修复 (Fixed)
 
-#### 🏗️ Git集成模块 | Git Integration Module
-- **新增`src/git/`目录** | Added `src/git/` directory
-- **git/service.ts** - Git服务封装 | Git service wrapper
-- **git/cache.ts** - Git命令缓存 | Git command caching
-- **git/types.ts** - Git类型定义 | Git type definitions
+- **测试稳定性**: 修复 `test_throttling_behavior` 不稳定的性能测试
+- **大型仓库性能**: 通过原生 git2 解决大型仓库的性能问题
+- **Token 计算准确性**: 确保与 Claude 官方 API 完全一致
 
-#### 🧪 测试系统重构 | Test System Refactoring
-- **新增`tests/`目录结构** | Added `tests/` directory structure
-- **单元测试** | Unit tests
-  - `tests/unit/config/` - 配置系统测试 | Configuration system tests
-  - `tests/unit/git/` - Git模块测试 | Git module tests
-- **测试工具** | Test utilities
-  - `git-mocks.ts` - Git模拟工具 | Git mocking utilities
-  - `git-scenarios.ts` - Git测试场景 | Git test scenarios
-  - `repo-fixtures.ts` - 仓库测试夹具 | Repository test fixtures
-  - `test-helpers.ts` - 测试辅助函数 | Test helper functions
+### 🚀 性能优化 (Performance)
 
-#### 📦 依赖和构建优化 | Dependencies and Build Optimization
-- **升级依赖包版本** | Updated dependency versions
-  - `@inquirer/*` 系列 - 最新交互式CLI组件 | Latest interactive CLI components
-  - `commander@14.0.0` - 命令行参数解析 | Command line argument parsing
-  - `zod@4.0.17` - 运行时类型验证 | Runtime type validation
-- **Biome代码质量工具** | Biome code quality tools
-  - `@biomejs/biome@2.1.4` - 代码格式化和质量检查 | Code formatting and quality checking
-- **现代化构建系统** | Modern build system
-  - `tsup@8.5.0` - 快速TypeScript构建 | Fast TypeScript building
-  - `vitest@3.2.4` - 现代测试框架 | Modern testing framework
+- **启动速度**: 通过缓存机制显著提升启动速度
+- **内存使用**: 优化内存占用，减少不必要的数据复制
+- **I/O 优化**: 增量读取和原子写入，减少磁盘 I/O
+- **并发处理**: 多线程异步处理，提升并发性能
 
-### 🐛 修复 | Bug Fixes
+### 🧪 测试改进 (Tests)
 
-#### 📊 组件渲染优化 | Component Rendering Optimization
-- **修复多组件场景下的显示问题** | Fixed display issues in multi-component scenarios
-- **优化组件顺序和间距** | Optimized component order and spacing
-- **改进分隔符处理逻辑** | Improved separator handling logic
+- **测试覆盖率提升**: 从 5 个测试增加到 21 个测试
+- **边界情况测试**:
+  - 超长分支名测试
+  - 零 token 和最大 token 测试
+  - 特殊字符和 Unicode 测试
+  - 无效模型 ID 测试
+- **错误处理测试**:
+  - 无效路径处理
+  - 恶意 JSON 数据处理
+  - 并发生成测试
+  - 快速连续调用测试
+- **预设测试**: 测试所有预设组合
 
-#### ⚡ 性能优化 | Performance Optimization
-- **配置加载性能提升** | Improved configuration loading performance
-- **缓存机制优化** | Optimized caching mechanisms
-- **减少文件I/O操作** | Reduced file I/O operations
+### 📚 文档改进 (Documentation)
 
-#### 🔧 错误处理增强 | Enhanced Error Handling
-- **更友好的错误提示** | More user-friendly error messages
-- **异常情况的优雅降级** | Graceful degradation for exceptions
-- **配置验证和修复** | Configuration validation and repair
+- **双语文档**: 完整的中英双语 README
+- **CHANGELOG**: 添加版本变更日志（本文件）
+- **CONTRIBUTING**: 添加贡献指南
+- **AGENTS.md**: 添加 AI Agent 开发流程指引
 
-### 💔 破坏性变更 | Breaking Changes
+### 🔧 开发体验 (Developer Experience)
 
-#### 📦 配置格式更新 | Configuration Format Updates
-- **预设系统扩展** | Preset system expansion
-  - `PMBTS` → `PMBTUS` (新增U=usage组件 | Added U=usage component)
-- **组件配置结构调整** | Component configuration structure adjustments
-  - 新增`components.usage`配置块 | Added `components.usage` configuration block
-  - 更新`preset_mapping`包含usage | Updated `preset_mapping` to include usage
+- **CI/CD**:
+  - 完整的 Rust CI 流程（格式、Clippy、测试、构建）
+  - 多平台构建支持（Ubuntu、macOS、Windows）
+  - MSRV (Minimum Supported Rust Version) 检查（Rust 1.75）
+  - 安全审计（cargo-audit）
+- **代码质量**:
+  - Clippy 零警告
+  - 统一的代码格式
+  - 完善的错误处理
 
-#### 🏗️ 模块重构 | Module Refactoring
-- **CLI模块大规模重构** | Major CLI module refactoring
-- **某些内部API可能发生变化** | Some internal APIs may have changed
-- **建议重新生成配置文件** | Recommend regenerating configuration files
+### ⚙️ 配置变更 (Configuration)
 
-### 🔄 迁移指南 | Migration Guide
+如果你从旧版本升级，需要注意以下配置变更：
 
-#### 从v1.x升级到v2.0 | Upgrading from v1.x to v2.0
-
-1. **更新配置文件** | Update configuration file
-   ```bash
-   # 备份现有配置 | Backup existing configuration
-   cp config.toml config.toml.backup
-   
-   # 使用新的配置编辑器重新生成 | Regenerate using new configuration editor
-   npm run config
+1. **更新 settings.json**:
+   ```json
+   {
+     "statusLine": {
+       "type": "command",
+       "command": "npx ccsp@latest"
+     }
+   }
    ```
 
-2. **预设更新** | Preset updates
+2. **初始化新配置**:
    ```bash
-   # 旧的预设 | Old preset
-   npx claude-code-statusline-pro PMBTS
-   
-   # 新的预设（包含usage组件）| New preset (includes usage component)
-   npx claude-code-statusline-pro PMBTUS
+   npx ccsp@latest config init -w
    ```
 
-3. **CLI命令更新** | CLI command updates
-   ```bash
-   # 新的交互式配置编辑器 | New interactive configuration editor
-   npm run config
-   
-   # 或直接使用 | Or use directly
-   npx claude-code-statusline-pro config
-   ```
+3. **迁移旧配置**:
+   旧的 JSON 配置需要手动转换为 TOML 格式。参考 `configs/config.template.toml`。
+
+### 🔗 链接
+
+- [GitHub 仓库](https://github.com/wangnov/claude-code-statusline-pro)
+- [NPM 包 (ccsp)](https://www.npmjs.com/package/ccsp)
+- [NPM 包 (旧名)](https://www.npmjs.com/package/claude-code-statusline-pro)
+- [问题反馈](https://github.com/wangnov/claude-code-statusline-pro/issues)
 
 ---
 
-## [1.1.1] - 2025-08-11
+## [2.x.x] - 历史版本
 
-### 新功能 | Added
-- 🔍 **Debug模式** | Debug mode: 添加`advanced.debug_mode`配置，可显示接收到的JSON数据
-- 🧠 **智能状态判断** | Smart status detection: 基于output_tokens数量智能区分Thinking和Ready状态
-- 🎨 **彩色JSON显示** | Colored JSON display: Debug模式下JSON数据语法高亮显示
+之前的版本基于 Node.js 实现，详细变更请参考 Git 提交历史。
 
-### 改进 | Changed
-- 🚀 **状态精度** | Status precision: 修复`stop_reason: null`的状态判断逻辑
-- 📊 **新会话显示** | New session display: 无transcript文件时正确显示0%进度条
-- 💡 **帮助完善** | Help improvements: 更新`--help`信息包含debug功能说明
-
-### 修复 | Fixed
-- ⚡ **性能优化** | Performance optimization: 简化状态判断逻辑，提升响应速度
-- 🔧 **错误处理** | Error handling: 增强transcript文件解析的容错性
+主要特性：
+- 基础状态栏功能
+- Token 显示
+- Git 分支显示
+- 模型信息显示
 
 ---
 
-## [1.1.0] - 2025-08-10
+## 版本说明
 
-### 新功能 | Added
-- 🎯 **预设系统** | Preset system: 支持字母组合快速配置 (PMBTS, MT, BT等)
-- 📊 **可视化进度条** | Visual progress bar: 双区域Token使用情况显示
-- 🔧 **TOML配置支持** | TOML configuration support: 完整的配置文件系统
+### 语义化版本规则
 
-### 改进 | Changed
-- 🌈 **跨平台兼容性** | Cross-platform compatibility: 智能终端检测和适配
-- ⚡ **性能优化** | Performance optimization: 缓存机制和更新限制
+- **主版本号 (Major)**: 不兼容的 API 修改
+- **次版本号 (Minor)**: 向下兼容的功能性新增
+- **修订号 (Patch)**: 向下兼容的问题修正
 
----
+### 发布节奏
 
-## [1.0.0] - 2025-08-08
+- 主版本更新：根据重大架构变更
+- 次版本更新：每月或当累积足够新功能时
+- 修订版更新：根据需要随时发布
 
-### 新功能 | Added
-- 🚀 **初始版本发布** | Initial release
-- 📁 **项目名称显示** | Project name display
-- 🤖 **模型信息显示** | Model information display  
-- 🌿 **Git分支显示** | Git branch display
-- 📊 **Token使用情况** | Token usage display
-- ✅ **状态指示器** | Status indicator
+### 如何贡献
 
----
-
-## 版本格式说明 | Version Format
-
-- **主版本号** | Major: 不兼容的API修改 | Incompatible API changes
-- **次版本号** | Minor: 向下兼容的功能性新增 | Backwards compatible feature additions  
-- **修订号** | Patch: 向下兼容的问题修正 | Backwards compatible bug fixes
-- **预发布标识** | Pre-release: beta, alpha等测试版本 | Beta, alpha and other test versions
-
-## 贡献指南 | Contributing
-
-如需贡献代码或报告问题，请参考[贡献指南](./CONTRIBUTING.md)。
-
-For code contributions or issue reporting, please refer to the [Contributing Guide](./CONTRIBUTING.md).
+如果你发现任何问题或有新功能建议，请：
+1. 查看 [CONTRIBUTING.md](./CONTRIBUTING.md)
+2. 提交 [Issue](https://github.com/wangnov/claude-code-statusline-pro/issues)
+3. 提交 [Pull Request](https://github.com/wangnov/claude-code-statusline-pro/pulls)

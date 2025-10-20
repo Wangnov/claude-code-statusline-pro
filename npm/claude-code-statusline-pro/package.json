@@ -1,0 +1,45 @@
+{
+  "name": "claude-code-statusline-pro",
+  "version": "3.0.1",
+  "description": "Claude Code Statusline Pro - Enhanced statusline with Rust engine (supports short command: ccsp)",
+  "license": "MIT",
+  "bin": {
+    "claude-code-statusline-pro": "index.js"
+  },
+  "files": [
+    "index.js",
+    "install.js",
+    "bin/"
+  ],
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "keywords": [
+    "cli",
+    "statusline",
+    "claude",
+    "rust",
+    "terminal",
+    "ccsp"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Wangnov/claude-code-statusline-pro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Wangnov/claude-code-statusline-pro/issues"
+  },
+  "homepage": "https://github.com/Wangnov/claude-code-statusline-pro",
+  "author": "wangnov",
+  "engines": {
+    "node": ">=16"
+  },
+  "optionalDependencies": {
+    "@wangnov/ccsp-macos-arm64": "^3.0.0",
+    "@wangnov/ccsp-macos-x64": "^3.0.0",
+    "@wangnov/ccsp-linux-x64": "^3.0.0",
+    "@wangnov/ccsp-linux-arm64": "^3.0.0",
+    "@wangnov/ccsp-windows-x64": "^3.0.0",
+    "@wangnov/ccsp-windows-arm64": "^3.0.0"
+  }
+}

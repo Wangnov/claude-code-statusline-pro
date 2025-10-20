@@ -12,10 +12,11 @@
 # 4. 内置默认值（最低优先级）
 #
 # 使用方法：
-# 1. 运行 `npx claude-code-statusline-pro@latest config --init` 初始化配置
-# 或 `npx claude-code-statusline-pro@latest config --init -g` 初始化全局配置
+# 1. 运行 `npx ccsp@latest config init` 初始化配置
+#    旧命令 `npx claude-code-statusline-pro@latest` 仍可用，但会提示迁移
+#    或 `npx ccsp@latest config init -g` 初始化全局配置
 # 2. 根据需要修改配置项
-# 3. 运行 `npx claude-code-statusline-pro@latest validate` 验证配置
+# 3. 运行 `npx ccsp@latest validate` 验证配置
 #
 # ====================================================================
 
@@ -30,8 +31,8 @@ preset = "PMBTUS"
 # 主题名称 | Theme name  
 # 支持三种内置主题：classic（经典）, powerline（电力线）, capsule（胶囊）
 # classic: 传统分隔符样式，兼容性最好
-# powerline: 现代箭头连接样式，需要 Powerline 字体支持
-# capsule: 圆角胶囊样式，现代化UI风格
+# powerline: 现代箭头连接样式，需要 Nerd Font 字体支持
+# capsule: 圆角胶囊样式，现代化UI风格，需要 Nerd Font 字体支持
 theme = "classic"
 
 # 界面语言 | Interface language
@@ -208,28 +209,28 @@ emoji_icon = "🤖"
 nerd_icon = ""
 text_icon = "[M]"
 # 显示模型全名 | Show full model name
-# false: 显示缩写版本（如 S4），true: 显示完整名称（如 claude-sonnet-4）
+# false: 显示缩写版本（如 S4.5），true: 显示完整名称（如 Sonnet 4.5）
 show_full_name = false
 
 # 自定义模型名映射 | Custom model name mapping
-# 将长模型名映射为简短易读的名称，节省状态栏空间
+# 将长模型名映射为简短易读的名称，节省状态栏空间。此处仅用于修改自定义映射，实际在代码内已有默认规则
 [components.model.mapping]
 # Opus 模型
 "claude-opus-4-1-20250805" = "O4.1"
 "claude-opus-4-20250514" = "O4"
 
-# Sonnet 模型
+# Sonnet 模型  
 "claude-sonnet-4-5-20250929" = "S4.5"
+"claude-sonnet-4-5-20250929[1m]" = "S4.5[1m]"
 "claude-sonnet-4-20250514" = "S4"
 "claude-sonnet-4-20250514[1m]" = "S4[1m]"
-"claude-3-7-sonnet-20250219" = "S3.7"
 
 # Haiku 模型
 "claude-3-5-haiku-20241022" = "H3.5"
 "claude-3-haiku-20240307" = "H3"
 
 # 自定义模型长名称映射 | Custom model long name mapping  
-# 当 show_full_name = true 时显示的友好名称
+# 当 show_full_name = true 时显示的友好名称。此处仅用于修改自定义映射，实际在代码内已有默认规则
 [components.model.long_name_mapping]
 # Opus 模型
 "claude-opus-4-1-20250805" = "Opus 4.1"
@@ -237,6 +238,7 @@ show_full_name = false
 
 # Sonnet 模型
 "claude-sonnet-4-5-20250929" = "Sonnet 4.5"
+"claude-sonnet-4-5-20250929[1m]" = "Sonnet 4.5[1m]"
 "claude-sonnet-4-20250514" = "Sonnet 4"
 "claude-sonnet-4-20250514[1m]" = "Sonnet 4[1m]"
 "claude-3-7-sonnet-20250219" = "Sonnet 3.7"
@@ -271,7 +273,7 @@ dirty_emoji = "⚡"      # 脏工作区图标
 ahead_emoji = "🔼"      # ahead提交图标
 behind_emoji = "🔽"     # behind提交图标
 stash_emoji = "📦"      # stash存储图标
-dirty_nerd = "\uE0A0"  # 脏工作区 Nerd Font图标
+dirty_nerd = "\uF0E7"  # 脏工作区 Nerd Font图标
 ahead_nerd = "\uF062"  # ahead提交 Nerd Font图标
 behind_nerd = "\uF063" # behind提交 Nerd Font图标
 stash_nerd = "\uF01C"  # stash存储 Nerd Font图标
@@ -348,7 +350,7 @@ critical = "[X]"
 # 上下文窗口大小映射 | Context window size mapping
 # 为不同模型定义上下文窗口大小（Token数）
 [components.tokens.context_windows]
-default = 200_000                 # 默认窗口大小
+default = 200_000                          # 默认窗口大小
 "claude-opus-4-1-20250805" = 200_000
 "claude-opus-4-20250514" = 200_000
 "claude-sonnet-4-20250514" = 200_000
@@ -453,8 +455,8 @@ custom_color_codes = {}
 # 多行状态栏系统配置 - 支持Widget扩展功能
 [multiline]
 # 是否启用多行显示 | Enable multiline display
-# 启用后可以显示多行扩展信息，如API数据、统计信息等
-enabled = false
+# 启用后可以显示多行扩展信息，如API数据、统计信息等（默认已启用，可改为 false 关闭）
+enabled = true
 
 # 最大行数 | Maximum rows - 限制多行显示的最大行数
 max_rows = 5
@@ -476,8 +478,8 @@ enable_experimental = false
 # ====================================================================
 #
 # 关键提醒：
-# 1. 修改配置后建议运行 `npx claude-code-statusline-pro@latest validate` 验证
-# 2. 多行功能需要设置 multiline.enabled = true 才能使用Widget系统
+# 1. 修改配置后建议运行 `npx ccsp@latest validate` 验证
+# 2. 多行功能默认开启，如需关闭可设置 multiline.enabled = false
 # 3. API密钥等敏感信息建议配置在 ~/.claude/settings.json 的 envs 字段
 # 4. 终端字体不支持时会自动回退到兼容性更好的图标类型，但终端能力检测有局限性。可以使用force强制设定图标
 # 5. 所有颜色设置支持标准终端颜色名称

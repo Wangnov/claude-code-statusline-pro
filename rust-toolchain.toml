@@ -1,0 +1,7 @@
+# Rust工具链配置
+
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+# targets将在CI中按需安装，本地开发只需要当前平台
+profile = "minimal"

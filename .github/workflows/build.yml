@@ -1,0 +1,281 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  id-token: write  # 添加此权限以启用 OIDC
+
+jobs:
+  build:
+    name: build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x64
+            binary: claude-code-statusline-pro
+            artifact: linux-x64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            platform: linux-arm64
+            binary: claude-code-statusline-pro
+            artifact: linux-arm64
+            setup: install-linux-arm-toolchain
+          - os: macos-13
+            target: x86_64-apple-darwin
+            platform: macos-x64
+            binary: claude-code-statusline-pro
+            artifact: macos-x64
+          - os: macos-14
+            target: aarch64-apple-darwin
+            platform: macos-arm64
+            binary: claude-code-statusline-pro
+            artifact: macos-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: windows-x64
+            binary: claude-code-statusline-pro.exe
+            artifact: windows-x64
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            platform: windows-arm64
+            binary: claude-code-statusline-pro.exe
+            artifact: windows-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cross toolchain
+        if: matrix.setup == 'install-linux-arm-toolchain'
+        run: |
+          sudo dpkg --add-architecture arm64 || true
+
+          # 备份并完全替换 ubuntu.sources 文件（Ubuntu 24.04 DEB822 格式）
+          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sudo cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.bak
+            cat <<'EOF' | sudo tee /etc/apt/sources.list.d/ubuntu.sources
+          Types: deb
+          URIs: http://archive.ubuntu.com/ubuntu
+          Suites: noble noble-updates noble-backports
+          Components: main restricted universe multiverse
+          Architectures: amd64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+          Types: deb
+          URIs: http://security.ubuntu.com/ubuntu
+          Suites: noble-security
+          Components: main restricted universe multiverse
+          Architectures: amd64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+          fi
+
+          # 修改传统的 sources.list 文件（如果存在）
+          if [ -f /etc/apt/sources.list ]; then
+            sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+            sudo sed -i 's/^deb-src /deb-src [arch=amd64] /' /etc/apt/sources.list
+          fi
+
+          # 为 arm64 添加独立的 ports 源
+          cat <<'EOF' | sudo tee /etc/apt/sources.list.d/ubuntu-ports.sources
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports
+          Suites: noble noble-updates noble-security noble-backports
+          Components: main restricted universe multiverse
+          Architectures: arm64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            libssl-dev:arm64 \
+            pkg-config
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build ${{ matrix.target }}
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == "linux-arm64" ]]; then
+            export PKG_CONFIG_ALLOW_CROSS=1
+            export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+            export OPENSSL_DIR=/usr
+            export OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu
+            export OPENSSL_INCLUDE_DIR=/usr/include/aarch64-linux-gnu
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+            export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+            export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc-ar
+          fi
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Collect artifact
+        run: |
+          mkdir -p artifacts
+          cp target/${{ matrix.target }}/release/${{ matrix.binary }} artifacts/
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: artifacts/${{ matrix.binary }}
+
+  assemble-npm:
+    name: assemble npm package
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: npm-release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/artifacts
+
+      - name: Arrange binaries for npm packages
+        run: |
+          set -euo pipefail
+
+          declare -a PLATFORMS=(
+            "macos-arm64:claude-code-statusline-pro:ccsp"
+            "macos-x64:claude-code-statusline-pro:ccsp"
+            "linux-x64:claude-code-statusline-pro:ccsp"
+            "linux-arm64:claude-code-statusline-pro:ccsp"
+            "windows-x64:claude-code-statusline-pro.exe:ccsp.exe"
+            "windows-arm64:claude-code-statusline-pro.exe:ccsp.exe"
+          )
+
+          for entry in "${PLATFORMS[@]}"; do
+            IFS=":" read -r platform sourceBinary destBinary <<<"$entry"
+            pkg_dir="npm/platforms/ccsp-${platform}/bin"
+            mkdir -p "${pkg_dir}"
+
+            artifact_path="dist/artifacts/${platform}/${sourceBinary}"
+            if [ -f "${artifact_path}" ]; then
+              cp "${artifact_path}" "${pkg_dir}/${destBinary}"
+              if [[ "${destBinary}" != *.exe ]]; then
+                chmod +x "${pkg_dir}/${destBinary}"
+              fi
+              rm -f "${pkg_dir}/.gitkeep"
+            else
+              echo "No artifact found for ${platform}, leaving placeholder."
+            fi
+          done
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Pack platform packages
+        run: |
+          set -euo pipefail
+          packages=(
+            ccsp-macos-arm64
+            ccsp-macos-x64
+            ccsp-linux-x64
+            ccsp-linux-arm64
+            ccsp-windows-x64
+            ccsp-windows-arm64
+          )
+          for pkg in "${packages[@]}"; do
+            pkg_dir="npm/platforms/${pkg}"
+            rm -f "${pkg_dir}"/*.tgz
+            (cd "${pkg_dir}" && npm pack)
+          done
+
+      - name: Pack main package (ccsp)
+        run: |
+          set -euo pipefail
+          rm -f npm/ccsp/*.tgz
+          (cd npm/ccsp && npm pack)
+
+      - name: Pack legacy package (claude-code-statusline-pro)
+        run: |
+          set -euo pipefail
+          rm -f npm/claude-code-statusline-pro/*.tgz
+          (cd npm/claude-code-statusline-pro && npm pack)
+
+      - name: Read release version
+        id: release-version
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./npm/ccsp/package.json').version")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test assembled packages (linux-x64)
+        run: |
+          set -euo pipefail
+          PLATFORM_TARBALL=$(ls npm/platforms/ccsp-linux-x64/*.tgz)
+          MAIN_TARBALL=$(ls npm/ccsp/*.tgz)
+          LEGACY_TARBALL=$(ls npm/claude-code-statusline-pro/*.tgz)
+
+          TMP_DIR=$(mktemp -d)
+          trap 'rm -rf "$TMP_DIR"' EXIT
+
+          # Install all packages in one command to let npm handle dependencies correctly
+          npm install --prefix "$TMP_DIR" --no-save "$PLATFORM_TARBALL" "$MAIN_TARBALL" "$LEGACY_TARBALL"
+
+          NODE_PATH="$TMP_DIR/node_modules" node "$TMP_DIR/node_modules/ccsp/index.js" --version
+          NODE_PATH="$TMP_DIR/node_modules" node "$TMP_DIR/node_modules/claude-code-statusline-pro/index.js" --help >/dev/null
+
+      - name: Ensure npm versions are unpublished
+        env:
+          VERSION: ${{ steps.release-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          packages=(
+            ccsp
+            claude-code-statusline-pro
+            @wangnov/ccsp-linux-x64
+            @wangnov/ccsp-linux-arm64
+            @wangnov/ccsp-macos-x64
+            @wangnov/ccsp-macos-arm64
+            @wangnov/ccsp-windows-x64
+            @wangnov/ccsp-windows-arm64
+          )
+          for pkg in "${packages[@]}"; do
+            if npm view "${pkg}@${VERSION}" > /dev/null 2>&1; then
+              echo "::error::${pkg}@${VERSION} already exists on npm"
+              exit 1
+            fi
+          done
+
+      - name: Publish npm packages with provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}"
+
+          # 使用 --provenance 标志发布，启用自动溯源
+          for file in npm/platforms/*/*.tgz; do
+            npm publish "$file" --access public --provenance
+          done
+
+          npm publish "$(ls npm/ccsp/*.tgz)" --access public --provenance
+          npm publish "$(ls npm/claude-code-statusline-pro/*.tgz)" --access public --provenance
+
+      - name: Upload npm tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-packages
+          path: |
+            npm/platforms/*/*.tgz
+            npm/ccsp/*.tgz
+            npm/claude-code-statusline-pro/*.tgz

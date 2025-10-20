@@ -86,6 +86,11 @@ text_icon = "[R]"
 # 复杂模板示例：支持数学表达式、格式化、嵌套字段访问
 template = "{model} ↗{input_tokens} ↘{output_tokens} :{cache_creation_tokens:.0f} +{cache_read_tokens:.0f} \\${cost:.4f}"
 
+[widgets.yescode_team_last_request.filter]
+object = "$"
+mode = "contains"
+keyword = "claude"
+
 [widgets.yescode_team_last_request.detection]
 env = "ANTHROPIC_BASE_URL"
 pattern = ".*yes\\.vg/team$"
@@ -159,6 +164,11 @@ emoji_icon = "🔄"
 text_icon = "[R]"
 # 复杂模板示例：支持数学表达式、格式化、嵌套字段访问
 template = "{model} ↗{input_tokens} ↘{output_tokens} :{cache_creation_tokens:.0f} +{cache_read_tokens:.0f} \\${cost:.4f}"
+
+[widgets.yescode_last_request.filter]
+object = "$"
+mode = "contains"
+keyword = "claude"
 
 [widgets.yescode_last_request.detection]
 env = "ANTHROPIC_BASE_URL"
@@ -265,6 +275,14 @@ data_path = "$"
 # emoji_icon = "🔄"
 # text_icon = "[R]"
 # template = "{model} ↗{input_tokens} ↘{output_tokens} :{cache_creation_tokens:.0f} +{cache_read_tokens:.0f} \\${cost:.4f}"
+#
+# [widgets.packycode_last_request.filter]
+# object = "$"
+# mode = "pattern"
+# keyword = "claude"
+# filter.object = "$"
+# filter.mode = "pattern"
+# filter.keyword = "claude"
 
 # [widgets.packycode_last_request.detection]
 # env = "ANTHROPIC_BASE_URL"
@@ -357,6 +375,11 @@ text_icon = "[R]"
 # - {quota / 500000:.4f}: 数学表达式计算并格式化为4位小数
 template = "{model_name} ↗{prompt_tokens} ↘{completion_tokens} :{other.cache_tokens} +{other.cache_creation_tokens} \\${quota / 500000:.4f}"
 
+[widgets.duckcoding_last_request.filter]
+object = "$"
+mode = "pattern"
+keyword = "claude"
+
 [widgets.duckcoding_last_request.detection]
 env = "ANTHROPIC_BASE_URL"
 pattern = "(duckcoding\\.com|instcopilot-api\\.com)"
@@ -414,7 +437,7 @@ data_path = "$.data.items[0]"          # 提取响应中数组的第一个元素
 # 
 # [widgets.custom_api_widget.api.headers]
 # "Authorization" = "Bearer ${CUSTOM_API_TOKEN}"
-# "User-Agent" = "Claude-Statusline/2.3.0"
+# "User-Agent" = "claude-code-statusline-pro/2.3.0"
 
 # ====================================================================
 # 配置说明和最佳实践

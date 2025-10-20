@@ -1,0 +1,26 @@
+{
+  "name": "@wangnov/ccsp-linux-arm64",
+  "version": "3.0.1",
+  "description": "ccsp prebuilt binary for Linux arm64",
+  "license": "MIT",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "index.js",
+    "bin/"
+  ],
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Wangnov/claude-code-statusline-pro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Wangnov/claude-code-statusline-pro/issues"
+  },
+  "homepage": "https://github.com/Wangnov/claude-code-statusline-pro",
+  "author": "wangnov"
+}

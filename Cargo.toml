@@ -1,0 +1,71 @@
+[package]
+name = "claude-code-statusline-pro"
+version = "3.0.1"
+edition = "2021"
+rust-version = "1.75"
+authors = ["wangnov"]
+license = "MIT"
+description = "Enhanced statusline for Claude Code with 10x performance"
+repository = "https://github.com/wangnov/claude-code-statusline-pro"
+homepage = "https://github.com/wangnov/claude-code-statusline-pro"
+readme = "README.md"
+keywords = ["cli", "statusline", "claude", "terminal", "git"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+# CLI framework
+clap = { version = "4.5", features = ["derive", "env", "cargo", "color"] }
+
+# Configuration & serialization
+toml = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml_edit = "0.22"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Terminal handling
+crossterm = "0.28"
+
+# System utilities
+dirs = "5.0"
+chrono = { version = "0.4", features = ["serde"] }
+lazy_static = "1.4"
+regex = "1.10"
+async-trait = "0.1"
+dialoguer = "0.11"
+jsonpath_lib = "0.3"
+ureq = { version = "2.12", default-features = false, features = ["json", "tls"] }
+dateparser = "0.2"
+
+# Git integration
+git2 = "0.19"
+
+# Async runtime (for async config loading and file operations)
+tokio = { version = "1.35", features = [
+    "rt",
+    "rt-multi-thread",
+    "macros",
+    "fs",
+    "io-util",
+] }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+pretty_assertions = "1.4"
+tempfile = "3.10"
+proptest = { version = "1.8", default-features = false, features = ["std"] }
+serial_test = "3.1"
+tokio = { version = "1.35", features = ["rt", "macros", "test-util"] }
+assert_cmd = "2.0"
+predicates = "3.1"
+
+[[bin]]
+name = "claude-code-statusline-pro"
+path = "src/main.rs"
+
+[profile.dev]
+opt-level = 0
+debug = true
