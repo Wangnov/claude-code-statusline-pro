@@ -1,0 +1,38 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Rust source files: always LF
+*.rs text eol=lf
+*.toml text eol=lf
+
+# JavaScript/JSON: always LF
+*.js text eol=lf
+*.json text eol=lf
+
+# Markdown and documentation: always LF
+*.md text eol=lf
+
+# Shell scripts: always LF
+*.sh text eol=lf
+
+# Configuration files: always LF
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Windows batch files: always CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.tgz binary
+*.exe binary
