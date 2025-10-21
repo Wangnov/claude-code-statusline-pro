@@ -30,7 +30,7 @@ thiserror = "1.0"
 crossterm = "0.28"
 
 # System utilities
-dirs = "5.0"
+dirs = "6.0"
 chrono = { version = "0.4", features = ["serde"] }
 lazy_static = "1.4"
 regex = "1.10"
