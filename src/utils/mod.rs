@@ -65,6 +65,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn falls_back_to_dirs_home_dir() {
         let original_home = env::var_os("HOME");
         let original_profile = env::var_os("USERPROFILE");
@@ -77,7 +78,12 @@ mod tests {
         env::remove_var("HOMEPATH");
 
         let detected = home_dir();
-        assert_eq!(detected, dirs::home_dir());
+        let expected = dirs::home_dir();
+
+        // 在某些 CI 环境中，即使移除环境变量，dirs::home_dir() 仍可能
+        // 通过系统调用（如读取 /etc/passwd）返回值，因此两者应该一致
+        assert_eq!(detected, expected,
+            "home_dir() should match dirs::home_dir() when env vars are removed");
 
         restore_env("HOME", original_home);
         restore_env("USERPROFILE", original_profile);

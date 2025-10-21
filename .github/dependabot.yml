@@ -27,7 +27,7 @@ updates:
         update-types:
           - "patch"
 
-    # 可选：忽略特定依赖的更新
-    # ignore:
-    #   - dependency-name: "某个包名"
-    #     update-types: ["version-update:semver-major"]
+    # 忽略需要代码适配的主版本更新
+    ignore:
+      - dependency-name: "toml"
+        update-types: ["version-update:semver-major"]
