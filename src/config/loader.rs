@@ -7,11 +7,11 @@
 //! - Default value handling
 
 use anyhow::{anyhow, Context, Result};
+use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tokio::task;
-use toml::{self, Value};
-use toml_edit::{value as toml_value, DocumentMut};
+use toml_edit::{ser, value as toml_value, DocumentMut};
 
 use super::schema::Config;
 use crate::storage::ProjectResolver;
@@ -156,7 +156,8 @@ impl ConfigLoader {
     fn load_config_layers(
         custom_path: Option<&str>,
     ) -> Result<(Config, ConfigSource, MergeReport)> {
-        let mut merged_value = Value::try_from(Config::default())?;
+        let mut merged_value = serde_json::to_value(Config::default())
+            .context("Failed to serialize default config")?;
         let mut source = ConfigSource {
             path: None,
             source_type: ConfigSourceType::Default,
@@ -223,8 +224,7 @@ impl ConfigLoader {
             }
         }
 
-        let config: Config = merged_value
-            .try_into()
+        let config: Config = serde_json::from_value(merged_value)
             .context("Failed to build configuration from merged values")?;
 
         Ok((config, source, MergeReport { layers }))
@@ -482,9 +482,14 @@ impl ConfigLoader {
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read config file: {}", path.display()))?;
 
-        let mut value: Value = content
-            .parse::<Value>()
+        // Parse TOML content using toml_edit and deserialize to serde_json::Value
+        let document = content
+            .parse::<DocumentMut>()
             .with_context(|| format!("Failed to parse TOML config: {}", path.display()))?;
+
+        let toml_string = document.to_string();
+        let mut value: Value = toml_edit::de::from_str(&toml_string)
+            .with_context(|| format!("Failed to deserialize TOML config: {}", path.display()))?;
 
         Self::normalize_value(&mut value);
 
@@ -493,12 +498,12 @@ impl ConfigLoader {
 
     fn normalize_value(value: &mut Value) {
         match value {
-            Value::Table(table) => {
-                if let Some(storage_table) = table.get_mut("storage").and_then(Value::as_table_mut)
+            Value::Object(table) => {
+                if let Some(storage_table) = table.get_mut("storage").and_then(Value::as_object_mut)
                 {
                     if let Some(auto_value) = storage_table.remove("autoCleanupDays") {
                         storage_table
-                            .entry("sessionExpiryDays".to_string())
+                            .entry("sessionExpiryDays")
                             .or_insert(auto_value);
                     }
                 }
@@ -518,7 +523,7 @@ impl ConfigLoader {
 
     fn merge_value(base: &mut Value, overlay: Value) {
         match (base, overlay) {
-            (Value::Table(base_table), Value::Table(overlay_table)) => {
+            (Value::Object(base_table), Value::Object(overlay_table)) => {
                 for (key, overlay_value) in overlay_table {
                     match base_table.get_mut(&key) {
                         Some(base_value) => Self::merge_value(base_value, overlay_value),
@@ -616,8 +621,21 @@ impl ConfigLoader {
             fs::create_dir_all(parent)?;
         }
 
-        let toml_string = toml::to_string_pretty(config)?;
-        fs::write(&path, toml_string)?;
+        // Read existing document if it exists, otherwise create default template
+        let mut document = if path.exists() {
+            let content = fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read existing config: {}", path.display()))?;
+            content
+                .parse::<DocumentMut>()
+                .with_context(|| format!("Failed to parse existing config: {}", path.display()))?
+        } else {
+            default_config_document()
+        };
+
+        // Update document with config values (preserving format and comments)
+        update_document_from_config(&mut document, config)?;
+
+        fs::write(&path, document.to_string())?;
 
         Ok(path)
     }
@@ -630,10 +648,27 @@ impl Default for ConfigLoader {
 }
 
 fn default_config_document() -> DocumentMut {
-    let default_toml = toml::to_string_pretty(&Config::default()).unwrap_or_else(|_| String::new());
+    let default_toml = ser::to_string_pretty(&Config::default()).unwrap_or_else(|_| String::new());
     default_toml
         .parse::<DocumentMut>()
         .unwrap_or_else(|_| DocumentMut::new())
+}
+
+/// Update `DocumentMut` with values from Config while preserving comments and formatting
+fn update_document_from_config(document: &mut DocumentMut, config: &Config) -> Result<()> {
+    // Serialize config to TOML string, then parse as DocumentMut to get structured values
+    let config_toml =
+        ser::to_string_pretty(config).with_context(|| "Failed to serialize config")?;
+    let config_doc = config_toml
+        .parse::<DocumentMut>()
+        .with_context(|| "Failed to parse serialized config")?;
+
+    // Update top-level keys in the document
+    for (key, value) in config_doc.as_table() {
+        document[key] = value.clone();
+    }
+
+    Ok(())
 }
 
 fn collect_diffs(before: &Value, after: &Value) -> (Vec<String>, Vec<String>) {
@@ -651,15 +686,15 @@ fn collect_diffs_impl(
     updated: &mut Vec<String>,
 ) {
     match after {
-        Value::Table(after_table) => {
-            let before_table = before.as_table();
+        Value::Object(after_table) => {
+            let before_table = before.as_object();
             for (key, after_value) in after_table {
                 path.push(key.clone());
                 match before_table.and_then(|t| t.get(key)) {
                     Some(before_value) => {
                         if before_value == after_value {
                             // no change
-                        } else if before_value.is_table() && after_value.is_table() {
+                        } else if before_value.is_object() && after_value.is_object() {
                             collect_diffs_impl(before_value, after_value, path, added, updated);
                         } else {
                             updated.push(path.join("."));

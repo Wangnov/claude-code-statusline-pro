@@ -207,8 +207,8 @@ impl MultiLineRenderer {
                 let contents = fs::read_to_string(&path).await.with_context(|| {
                     format!("Failed to read component configuration: {}", path.display())
                 })?;
-                let config: ComponentMultilineConfig =
-                    toml::from_str(&contents).with_context(|| {
+                let config: ComponentMultilineConfig = toml_edit::de::from_str(&contents)
+                    .with_context(|| {
                         format!("Failed to parse component configuration {}", path.display())
                     })?;
                 return Ok(Some(config));

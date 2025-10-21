@@ -246,7 +246,10 @@ impl StatuslineGenerator {
 
         if let Ok(snapshot_value) = serde_json::to_value(&input_data) {
             if let Err(err) = storage::update_session_snapshot(&snapshot_value).await {
-                eprintln!("[statusline] failed to update session snapshot: {err}");
+                // Only log unexpected errors; missing session ID is expected in some scenarios
+                if !err.to_string().contains("No session ID found") {
+                    eprintln!("[statusline] failed to update session snapshot: {err}");
+                }
             }
         }
 

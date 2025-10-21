@@ -14,34 +14,33 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 # CLI framework
-clap = { version = "4.5", features = ["derive", "env", "cargo", "color"] }
+clap = { version = "4.5.50", features = ["derive", "env", "cargo", "color"] }
 
 # Configuration & serialization
-toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml_edit = "0.22"
+toml_edit = { version = "0.23.7", features = ["serde"] }
 
 # Error handling
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0.17"
 
 # Terminal handling
-crossterm = "0.28"
+crossterm = "0.29.0"
 
 # System utilities
-dirs = "5.0"
+dirs = "6.0.0"
 chrono = { version = "0.4", features = ["serde"] }
 lazy_static = "1.4"
 regex = "1.10"
 async-trait = "0.1"
-dialoguer = "0.11"
+dialoguer = "0.12.0"
 jsonpath_lib = "0.3"
 ureq = { version = "2.12", default-features = false, features = ["json", "tls"] }
 dateparser = "0.2"
 
 # Git integration
-git2 = "0.19"
+git2 = "0.20.2"
 
 # Async runtime (for async config loading and file operations)
 tokio = { version = "1.35", features = [
@@ -53,7 +52,7 @@ tokio = { version = "1.35", features = [
 ] }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.7.0", features = ["html_reports"] }
 pretty_assertions = "1.4"
 tempfile = "3.10"
 proptest = { version = "1.8", default-features = false, features = ["std"] }
