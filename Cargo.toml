@@ -24,7 +24,7 @@ toml_edit = "0.22"
 
 # Error handling
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 
 # Terminal handling
 crossterm = "0.28"
