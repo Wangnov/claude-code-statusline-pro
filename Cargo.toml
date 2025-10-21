@@ -35,7 +35,7 @@ chrono = { version = "0.4", features = ["serde"] }
 lazy_static = "1.4"
 regex = "1.10"
 async-trait = "0.1"
-dialoguer = "0.11"
+dialoguer = "0.12"
 jsonpath_lib = "0.3"
 ureq = { version = "2.12", default-features = false, features = ["json", "tls"] }
 dateparser = "0.2"
