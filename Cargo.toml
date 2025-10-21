@@ -27,7 +27,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 
 # Terminal handling
-crossterm = "0.28"
+crossterm = "0.29"
 
 # System utilities
 dirs = "5.0"
