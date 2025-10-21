@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # Rust 依赖更新
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "rust"
+    reviewers:
+      - "wangnov"
+
+    # 安全更新分组：将所有安全漏洞修复合并到一个 PR
+    groups:
+      security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+      # 常规更新分组：将补丁版本更新合并
+      patch-updates:
+        update-types:
+          - "patch"
+
+    # 可选：忽略特定依赖的更新
+    # ignore:
+    #   - dependency-name: "某个包名"
+    #     update-types: ["version-update:semver-major"]
