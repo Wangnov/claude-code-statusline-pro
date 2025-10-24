@@ -391,6 +391,18 @@ npm install -g @anthropic-ai/claude-code@latest
 # 更新后重启终端并重新打开Claude Code
 ```
 
+##### **Q: Linux 上提示 `libssl.so.3` 找不到**
+
+自 v3.0.2 起，Linux x64/ARM64 平台包改为 **musl** 静态链接构建，不再依赖系统自带的 OpenSSL；请执行以下步骤：
+
+1. 确认使用最新版本：`npx ccsp@latest --version`
+2. 若仍提示旧二进制，可清理 npm 缓存后重试：
+   ```bash
+   npm cache clean --force
+   npx ccsp@latest --version
+   ```
+3. 仍需手动安装依赖的老版本用户，可按发行说明安装 `libssl3` 或升级系统，但建议尽快迁移到 3.0.2+。
+
 #### 显示问题
 
 ##### **Q: 图标显示为方框或乱码**

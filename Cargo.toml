@@ -40,7 +40,12 @@ ureq = { version = "2.12", default-features = false, features = ["json", "tls"] 
 dateparser = "0.2"
 
 # Git integration
-git2 = "0.20.2"
+git2 = { version = "0.20.2", default-features = false, features = [
+    "https",
+    "ssh",
+    "vendored-libgit2",
+    "vendored-openssl",
+] }
 
 # Async runtime (for async config loading and file operations)
 tokio = { version = "1.35", features = [

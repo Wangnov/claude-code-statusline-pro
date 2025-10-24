@@ -7,13 +7,24 @@
 
 ---
 
-## [3.0.0] - 2025-01-20
+## [3.0.2] - 2025-10-24
+
+### 修复
+
+- Linux x64/ARM64 平台 npm 包改为使用 musl 静态链接，避免旧版发行版缺少 `libssl.so.3` 时无法运行。
+
+### 优化
+
+- 移除冗余的 `toml` ，统一使用最新版 `toml_edit` 依赖并同步 Dependabot 更新，减少重复依赖并保持依赖树整洁。
+
+## [3.0.0] - 2025-10-20
 
 这是一个重大版本更新，使用 Rust 完全重写了核心引擎，性能提升 10 倍。
 
 ### 🎉 新增功能 (Added)
 
 #### 核心架构
+
 - **Rust 重写**: 使用 Rust 完全重写核心引擎，性能提升 10x
 - **原生 Git 集成**: 使用 `git2` 库直接分析仓库，避免频繁的 Shell 调用
 - **多层缓存体系**:
@@ -24,6 +35,7 @@
 - **增量 Transcript 解析**: 按偏移量增量读取 `.jsonl` 文件，避免全量扫描
 
 #### 功能特性
+
 - **三大主题系统**: Classic、Powerline、Capsule 主题
 - **智能终端检测**: 自动检测 Nerd Font、Emoji、颜色支持
 - **预设系统**: 通过字母组合（PMBTUS）快速配置组件
@@ -35,6 +47,7 @@
 - **智能成本追踪**: Session 和 Conversation 两种模式
 
 #### 包管理
+
 - **新包名**: 从 `claude-code-statusline-pro` 迁移到 `ccsp`
 - **兼容包**: 保留旧包名作为兼容层，自动转发到新包
 - **多平台二进制**: 支持 6 个平台（linux/macos/windows × x64/arm64）
@@ -102,6 +115,7 @@
 如果你从旧版本升级，需要注意以下配置变更：
 
 1. **更新 settings.json**:
+
    ```json
    {
      "statusLine": {
@@ -112,6 +126,7 @@
    ```
 
 2. **初始化新配置**:
+
    ```bash
    npx ccsp@latest config init -w
    ```
@@ -133,6 +148,7 @@
 之前的版本基于 Node.js 实现，详细变更请参考 Git 提交历史。
 
 主要特性：
+
 - 基础状态栏功能
 - Token 显示
 - Git 分支显示
@@ -157,6 +173,7 @@
 ### 如何贡献
 
 如果你发现任何问题或有新功能建议，请：
+
 1. 查看 [CONTRIBUTING.md](./CONTRIBUTING.md)
 2. 提交 [Issue](https://github.com/wangnov/claude-code-statusline-pro/issues)
 3. 提交 [Pull Request](https://github.com/wangnov/claude-code-statusline-pro/pulls)

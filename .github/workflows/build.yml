@@ -19,87 +19,48 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
+            target: x86_64-unknown-linux-musl
             platform: linux-x64
             binary: claude-code-statusline-pro
             artifact: linux-x64
+            use_cross: true
           - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
+            target: aarch64-unknown-linux-musl
             platform: linux-arm64
             binary: claude-code-statusline-pro
             artifact: linux-arm64
-            setup: install-linux-arm-toolchain
+            use_cross: true
           - os: macos-13
             target: x86_64-apple-darwin
             platform: macos-x64
             binary: claude-code-statusline-pro
             artifact: macos-x64
+            use_cross: false
           - os: macos-14
             target: aarch64-apple-darwin
             platform: macos-arm64
             binary: claude-code-statusline-pro
             artifact: macos-arm64
+            use_cross: false
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             platform: windows-x64
             binary: claude-code-statusline-pro.exe
             artifact: windows-x64
+            use_cross: false
           - os: windows-latest
             target: aarch64-pc-windows-msvc
             platform: windows-arm64
             binary: claude-code-statusline-pro.exe
             artifact: windows-arm64
+            use_cross: false
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install cross toolchain
-        if: matrix.setup == 'install-linux-arm-toolchain'
-        run: |
-          sudo dpkg --add-architecture arm64 || true
-
-          # 备份并完全替换 ubuntu.sources 文件（Ubuntu 24.04 DEB822 格式）
-          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
-            sudo cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.bak
-            cat <<'EOF' | sudo tee /etc/apt/sources.list.d/ubuntu.sources
-          Types: deb
-          URIs: http://archive.ubuntu.com/ubuntu
-          Suites: noble noble-updates noble-backports
-          Components: main restricted universe multiverse
-          Architectures: amd64
-          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-
-          Types: deb
-          URIs: http://security.ubuntu.com/ubuntu
-          Suites: noble-security
-          Components: main restricted universe multiverse
-          Architectures: amd64
-          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-          EOF
-          fi
-
-          # 修改传统的 sources.list 文件（如果存在）
-          if [ -f /etc/apt/sources.list ]; then
-            sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
-            sudo sed -i 's/^deb-src /deb-src [arch=amd64] /' /etc/apt/sources.list
-          fi
-
-          # 为 arm64 添加独立的 ports 源
-          cat <<'EOF' | sudo tee /etc/apt/sources.list.d/ubuntu-ports.sources
-          Types: deb
-          URIs: http://ports.ubuntu.com/ubuntu-ports
-          Suites: noble noble-updates noble-security noble-backports
-          Components: main restricted universe multiverse
-          Architectures: arm64
-          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-          EOF
-
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            libssl-dev:arm64 \
-            pkg-config
+      - name: Install cross
+        if: matrix.use_cross
+        run: cargo install cross --version 0.2.5 --locked
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -109,17 +70,11 @@ jobs:
       - name: Build ${{ matrix.target }}
         shell: bash
         run: |
-          if [[ "${{ matrix.platform }}" == "linux-arm64" ]]; then
-            export PKG_CONFIG_ALLOW_CROSS=1
-            export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
-            export OPENSSL_DIR=/usr
-            export OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu
-            export OPENSSL_INCLUDE_DIR=/usr/include/aarch64-linux-gnu
-            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-            export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-            export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc-ar
+          if [[ "${{ matrix.use_cross }}" == "true" ]]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
           fi
-          cargo build --release --target ${{ matrix.target }}
 
       - name: Collect artifact
         run: |
