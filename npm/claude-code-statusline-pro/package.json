@@ -1,6 +1,6 @@
 {
   "name": "claude-code-statusline-pro",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Claude Code Statusline Pro - Enhanced statusline with Rust engine (supports short command: ccsp)",
   "license": "MIT",
   "bin": {

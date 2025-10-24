@@ -1,6 +1,6 @@
 [package]
 name = "claude-code-statusline-pro"
-version = "3.0.1"
+version = "3.0.2"
 edition = "2021"
 rust-version = "1.75"
 authors = ["wangnov"]
@@ -36,7 +36,10 @@ regex = "1.10"
 async-trait = "0.1"
 dialoguer = "0.12.0"
 jsonpath_lib = "0.3"
-ureq = { version = "2.12", default-features = false, features = ["json", "tls"] }
+ureq = { version = "2.12", default-features = false, features = [
+    "json",
+    "tls",
+] }
 dateparser = "0.2"
 
 # Git integration
