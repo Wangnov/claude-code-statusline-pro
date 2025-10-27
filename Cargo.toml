@@ -63,7 +63,7 @@ tokio = { version = "1.35", features = [
 criterion = { version = "0.7.0", features = ["html_reports"] }
 pretty_assertions = "1.4"
 tempfile = "3.10"
-proptest = { version = "1.8", default-features = false, features = ["std"] }
+proptest = { version = "1.9", default-features = false, features = ["std"] }
 serial_test = "3.1"
 tokio = { version = "1.35", features = ["rt", "macros", "test-util"] }
 assert_cmd = "2.0"
