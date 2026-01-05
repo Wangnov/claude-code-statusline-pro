@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 # CLI framework
-clap = { version = "4.5.53", features = ["derive", "env", "cargo", "color"] }
+clap = { version = "4.5.54", features = ["derive", "env", "cargo", "color"] }
 
 # Configuration & serialization
 serde = { version = "1.0", features = ["derive"] }
