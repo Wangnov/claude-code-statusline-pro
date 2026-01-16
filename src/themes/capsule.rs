@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 
-use super::{ansi_bg, ansi_fg, colorize_segment, reapply_background, ThemeRenderer, ANSI_RESET};
+use super::{ansi_bg, ansi_fg, colorize_segment, reapply_colors, ThemeRenderer, ANSI_RESET};
 use crate::components::{ComponentOutput, RenderContext};
 
 pub struct CapsuleThemeRenderer;
@@ -100,7 +100,12 @@ impl CapsuleThemeRenderer {
                 .any(|word| text.contains(word))
     }
 
-    fn render_capsule(content: &str, color: &str, preserve_internal: bool) -> String {
+    fn render_capsule(
+        content: &str,
+        color: &str,
+        preserve_internal: bool,
+        fg_color: &str,
+    ) -> String {
         let mut segment = String::new();
 
         if let Some(fg) = ansi_fg(color).as_ref() {
@@ -110,7 +115,7 @@ impl CapsuleThemeRenderer {
         segment.push_str(ANSI_RESET);
 
         let bg_seq = ansi_bg(color);
-        let fg_seq = ansi_fg("white");
+        let fg_seq = ansi_fg(fg_color);
 
         if let Some(bg) = bg_seq.as_ref() {
             segment.push_str(bg);
@@ -120,8 +125,10 @@ impl CapsuleThemeRenderer {
         }
         segment.push(' ');
         if preserve_internal {
-            if let Some(bg) = bg_seq.as_ref() {
-                segment.push_str(&reapply_background(content, bg));
+            if let (Some(bg), Some(fg)) = (bg_seq.as_ref(), fg_seq.as_ref()) {
+                segment.push_str(&reapply_colors(content, bg, fg));
+            } else if let Some(bg) = bg_seq.as_ref() {
+                segment.push_str(&reapply_colors(content, bg, ""));
             } else {
                 segment.push_str(content);
             }
@@ -169,6 +176,9 @@ impl ThemeRenderer for CapsuleThemeRenderer {
             ));
         }
 
+        // Get foreground color from theme config
+        let fg_color = &context.config.themes.capsule.fg;
+
         let mut rendered = Vec::with_capacity(components.len());
         let mut color_iter = colors.iter();
 
@@ -179,7 +189,12 @@ impl ThemeRenderer for CapsuleThemeRenderer {
                 .cloned()
                 .unwrap_or_else(|| "bright_blue".to_string());
             let preserve = Self::should_preserve_internal_colors(component);
-            rendered.push(Self::render_capsule(&rendered_content, &color, preserve));
+            rendered.push(Self::render_capsule(
+                &rendered_content,
+                &color,
+                preserve,
+                fg_color,
+            ));
         }
 
         Ok(rendered.join(" "))

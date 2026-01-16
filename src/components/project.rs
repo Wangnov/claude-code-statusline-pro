@@ -35,8 +35,7 @@ impl ProjectComponent {
             .or_else(|| {
                 sanitized
                     .split(['/', '\\'])
-                    .filter(|segment| !segment.is_empty())
-                    .next_back()
+                    .rfind(|segment| !segment.is_empty())
                     .map(std::string::ToString::to_string)
             })
     }

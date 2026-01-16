@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 
-use super::{ansi_bg, ansi_fg, colorize_segment, reapply_background, ThemeRenderer, ANSI_RESET};
+use super::{ansi_bg, ansi_fg, colorize_segment, reapply_colors, ThemeRenderer, ANSI_RESET};
 use crate::components::{ComponentOutput, RenderContext};
 
 /// Powerline theme renderer
@@ -124,11 +124,12 @@ impl PowerlineThemeRenderer {
         bg_color: &str,
         next_bg: Option<&str>,
         preserve_internal: bool,
+        fg_color: &str,
     ) -> String {
         let mut segment = String::new();
 
         let bg_seq = ansi_bg(bg_color);
-        let fg_seq = ansi_fg("white");
+        let fg_seq = ansi_fg(fg_color);
 
         if let Some(bg) = bg_seq.as_ref() {
             segment.push_str(bg);
@@ -139,8 +140,10 @@ impl PowerlineThemeRenderer {
 
         segment.push(' ');
         if preserve_internal {
-            if let Some(bg) = bg_seq.as_ref() {
-                segment.push_str(&reapply_background(content, bg));
+            if let (Some(bg), Some(fg)) = (bg_seq.as_ref(), fg_seq.as_ref()) {
+                segment.push_str(&reapply_colors(content, bg, fg));
+            } else if let Some(bg) = bg_seq.as_ref() {
+                segment.push_str(&reapply_colors(content, bg, ""));
             } else {
                 segment.push_str(content);
             }
@@ -218,6 +221,9 @@ impl ThemeRenderer for PowerlineThemeRenderer {
             ));
         }
 
+        // Get foreground color from theme config
+        let fg_color = &context.config.themes.powerline.fg;
+
         // Prepend start symbol (powerline reverse triangle)
         let mut rendered = String::new();
         if let Some((_, Some(color), _)) = prepared.iter().find(|(_, color, _)| color.is_some()) {
@@ -242,6 +248,7 @@ impl ThemeRenderer for PowerlineThemeRenderer {
                     color,
                     next_color.as_deref(),
                     preserve_internal,
+                    fg_color,
                 ));
             }
         }

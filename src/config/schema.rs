@@ -44,6 +44,10 @@ pub struct Config {
     /// Multi-line configuration (optional)
     #[serde(default)]
     pub multiline: Option<MultilineConfig>,
+
+    /// Theme-specific configurations
+    #[serde(default)]
+    pub themes: ThemesConfig,
 }
 
 impl Default for Config {
@@ -58,6 +62,7 @@ impl Default for Config {
             style: StyleConfig::default(),
             components: ComponentsConfig::default(),
             multiline: Some(MultilineConfig::default()),
+            themes: ThemesConfig::default(),
         }
     }
 }
@@ -881,6 +886,138 @@ impl Default for MultilineRowConfig {
             max_width: default_row_width(),
         }
     }
+}
+
+/// Theme-specific configurations container
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ThemesConfig {
+    /// Classic theme configuration
+    #[serde(default)]
+    pub classic: ClassicThemeConfig,
+
+    /// Powerline theme configuration
+    #[serde(default)]
+    pub powerline: PowerlineThemeConfig,
+
+    /// Capsule theme configuration
+    #[serde(default)]
+    pub capsule: CapsuleThemeConfig,
+}
+
+/// Classic theme configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct ClassicThemeConfig {
+    /// Enable gradient colors
+    #[serde(default = "default_true")]
+    pub enable_gradient: bool,
+
+    /// Ignore separator settings
+    #[serde(default)]
+    pub ignore_separator: bool,
+
+    /// Fine-grained progress bar
+    #[serde(default = "default_true")]
+    pub fine_progress: bool,
+
+    /// Capsule style
+    #[serde(default)]
+    pub capsule_style: bool,
+}
+
+impl Default for ClassicThemeConfig {
+    fn default() -> Self {
+        Self {
+            enable_gradient: true,
+            ignore_separator: false,
+            fine_progress: true,
+            capsule_style: false,
+        }
+    }
+}
+
+/// Powerline theme configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct PowerlineThemeConfig {
+    /// Enable gradient colors
+    #[serde(default = "default_true")]
+    pub enable_gradient: bool,
+
+    /// Ignore separator settings
+    #[serde(default)]
+    pub ignore_separator: bool,
+
+    /// Fine-grained progress bar
+    #[serde(default = "default_true")]
+    pub fine_progress: bool,
+
+    /// Capsule style
+    #[serde(default)]
+    pub capsule_style: bool,
+
+    /// Foreground color for text in powerline segments
+    /// Accepts color names (black, white, etc.) or hex values (#000000)
+    #[serde(default = "default_powerline_fg")]
+    pub fg: String,
+}
+
+impl Default for PowerlineThemeConfig {
+    fn default() -> Self {
+        Self {
+            enable_gradient: true,
+            ignore_separator: false,
+            fine_progress: true,
+            capsule_style: false,
+            fg: default_powerline_fg(),
+        }
+    }
+}
+
+/// Capsule theme configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct CapsuleThemeConfig {
+    /// Enable gradient colors
+    #[serde(default = "default_true")]
+    pub enable_gradient: bool,
+
+    /// Ignore separator settings
+    #[serde(default = "default_true")]
+    pub ignore_separator: bool,
+
+    /// Fine-grained progress bar
+    #[serde(default = "default_true")]
+    pub fine_progress: bool,
+
+    /// Capsule style
+    #[serde(default = "default_true")]
+    pub capsule_style: bool,
+
+    /// Foreground color for text in capsule segments
+    /// Accepts color names (black, white, etc.) or hex values (#000000)
+    #[serde(default = "default_capsule_fg")]
+    pub fg: String,
+}
+
+impl Default for CapsuleThemeConfig {
+    fn default() -> Self {
+        Self {
+            enable_gradient: true,
+            ignore_separator: true,
+            fine_progress: true,
+            capsule_style: true,
+            fg: default_capsule_fg(),
+        }
+    }
+}
+
+fn default_powerline_fg() -> String {
+    "white".to_string()
+}
+
+fn default_capsule_fg() -> String {
+    "white".to_string()
 }
 
 // Default value functions

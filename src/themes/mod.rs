@@ -212,17 +212,16 @@ fn rgb_to_ansi16(r: u8, g: u8, b: u8) -> u8 {
     }
 }
 
-pub(crate) fn reapply_background(content: &str, bg_seq: &str) -> String {
+/// Reapply both background and foreground colors after `ANSI_RESET` sequences
+pub(crate) fn reapply_colors(content: &str, bg_seq: &str, fg_seq: &str) -> String {
     if !content.contains(ANSI_RESET) {
         return content.to_string();
     }
 
-    let mut processed = content.replace(ANSI_RESET, &(String::from(ANSI_RESET) + bg_seq));
-    if !processed.starts_with(bg_seq) {
-        processed = format!("{bg_seq}{processed}");
-    }
-    if !processed.ends_with(bg_seq) {
-        processed = format!("{processed}{bg_seq}");
+    let color_seq = format!("{bg_seq}{fg_seq}");
+    let mut processed = content.replace(ANSI_RESET, &(String::from(ANSI_RESET) + &color_seq));
+    if !processed.starts_with(&color_seq) {
+        processed = format!("{color_seq}{processed}");
     }
     processed
 }
