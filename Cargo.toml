@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 # CLI framework
-clap = { version = "4.5.53", features = ["derive", "env", "cargo", "color"] }
+clap = { version = "4.5.54", features = ["derive", "env", "cargo", "color"] }
 
 # Configuration & serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -23,7 +23,7 @@ toml_edit = { version = "0.23.9", features = ["serde"] }
 
 # Error handling
 anyhow = "1.0"
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 
 # Terminal handling
 crossterm = "0.29.0"
