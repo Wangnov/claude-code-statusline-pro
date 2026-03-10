@@ -2,7 +2,7 @@
 name = "claude-code-statusline-pro"
 version = "3.0.5"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.85"
 authors = ["wangnov"]
 license = "MIT"
 description = "Enhanced statusline for Claude Code with 10x performance"

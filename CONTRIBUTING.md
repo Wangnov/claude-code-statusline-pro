@@ -36,7 +36,7 @@
 
 #### 必需工具
 
-1. **Rust 工具链** (>= 1.75.0)
+1. **Rust 工具链** (>= 1.85.0)
    ```bash
    # 安装 rustup
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -498,7 +498,7 @@ By participating in this project, you agree to abide by our code of conduct:
 
 #### Required Tools
 
-1. **Rust Toolchain** (>= 1.75.0)
+1. **Rust Toolchain** (>= 1.85.0)
    ```bash
    # Install rustup
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
