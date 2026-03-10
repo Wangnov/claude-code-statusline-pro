@@ -138,7 +138,7 @@ impl ConfigLoader {
 
     fn try_reuse_cached_config(&self, custom_path: Option<&str>) -> Option<Config> {
         let cached = self.cached_config.as_ref()?;
-        let can_reuse = custom_path.map_or(true, |path| {
+        let can_reuse = custom_path.is_none_or(|path| {
             self.config_source
                 .as_ref()
                 .filter(|source| source.source_type == ConfigSourceType::Custom)

@@ -12,9 +12,8 @@ pub use types::*;
 
 use crate::config::StorageConfig as SettingsConfig;
 use anyhow::Result;
-use lazy_static::lazy_static;
 use std::path::PathBuf;
-use std::sync::RwLock;
+use std::sync::{LazyLock, RwLock};
 use tokio::task;
 
 #[derive(Debug, Clone, Default)]
@@ -23,10 +22,8 @@ struct StorageRuntimeState {
     project_id: Option<String>,
 }
 
-lazy_static! {
-    static ref STORAGE_RUNTIME: RwLock<StorageRuntimeState> =
-        RwLock::new(StorageRuntimeState::default());
-}
+static STORAGE_RUNTIME: LazyLock<RwLock<StorageRuntimeState>> =
+    LazyLock::new(|| RwLock::new(StorageRuntimeState::default()));
 
 fn runtime_config() -> types::StorageConfig {
     STORAGE_RUNTIME

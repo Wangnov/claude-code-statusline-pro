@@ -542,7 +542,7 @@ impl StorageManager {
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
 
-            if !path.extension().is_some_and(|ext| ext == "json") {
+            if path.extension().is_none_or(|ext| ext != "json") {
                 continue;
             }
 

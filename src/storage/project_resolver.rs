@@ -7,16 +7,14 @@
 //! 2. 智能优先级：优先使用 stdin 数据，其次自动生成
 //! 3. 全局一致性：单例模式确保整个程序生命周期内项目 ID 一致
 
-use lazy_static::lazy_static;
 use regex::Regex;
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
 const UNC_PREFIXES: [&str; 2] = ["\\\\\\\\?\\", "\\\\?\\"];
 
-lazy_static! {
-    static ref INSTANCE: Arc<Mutex<ProjectResolver>> = Arc::new(Mutex::new(ProjectResolver::new()));
-}
+static INSTANCE: LazyLock<Arc<Mutex<ProjectResolver>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(ProjectResolver::new())));
 
 /// Project path resolver using singleton pattern for global consistency
 #[derive(Debug)]

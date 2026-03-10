@@ -445,7 +445,7 @@ impl MultiLineRenderer {
         widget
             .filter
             .as_ref()
-            .map_or(true, |filter| value_matches_filter(filter, data))
+            .is_none_or(|filter| value_matches_filter(filter, data))
     }
 
     fn compose_with_icon(
