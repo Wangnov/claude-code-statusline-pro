@@ -60,7 +60,7 @@ tokio = { version = "1.35", features = [
 ] }
 
 [dev-dependencies]
-criterion = { version = "0.7.0", features = ["html_reports"] }
+criterion = { version = "0.8.2", features = ["html_reports"] }
 pretty_assertions = "1.4"
 tempfile = "3.24"
 proptest = { version = "1.9", default-features = false, features = ["std"] }
