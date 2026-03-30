@@ -40,7 +40,7 @@ ureq = { version = "2.12", default-features = false, features = [
     "json",
     "tls",
 ] }
-dateparser = "0.2"
+dateparser = "0.3"
 
 # Git integration
 git2 = { version = "0.20.4", default-features = false, features = [
