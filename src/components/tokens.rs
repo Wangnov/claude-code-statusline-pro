@@ -28,6 +28,51 @@ impl TokensComponent {
         Self { config }
     }
 
+    fn usage_from_official_input(&self, ctx: &RenderContext) -> Option<TokenUsageInfo> {
+        let context_window = ctx
+            .input
+            .extra
+            .get("context_window")
+            .or_else(|| ctx.input.extra.get("contextWindow"))?;
+        let current_usage = context_window
+            .get("current_usage")
+            .or_else(|| context_window.get("currentUsage"))?;
+
+        let input = current_usage
+            .get("input_tokens")
+            .or_else(|| current_usage.get("inputTokens"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+        let output = current_usage
+            .get("output_tokens")
+            .or_else(|| current_usage.get("outputTokens"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+        let cache_creation = current_usage
+            .get("cache_creation_input_tokens")
+            .or_else(|| current_usage.get("cacheCreationInputTokens"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+        let cache_read = current_usage
+            .get("cache_read_input_tokens")
+            .or_else(|| current_usage.get("cacheReadInputTokens"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+
+        let used = input + output + cache_creation + cache_read;
+        if used == 0 && !self.config.show_zero {
+            return None;
+        }
+
+        let total = context_window
+            .get("context_window_size")
+            .or_else(|| context_window.get("contextWindowSize"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or_else(|| self.context_window_for_model(ctx));
+
+        Some(TokenUsageInfo { used, total })
+    }
+
     async fn fetch_usage_from_cache(&self, ctx: &RenderContext) -> Option<TokenUsageInfo> {
         if let Some(mock_tokens) = ctx
             .input
@@ -50,6 +95,10 @@ impl TokensComponent {
                 used,
                 total: window,
             });
+        }
+
+        if let Some(usage) = self.usage_from_official_input(ctx) {
+            return Some(usage);
         }
 
         if let Some(session_id) = ctx.input.session_id.as_deref() {
@@ -587,6 +636,42 @@ mod tests {
 
         assert!(output.visible);
         assert!(output.text.contains("(20/100)"));
+    }
+
+    #[tokio::test]
+    async fn test_tokens_use_official_context_window_input() {
+        let input = build_input(|input| {
+            input.session_id = Some("official-session".to_string());
+            input.extra = json!({
+                "context_window": {
+                    "context_window_size": 200_000u64,
+                    "current_usage": {
+                        "input_tokens": 1_000u64,
+                        "output_tokens": 200u64,
+                        "cache_creation_input_tokens": 50u64,
+                        "cache_read_input_tokens": 25u64
+                    }
+                }
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+        };
+
+        let config = build_tokens_config(|config| {
+            config.show_progress_bar = false;
+            config.show_percentage = false;
+            config.show_raw_numbers = true;
+        });
+
+        let component = TokensComponent::new(config);
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert!(output.text.contains("(1275/200000)"));
     }
 
     // ==================== 上下文窗口智能推断测试 ====================

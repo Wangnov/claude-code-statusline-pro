@@ -244,7 +244,6 @@ impl StatusComponent {
             "max_tokens" => {
                 StatusInfo::warning("Max Tokens", Some("Token limit reached".to_string()))
             }
-            "stop_sequence" => StatusInfo::error(Some("Stop sequence encountered".to_string())),
             _ => StatusInfo::ready(),
         }
     }
@@ -678,6 +677,46 @@ mod tests {
             "Error (API Error: 403 user quota is not enough)"
         );
         assert_eq!(output.icon_color, Some("red".to_string()));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_status_stop_sequence_is_ready() -> TestResult {
+        let mut file = NamedTempFile::new()?;
+        writeln!(
+            file,
+            "{}",
+            json!({
+                "type": "assistant",
+                "message": {
+                    "usage": {"input_tokens": 42},
+                    "stop_reason": "stop_sequence",
+                    "content": [{"type": "text", "text": "Synthetic status update"}]
+                }
+            })
+        )
+        .context("failed to write stop sequence transcript")?;
+
+        let config = build_status_config(|config| {
+            config.show_when_idle = true;
+        });
+
+        let input = build_input(|input| {
+            input.transcript_path = Some(file.path().to_string_lossy().to_string());
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+        };
+
+        let component = StatusComponent::new(config);
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert_eq!(output.text, "Ready");
+        assert_eq!(output.icon_color, Some("green".to_string()));
         Ok(())
     }
 }
