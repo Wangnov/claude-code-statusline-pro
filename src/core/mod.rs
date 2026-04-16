@@ -10,5 +10,5 @@ pub mod multiline;
 
 // Re-export commonly used types
 pub use generator::{GeneratorOptions, StatuslineGenerator};
-pub use input::{CostInfo, GitInfo, InputData, ModelInfo, WorkspaceInfo};
+pub use input::{CostInfo, GitInfo, InputData, ModelInfo, WorkspaceInfo, WorktreeInfo};
 pub use multiline::{MultiLineRenderResult, MultiLineRenderer};

@@ -4,6 +4,7 @@
 
 use super::base::{Component, ComponentFactory, ComponentOutput, RenderContext};
 use crate::config::{BaseComponentConfig, Config, ModelComponentConfig};
+use crate::utils::effort::resolve_effort_level;
 use crate::utils::model_parser::parse_model_id;
 use async_trait::async_trait;
 
@@ -71,9 +72,14 @@ impl Component for ModelComponent {
         }
 
         // Get model name
-        let Some(text) = self.get_model_name(ctx) else {
+        let Some(mut text) = self.get_model_name(ctx) else {
             return ComponentOutput::hidden();
         };
+
+        if let Some(level) = resolve_effort_level(ctx.input.as_ref()) {
+            text.push(' ');
+            text.push_str(level.symbol());
+        }
 
         // Select icon
         let icon = self.select_icon(ctx);
@@ -107,8 +113,14 @@ impl ComponentFactory for ModelComponentFactory {
 mod tests {
     use super::*;
     use crate::components::TerminalCapabilities;
-    use crate::core::{InputData, ModelInfo};
+    use crate::core::{InputData, ModelInfo, WorkspaceInfo};
+    use anyhow::Result;
+    use serial_test::serial;
+    use std::env;
+    use std::ffi::OsString;
+    use std::fs;
     use std::sync::Arc;
+    use tempfile::tempdir;
 
     #[allow(clippy::field_reassign_with_default)]
     fn build_model_config(
@@ -289,6 +301,88 @@ mod tests {
         assert_eq!(output.text, "Some Model Name");
     }
 
+    #[tokio::test]
+    #[serial]
+    async fn test_model_appends_effort_symbol_from_env() -> Result<()> {
+        let original_effort = env::var_os("CLAUDE_CODE_EFFORT_LEVEL");
+        env::set_var("CLAUDE_CODE_EFFORT_LEVEL", "high");
+
+        let input = build_input(|input| {
+            input.model = Some(ModelInfo {
+                id: Some("claude-opus-4-1-20250805".to_string()),
+                display_name: None,
+            });
+            input.extra = serde_json::json!({
+                "version": "2.1.90"
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+        };
+
+        let component = ModelComponent::new(ModelComponentConfig::default());
+
+        let output = component.render(&ctx).await;
+        assert!(output.visible);
+        assert_eq!(output.text, "O4.1 ●");
+
+        restore_env("CLAUDE_CODE_EFFORT_LEVEL", original_effort);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_model_appends_effort_symbol_from_settings() -> Result<()> {
+        let home = tempdir()?;
+        let project = tempdir()?;
+        let original_home = env::var_os("HOME");
+        let original_effort = env::var_os("CLAUDE_CODE_EFFORT_LEVEL");
+
+        env::set_var("HOME", home.path());
+        env::remove_var("CLAUDE_CODE_EFFORT_LEVEL");
+
+        let settings_path = project.path().join(".claude/settings.local.json");
+        if let Some(parent) = settings_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(settings_path, r#"{"effortLevel":"medium"}"#)?;
+
+        let input = build_input(|input| {
+            input.model = Some(ModelInfo {
+                id: Some("claude-sonnet-4-5-20250929".to_string()),
+                display_name: None,
+            });
+            input.workspace = Some(WorkspaceInfo {
+                current_dir: Some(project.path().join("src").to_string_lossy().to_string()),
+                project_dir: Some(project.path().to_string_lossy().to_string()),
+                added_dirs: None,
+                git_worktree: None,
+            });
+            input.extra = serde_json::json!({
+                "version": "2.1.90"
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+        };
+
+        let component = ModelComponent::new(ModelComponentConfig::default());
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert_eq!(output.text, "S4.5 ◐");
+
+        restore_env("HOME", original_home);
+        restore_env("CLAUDE_CODE_EFFORT_LEVEL", original_effort);
+        Ok(())
+    }
+
     // ==================== 边缘情况测试 ====================
 
     #[tokio::test]
@@ -320,5 +414,13 @@ mod tests {
 
         let output = component.render(&ctx).await;
         assert!(!output.visible);
+    }
+
+    fn restore_env(key: &str, value: Option<OsString>) {
+        if let Some(value) = value {
+            env::set_var(key, value);
+        } else {
+            env::remove_var(key);
+        }
     }
 }

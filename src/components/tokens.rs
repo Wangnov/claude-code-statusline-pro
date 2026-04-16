@@ -15,6 +15,7 @@ use crate::utils::model_parser::parse_model_id;
 struct TokenUsageInfo {
     used: u64,
     total: u64,
+    percentage: Option<f64>,
 }
 
 /// Tokens component
@@ -36,31 +37,41 @@ impl TokensComponent {
             .or_else(|| ctx.input.extra.get("contextWindow"))?;
         let current_usage = context_window
             .get("current_usage")
-            .or_else(|| context_window.get("currentUsage"))?;
+            .or_else(|| context_window.get("currentUsage"));
 
         let input = current_usage
-            .get("input_tokens")
-            .or_else(|| current_usage.get("inputTokens"))
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0);
-        let output = current_usage
-            .get("output_tokens")
-            .or_else(|| current_usage.get("outputTokens"))
-            .and_then(serde_json::Value::as_u64)
+            .and_then(|usage| {
+                usage
+                    .get("input_tokens")
+                    .or_else(|| usage.get("inputTokens"))
+                    .and_then(serde_json::Value::as_u64)
+            })
             .unwrap_or(0);
         let cache_creation = current_usage
-            .get("cache_creation_input_tokens")
-            .or_else(|| current_usage.get("cacheCreationInputTokens"))
-            .and_then(serde_json::Value::as_u64)
+            .and_then(|usage| {
+                usage
+                    .get("cache_creation_input_tokens")
+                    .or_else(|| usage.get("cacheCreationInputTokens"))
+                    .and_then(serde_json::Value::as_u64)
+            })
             .unwrap_or(0);
         let cache_read = current_usage
-            .get("cache_read_input_tokens")
-            .or_else(|| current_usage.get("cacheReadInputTokens"))
-            .and_then(serde_json::Value::as_u64)
+            .and_then(|usage| {
+                usage
+                    .get("cache_read_input_tokens")
+                    .or_else(|| usage.get("cacheReadInputTokens"))
+                    .and_then(serde_json::Value::as_u64)
+            })
             .unwrap_or(0);
 
-        let used = input + output + cache_creation + cache_read;
-        if used == 0 && !self.config.show_zero {
+        let used = input + cache_creation + cache_read;
+
+        let percentage = context_window
+            .get("used_percentage")
+            .or_else(|| context_window.get("usedPercentage"))
+            .and_then(serde_json::Value::as_f64);
+
+        if used == 0 && percentage.is_none() && !self.config.show_zero {
             return None;
         }
 
@@ -70,7 +81,11 @@ impl TokensComponent {
             .and_then(serde_json::Value::as_u64)
             .unwrap_or_else(|| self.context_window_for_model(ctx));
 
-        Some(TokenUsageInfo { used, total })
+        Some(TokenUsageInfo {
+            used,
+            total,
+            percentage,
+        })
     }
 
     async fn fetch_usage_from_cache(&self, ctx: &RenderContext) -> Option<TokenUsageInfo> {
@@ -94,6 +109,7 @@ impl TokensComponent {
             return Some(TokenUsageInfo {
                 used,
                 total: window,
+                percentage: None,
             });
         }
 
@@ -103,7 +119,7 @@ impl TokensComponent {
 
         if let Some(session_id) = ctx.input.session_id.as_deref() {
             if let Ok(Some(tokens)) = storage::get_session_tokens(session_id).await {
-                let used = tokens.context_used;
+                let used = tokens.input + tokens.cache_creation_input + tokens.cache_read_input;
                 if used == 0 && !self.config.show_zero {
                     return None;
                 }
@@ -111,6 +127,7 @@ impl TokensComponent {
                 return Some(TokenUsageInfo {
                     used,
                     total: window,
+                    percentage: None,
                 });
             }
         }
@@ -119,6 +136,7 @@ impl TokensComponent {
             return Some(TokenUsageInfo {
                 used: 0,
                 total: window,
+                percentage: Some(0.0),
             });
         }
         None
@@ -320,7 +338,9 @@ impl Component for TokensComponent {
         };
 
         let total = usage.total.max(1);
-        let percentage = (to_f64(usage.used) / to_f64(total)) * 100.0;
+        let percentage = usage
+            .percentage
+            .unwrap_or_else(|| (to_f64(usage.used) / to_f64(total)) * 100.0);
         let clamped_percentage = percentage.clamp(0.0, 999.9);
 
         let mut parts = Vec::new();
@@ -659,6 +679,7 @@ mod tests {
             input.extra = json!({
                 "context_window": {
                     "context_window_size": 200_000u64,
+                    "used_percentage": 0.5375f64,
                     "current_usage": {
                         "input_tokens": 1_000u64,
                         "output_tokens": 200u64,
@@ -685,7 +706,73 @@ mod tests {
         let output = component.render(&ctx).await;
 
         assert!(output.visible);
-        assert!(output.text.contains("(1275/200000)"));
+        assert!(output.text.contains("(1075/200000)"));
+    }
+
+    #[tokio::test]
+    async fn test_tokens_use_official_used_percentage_formula() {
+        let input = build_input(|input| {
+            input.session_id = Some("official-session".to_string());
+            input.extra = json!({
+                "context_window": {
+                    "context_window_size": 200_000u64,
+                    "used_percentage": 12.5f64,
+                    "current_usage": {
+                        "input_tokens": 1_000u64,
+                        "output_tokens": 5_000u64,
+                        "cache_creation_input_tokens": 10u64,
+                        "cache_read_input_tokens": 15u64
+                    }
+                }
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+        };
+
+        let config = build_tokens_config(|config| {
+            config.show_progress_bar = false;
+            config.show_raw_numbers = false;
+        });
+
+        let component = TokensComponent::new(config);
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert!(output.text.contains("12.5%"));
+    }
+
+    #[tokio::test]
+    async fn test_tokens_render_official_percentage_without_current_usage() {
+        let input = build_input(|input| {
+            input.session_id = Some("official-session".to_string());
+            input.extra = json!({
+                "context_window": {
+                    "context_window_size": 200_000u64,
+                    "used_percentage": 12.5f64
+                }
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+        };
+
+        let config = build_tokens_config(|config| {
+            config.show_progress_bar = false;
+            config.show_raw_numbers = false;
+        });
+
+        let component = TokensComponent::new(config);
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert!(output.text.contains("12.5%"));
     }
 
     // ==================== 上下文窗口智能推断测试 ====================

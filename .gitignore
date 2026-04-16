@@ -30,6 +30,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 .tmp/
+.omc/
 
 # npm packages (generated during build/publish)
 npm/**/*.tgz

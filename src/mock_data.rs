@@ -45,6 +45,8 @@ fn build_dev_scenario() -> InputData {
         workspace: Some(WorkspaceInfo {
             current_dir: Some(current_dir.clone()),
             project_dir: Some(current_dir),
+            added_dirs: None,
+            git_worktree: None,
         }),
         cost: Some(CostInfo {
             total_cost_usd: Some(0.023),
@@ -80,6 +82,8 @@ fn build_critical_scenario() -> InputData {
         workspace: Some(WorkspaceInfo {
             current_dir: Some("/Users/dev/enterprise-app".to_string()),
             project_dir: Some("/Users/dev/enterprise-app".to_string()),
+            added_dirs: None,
+            git_worktree: None,
         }),
         cost: Some(CostInfo {
             total_cost_usd: Some(1.284),

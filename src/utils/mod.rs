@@ -2,6 +2,7 @@
 //!
 //! 包含跨平台 home 目录解析和模型 ID 解析等辅助函数。
 
+pub mod effort;
 pub mod model_parser;
 
 use std::env;

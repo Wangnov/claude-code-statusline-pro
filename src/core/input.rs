@@ -42,6 +42,10 @@ pub struct InputData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace: Option<WorkspaceInfo>,
 
+    /// Worktree information for `--worktree` sessions
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worktree: Option<WorktreeInfo>,
+
     /// Git branch (legacy field, prefer git.branch)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub git_branch: Option<String>,
@@ -85,6 +89,50 @@ pub struct WorkspaceInfo {
     /// Project root directory path
     #[serde(alias = "projectDir", default, skip_serializing_if = "Option::is_none")]
     pub project_dir: Option<String>,
+
+    /// Additional directories added to the session
+    #[serde(alias = "addedDirs", default, skip_serializing_if = "Option::is_none")]
+    pub added_dirs: Option<Vec<String>>,
+
+    /// Linked git worktree name for generic git worktree sessions
+    #[serde(
+        alias = "gitWorktree",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub git_worktree: Option<String>,
+}
+
+/// Worktree information for `--worktree` sessions
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct WorktreeInfo {
+    /// Worktree name
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+
+    /// Absolute path to the worktree directory
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+
+    /// Worktree branch name
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+
+    /// Original cwd before entering the worktree
+    #[serde(
+        alias = "originalCwd",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub original_cwd: Option<String>,
+
+    /// Original branch before entering the worktree
+    #[serde(
+        alias = "originalBranch",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub original_branch: Option<String>,
 }
 
 /// Git repository information
@@ -194,13 +242,37 @@ impl InputData {
 
     /// Get the effective project directory
     ///
-    /// Returns the project directory from workspace, or falls back to cwd
+    /// Returns the original project root directory for the session.
     #[must_use]
     pub fn project_dir(&self) -> Option<&str> {
+        self.project_root_dir().or(self.cwd.as_deref())
+    }
+
+    /// Get the effective current directory for the session
+    #[must_use]
+    pub fn current_dir(&self) -> Option<&str> {
+        self.worktree
+            .as_ref()
+            .and_then(|w| w.path.as_deref())
+            .or_else(|| {
+                self.workspace
+                    .as_ref()
+                    .and_then(|w| w.current_dir.as_deref())
+            })
+            .or(self.cwd.as_deref())
+    }
+
+    /// Get the original project root for the session
+    #[must_use]
+    pub fn project_root_dir(&self) -> Option<&str> {
         self.workspace
             .as_ref()
             .and_then(|w| w.project_dir.as_deref())
-            .or(self.cwd.as_deref())
+            .or_else(|| {
+                self.worktree
+                    .as_ref()
+                    .and_then(|w| w.original_cwd.as_deref())
+            })
     }
 
     /// Get the effective git branch
@@ -208,10 +280,15 @@ impl InputData {
     /// Prefers git.branch over the legacy `git_branch` field
     #[must_use]
     pub fn branch(&self) -> Option<&str> {
-        self.git
+        self.worktree
             .as_ref()
-            .and_then(|g| g.branch.as_deref())
-            .or(self.git_branch.as_deref())
+            .and_then(|w| w.branch.as_deref())
+            .or_else(|| {
+                self.git
+                    .as_ref()
+                    .and_then(|g| g.branch.as_deref())
+                    .or(self.git_branch.as_deref())
+            })
     }
 }
 
@@ -305,15 +382,66 @@ mod tests {
     fn test_project_dir_fallback() {
         let mut data = InputData::default();
         assert!(data.project_dir().is_none());
+        assert!(data.current_dir().is_none());
 
         data.cwd = Some("/cwd".to_string());
         assert_eq!(data.project_dir(), Some("/cwd"));
+        assert_eq!(data.current_dir(), Some("/cwd"));
 
         data.workspace = Some(WorkspaceInfo {
-            current_dir: None,
+            current_dir: Some("/workspace".to_string()),
             project_dir: Some("/project".to_string()),
+            added_dirs: None,
+            git_worktree: None,
         });
+        assert_eq!(data.current_dir(), Some("/workspace"));
         assert_eq!(data.project_dir(), Some("/project"));
+        assert_eq!(data.project_root_dir(), Some("/project"));
+    }
+
+    #[test]
+    fn test_worktree_path_takes_priority() {
+        let mut data = InputData {
+            cwd: Some("/cwd".to_string()),
+            workspace: Some(WorkspaceInfo {
+                current_dir: Some("/workspace/current".to_string()),
+                project_dir: Some("/workspace/original".to_string()),
+                added_dirs: None,
+                git_worktree: None,
+            }),
+            worktree: Some(WorktreeInfo {
+                path: Some("/workspace/worktrees/feature-x".to_string()),
+                branch: Some("worktree-feature-x".to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(data.current_dir(), Some("/workspace/worktrees/feature-x"));
+        assert_eq!(data.project_dir(), Some("/workspace/original"));
+        assert_eq!(data.project_root_dir(), Some("/workspace/original"));
+        assert_eq!(data.branch(), Some("worktree-feature-x"));
+
+        data.worktree = None;
+        assert_eq!(data.current_dir(), Some("/workspace/current"));
+        assert_eq!(data.branch(), None);
+    }
+
+    #[test]
+    fn test_project_root_uses_worktree_original_cwd() {
+        let data = InputData {
+            cwd: Some("/workspace/worktrees/feature-x".to_string()),
+            worktree: Some(WorktreeInfo {
+                path: Some("/workspace/worktrees/feature-x".to_string()),
+                original_cwd: Some("/workspace/original".to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(data.current_dir(), Some("/workspace/worktrees/feature-x"));
+        assert_eq!(data.project_root_dir(), Some("/workspace/original"));
+        assert_eq!(data.project_dir(), Some("/workspace/original"));
     }
 
     #[test]

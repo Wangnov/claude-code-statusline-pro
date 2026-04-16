@@ -30,23 +30,11 @@ impl BranchComponent {
     }
 
     fn resolve_repo_path(ctx: &RenderContext) -> Option<PathBuf> {
-        if let Some(project_dir) = ctx.input.project_dir() {
-            return Some(PathBuf::from(project_dir));
+        if let Some(current_dir) = ctx.input.current_dir() {
+            return Some(PathBuf::from(current_dir));
         }
 
-        if let Some(workspace) = &ctx.input.workspace {
-            if let Some(dir) = &workspace.project_dir {
-                return Some(PathBuf::from(dir));
-            }
-            if let Some(dir) = &workspace.current_dir {
-                return Some(PathBuf::from(dir));
-            }
-        }
-
-        ctx.input
-            .cwd
-            .as_ref()
-            .map(|cwd| PathBuf::from(cwd.as_str()))
+        ctx.input.project_root_dir().map(PathBuf::from)
     }
 
     async fn load_git_info(&self, ctx: &RenderContext) -> Option<GitInfo> {
@@ -387,7 +375,7 @@ struct CachedGitEntry {
 mod tests {
     use super::*;
     use crate::components::TerminalCapabilities;
-    use crate::core::{GitInfo, InputData};
+    use crate::core::{GitInfo, InputData, WorkspaceInfo, WorktreeInfo};
     use std::sync::Arc;
 
     #[allow(clippy::field_reassign_with_default)]
@@ -555,5 +543,35 @@ mod tests {
         let output = component.render(&ctx).await;
         assert!(output.visible);
         assert!(output.text.starts_with("lazy-main"));
+    }
+
+    #[test]
+    fn test_branch_resolve_repo_path_prefers_worktree() {
+        let input = build_input(|input| {
+            input.cwd = Some("/workspace/current".to_string());
+            input.workspace = Some(WorkspaceInfo {
+                current_dir: Some("/workspace/current".to_string()),
+                project_dir: Some("/workspace/original".to_string()),
+                added_dirs: None,
+                git_worktree: Some("feature-x".to_string()),
+            });
+            input.worktree = Some(WorktreeInfo {
+                path: Some("/workspace/worktrees/feature-x".to_string()),
+                branch: Some("worktree-feature-x".to_string()),
+                ..Default::default()
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+        };
+
+        let resolved = BranchComponent::resolve_repo_path(&ctx);
+        assert_eq!(
+            resolved.as_deref(),
+            Some(Path::new("/workspace/worktrees/feature-x"))
+        );
     }
 }

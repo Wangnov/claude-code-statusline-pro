@@ -20,9 +20,13 @@ impl ProjectComponent {
 
     /// Extract project name from path
     fn extract_project_name(ctx: &RenderContext) -> Option<String> {
-        // Try to get project directory from input
-        let project_dir = ctx.input.project_dir()?;
-        let sanitized = project_dir.trim_end_matches(['/', '\\']);
+        let display_dir = ctx
+            .input
+            .worktree
+            .as_ref()
+            .and_then(|worktree| worktree.path.as_deref())
+            .or_else(|| ctx.input.project_dir())?;
+        let sanitized = display_dir.trim_end_matches(['/', '\\']);
 
         if sanitized.is_empty() {
             return None;
@@ -100,7 +104,7 @@ impl ComponentFactory for ProjectComponentFactory {
 mod tests {
     use super::*;
     use crate::components::TerminalCapabilities;
-    use crate::core::{InputData, WorkspaceInfo};
+    use crate::core::{InputData, WorkspaceInfo, WorktreeInfo};
     use std::sync::Arc;
 
     #[allow(clippy::field_reassign_with_default)]
@@ -122,8 +126,10 @@ mod tests {
     fn create_test_context() -> RenderContext {
         let input = build_input(|input| {
             input.workspace = Some(WorkspaceInfo {
-                current_dir: Some("/home/user".to_string()),
+                current_dir: Some("/home/user/my-project".to_string()),
                 project_dir: Some("/home/user/my-project".to_string()),
+                added_dirs: None,
+                git_worktree: None,
             });
         });
 
@@ -173,5 +179,57 @@ mod tests {
 
         let output = component.render(&ctx).await;
         assert!(!output.visible);
+    }
+
+    #[tokio::test]
+    async fn test_project_prefers_worktree_path() {
+        let input = build_input(|input| {
+            input.workspace = Some(WorkspaceInfo {
+                current_dir: Some("/home/user/current-dir".to_string()),
+                project_dir: Some("/home/user/original-project".to_string()),
+                added_dirs: None,
+                git_worktree: Some("feature-x".to_string()),
+            });
+            input.worktree = Some(WorktreeInfo {
+                path: Some("/home/user/.claude/worktrees/feature-x".to_string()),
+                ..Default::default()
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+        };
+
+        let component = ProjectComponent::new(ProjectComponentConfig::default());
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert_eq!(output.text, "feature-x");
+    }
+
+    #[tokio::test]
+    async fn test_project_uses_project_root_for_regular_sessions() {
+        let input = build_input(|input| {
+            input.workspace = Some(WorkspaceInfo {
+                current_dir: Some("/home/user/my-project/src".to_string()),
+                project_dir: Some("/home/user/my-project".to_string()),
+                added_dirs: None,
+                git_worktree: None,
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+        };
+
+        let component = ProjectComponent::new(ProjectComponentConfig::default());
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert_eq!(output.text, "my-project");
     }
 }
