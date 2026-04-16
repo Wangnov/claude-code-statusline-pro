@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use claude_code_statusline_pro::core::{CostInfo, InputData, ModelInfo, WorkspaceInfo};
+use serde_json::json;
 
 /// Predefined mock scenarios for CLI preview mode
 pub struct MockDataGenerator {
@@ -57,6 +58,14 @@ fn build_dev_scenario() -> InputData {
             cache_read_tokens: Some(0),
             cache_write_tokens: Some(0),
         }),
+        extra: json!({
+            "__mock__": {
+                "tokensUsage": {
+                    "context_used": 1_840u64,
+                    "context_window": 200_000u64
+                }
+            }
+        }),
         ..Default::default()
     }
 }
@@ -84,6 +93,14 @@ fn build_critical_scenario() -> InputData {
             cache_read_tokens: Some(12_000),
             cache_write_tokens: Some(2_000),
         }),
+        extra: json!({
+            "__mock__": {
+                "tokensUsage": {
+                    "context_used": 125_000u64,
+                    "context_window": 200_000u64
+                }
+            }
+        }),
         ..Default::default()
     }
 }
@@ -106,6 +123,14 @@ fn build_thinking_scenario() -> InputData {
             total_tokens: Some(12_700),
             cache_read_tokens: Some(1_200),
             cache_write_tokens: Some(0),
+        }),
+        extra: json!({
+            "__mock__": {
+                "tokensUsage": {
+                    "context_used": 12_700u64,
+                    "context_window": 200_000u64
+                }
+            }
         }),
         ..Default::default()
     }
@@ -130,6 +155,14 @@ fn build_complete_scenario() -> InputData {
             cache_read_tokens: Some(3_000),
             cache_write_tokens: Some(800),
         }),
+        extra: json!({
+            "__mock__": {
+                "tokensUsage": {
+                    "context_used": 36_000u64,
+                    "context_window": 200_000u64
+                }
+            }
+        }),
         ..Default::default()
     }
 }
@@ -152,6 +185,14 @@ fn build_error_scenario() -> InputData {
             total_tokens: Some(7_000),
             cache_read_tokens: Some(0),
             cache_write_tokens: Some(0),
+        }),
+        extra: json!({
+            "__mock__": {
+                "tokensUsage": {
+                    "context_used": 7_000u64,
+                    "context_window": 200_000u64
+                }
+            }
         }),
         ..Default::default()
     }

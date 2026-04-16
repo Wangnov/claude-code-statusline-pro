@@ -326,7 +326,21 @@ impl Component for TokensComponent {
         let mut parts = Vec::new();
 
         if let Some(bar) = self.build_progress_bar(ctx, clamped_percentage) {
-            parts.push(format!("[{bar}]"));
+            let left = self
+                .config
+                .progress_bar_chars
+                .left_bracket
+                .chars()
+                .next()
+                .unwrap_or('[');
+            let right = self
+                .config
+                .progress_bar_chars
+                .right_bracket
+                .chars()
+                .next()
+                .unwrap_or(']');
+            parts.push(format!("{left}{bar}{right}"));
         }
 
         if self.config.show_percentage {
