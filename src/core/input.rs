@@ -107,15 +107,27 @@ pub struct WorkspaceInfo {
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct WorktreeInfo {
     /// Worktree name
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        alias = "worktreeName",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub name: Option<String>,
 
     /// Absolute path to the worktree directory
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        alias = "worktreePath",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub path: Option<String>,
 
     /// Worktree branch name
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        alias = "worktreeBranch",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub branch: Option<String>,
 
     /// Original cwd before entering the worktree
@@ -334,6 +346,55 @@ mod tests {
             workspace.project_dir,
             Some("/home/user/project".to_string())
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_worktree_with_camel_case_fields() -> TestResult {
+        let json = r#"{
+            "cwd": "/repo/.claude/worktrees/feature-x",
+            "workspace": {
+                "currentDir": "/repo/.claude/worktrees/feature-x",
+                "projectDir": "/repo",
+                "gitWorktree": "feature-x"
+            },
+            "worktree": {
+                "worktreeName": "feature-x",
+                "worktreePath": "/repo/.claude/worktrees/feature-x",
+                "worktreeBranch": "feature/worktree-x",
+                "originalCwd": "/repo",
+                "originalBranch": "main"
+            }
+        }"#;
+
+        let data = InputData::from_json(json)?;
+
+        let workspace = data
+            .workspace
+            .as_ref()
+            .context("expected workspace information")?;
+        assert_eq!(workspace.git_worktree.as_deref(), Some("feature-x"));
+
+        let worktree = data
+            .worktree
+            .as_ref()
+            .context("expected worktree information")?;
+        assert_eq!(worktree.name.as_deref(), Some("feature-x"));
+        assert_eq!(
+            worktree.path.as_deref(),
+            Some("/repo/.claude/worktrees/feature-x")
+        );
+        assert_eq!(worktree.branch.as_deref(), Some("feature/worktree-x"));
+        assert_eq!(worktree.original_cwd.as_deref(), Some("/repo"));
+        assert_eq!(worktree.original_branch.as_deref(), Some("main"));
+
+        assert_eq!(
+            data.current_dir(),
+            Some("/repo/.claude/worktrees/feature-x")
+        );
+        assert_eq!(data.project_root_dir(), Some("/repo"));
+        assert_eq!(data.project_dir(), Some("/repo"));
+        assert_eq!(data.branch(), Some("feature/worktree-x"));
         Ok(())
     }
 

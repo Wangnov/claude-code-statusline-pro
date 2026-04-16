@@ -20,6 +20,21 @@ impl ProjectComponent {
 
     /// Extract project name from path
     fn extract_project_name(ctx: &RenderContext) -> Option<String> {
+        if let Some(worktree_name) = ctx
+            .input
+            .worktree
+            .as_ref()
+            .and_then(|worktree| worktree.name.as_deref())
+            .or_else(|| {
+                ctx.input
+                    .workspace
+                    .as_ref()
+                    .and_then(|workspace| workspace.git_worktree.as_deref())
+            })
+        {
+            return Some(worktree_name.to_string());
+        }
+
         let display_dir = ctx
             .input
             .worktree
@@ -193,6 +208,30 @@ mod tests {
             input.worktree = Some(WorktreeInfo {
                 path: Some("/home/user/.claude/worktrees/feature-x".to_string()),
                 ..Default::default()
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+        };
+
+        let component = ProjectComponent::new(ProjectComponentConfig::default());
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert_eq!(output.text, "feature-x");
+    }
+
+    #[tokio::test]
+    async fn test_project_uses_git_worktree_name_for_generic_sessions() {
+        let input = build_input(|input| {
+            input.workspace = Some(WorkspaceInfo {
+                current_dir: Some("/repo/.claude/worktrees/feature-x".to_string()),
+                project_dir: Some("/repo".to_string()),
+                added_dirs: None,
+                git_worktree: Some("feature-x".to_string()),
             });
         });
 
