@@ -2,8 +2,8 @@
 
 [![npm version](https://badge.fury.io/js/ccsp.svg)](https://badge.fury.io/js/ccsp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/wangnov/ccsp)
+[![Node.js](https://img.shields.io/badge/Node.js-16+-green.svg)](https://nodejs.org/)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/Wangnov/claude-code-statusline-pro)
 
 [中文](#使用指南) | [English](#user-guide)
 
@@ -41,7 +41,7 @@
 #### 必需条件
 
 - **Claude Code**: 版本 ≥ 1.0.71
-- **Node.js**: 版本 ≥ 18.0.0 ([下载安装](https://nodejs.org/))
+- **Node.js**: 版本 ≥ 16.0.0 ([下载安装](https://nodejs.org/))
 - **npm**: 通常随Node.js自动安装
 
 #### 检查当前版本
@@ -74,7 +74,7 @@ npm --version
 }
 ```
 
-> 💡 **兼容说明**：旧命令 `npx ccsp@latest` 仍会继续工作并自动调用新包，但将显示迁移提示。建议尽快将现有配置更新为 `npx ccsp@latest` 以保持一致。
+> 💡 **兼容说明**：旧命令 `npx claude-code-statusline-pro@latest` 仍可继续使用，并会提示迁移。建议将现有配置更新为 `npx ccsp@latest`。
 
 保存文件后，重新打开Claude Code即可看到专业版状态栏！
 
@@ -122,7 +122,7 @@ npx ccsp@latest --preset BT --theme capsule
 - **小组件类型**：内置 `static`（静态文本）与 `api`（HTTP 请求）两种类型，API 小组件支持模板渲染、环境变量替换。
 - **自动检测**：通过 `detection` 段读取环境变量，可配置 `equals` / `contains` / `pattern` 触发条件，也可以配合 `force` 手动开启或关闭。
 - **结果过滤**：`filter` 支持 JSONPath + `equals` / `contains` / `pattern` 匹配，只在命中关键字时刷新；可用于最近请求等场景。
-- **模板示例**：项目内提供 `configs/components/usage.template.toml` 与 `rust/configs/components/usage.template.toml`，复制到 `~/.claude/statusline-pro/components/usage.toml` 后按需改写。
+- **模板示例**：项目内提供 `configs/components/usage.template.toml`，复制到 `~/.claude/statusline-pro/components/usage.toml` 后按需改写。
 
 #### 快速启用
 
@@ -416,7 +416,7 @@ npx ccsp@latest --force-emoji
 
 ```bash
 # 检查终端颜色支持，可以禁用颜色
-npx ccsp@latest --no-color
+npx ccsp@latest --no-colors
 ```
 
 ##### **Q: 状态栏不更新**
@@ -470,7 +470,7 @@ Before getting started, please ensure your system meets the following requiremen
 #### Prerequisites
 
 - **Claude Code**: Version ≥ 1.0.71
-- **Node.js**: Version ≥ 18.0.0 ([Download](https://nodejs.org/))
+- **Node.js**: Version ≥ 16.0.0 ([Download](https://nodejs.org/))
 - **npm**: Usually installed automatically with Node.js
 
 #### Check Current Versions
@@ -503,7 +503,7 @@ Simply add one line to your Claude Code configuration file, no pre-installation 
 }
 ```
 
-> 💡 **Compatibility Note**: The legacy command `npx ccsp@latest` still works and forwards to the new package, but will emit a migration warning. Updating existing configs to `npx ccsp@latest` keeps future upgrades smooth.
+> 💡 **Compatibility Note**: The legacy command `npx claude-code-statusline-pro@latest` still works and shows a migration hint. Updating existing configs to `npx ccsp@latest` keeps future upgrades smooth.
 
 Save the file and restart Claude Code to see the professional status bar!
 
@@ -551,7 +551,7 @@ The multiline engine turns the status bar into a grid of independently refreshin
 - **Widget types**: Built-in `static` (text) and `api` (HTTP request) widgets with template rendering and environment variable substitution.
 - **Auto detection**: `detection` blocks read environment variables and support `equals` / `contains` / `pattern`, with optional `force` overrides.
 - **Result filters**: `filter` combines JSONPath with `equals` / `contains` / `pattern` so widgets refresh only when keywords match—perfect for last-request panels.
-- **Starter templates**: Copy `configs/components/usage.template.toml` or `rust/configs/components/usage.template.toml` to `~/.claude/statusline-pro/components/usage.toml` and customize.
+- **Starter templates**: Copy `configs/components/usage.template.toml` to `~/.claude/statusline-pro/components/usage.toml` and customize.
 
 #### Quick Enable
 
@@ -833,7 +833,7 @@ npx ccsp@latest --force-emoji
 
 ```bash
 # Check terminal color support, can disable colors
-npx ccsp@latest --no-color
+npx ccsp@latest --no-colors
 ```
 
 #### **Q: Status bar not updating**
