@@ -558,6 +558,10 @@ pub struct TokensProgressBarCharsConfig {
     pub empty: String,
     #[serde(default = "default_backup_char")]
     pub backup: String,
+    #[serde(default = "default_left_bracket")]
+    pub left_bracket: String,
+    #[serde(default = "default_right_bracket")]
+    pub right_bracket: String,
 }
 
 impl Default for TokensProgressBarCharsConfig {
@@ -566,6 +570,8 @@ impl Default for TokensProgressBarCharsConfig {
             filled: default_filled_char(),
             empty: default_empty_char(),
             backup: default_backup_char(),
+            left_bracket: default_left_bracket(),
+            right_bracket: default_right_bracket(),
         }
     }
 }
@@ -1115,6 +1121,14 @@ fn default_empty_char() -> String {
 
 fn default_backup_char() -> String {
     "▓".to_string()
+}
+
+fn default_left_bracket() -> String {
+    "[".to_string()
+}
+
+fn default_right_bracket() -> String {
+    "]".to_string()
 }
 
 fn default_safe_color() -> String {
