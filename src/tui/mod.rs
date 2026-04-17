@@ -1,0 +1,101 @@
+//! TUI 配置编辑器(v1)
+//!
+//! 架构:
+//! - `sections`:静态字段元数据
+//! - `io`:`toml_edit::DocumentMut` 读写,保留注释
+//! - `preview`:用当前配置 + mock 数据生成预览行
+//! - `app`:状态机
+//! - `view`:ratatui 渲染
+//! - `event`:按键分发
+//!
+//! 进入方式:`ccsp config edit [--global | --file <path>] [--mock <scenario>]`
+
+#![allow(
+    clippy::too_many_lines,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::module_name_repetitions
+)]
+
+mod app;
+mod event;
+mod io;
+mod preview;
+mod sections;
+mod view;
+mod widgets;
+
+use std::io::IsTerminal;
+
+use anyhow::{bail, Result};
+use ratatui::crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+use ratatui::crossterm::execute;
+use ratatui::crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
+use ratatui::prelude::CrosstermBackend;
+use ratatui::Terminal;
+use toml_edit::DocumentMut;
+
+pub use app::{EditOptions, EditScope};
+
+use crate::tui::sections::{Field, FieldKind};
+
+/// 启动 TUI 编辑器。
+pub async fn run(options: EditOptions) -> Result<()> {
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        bail!("`config edit` 需要交互式终端(TTY),当前 stdin/stdout 不是 TTY。");
+    }
+
+    enable_raw_mode()?;
+    let mut stdout = std::io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let mut app = app::App::from_options(options).await?;
+    let loop_result = event::run_loop(&mut terminal, &mut app).await;
+
+    // 无论成功还是失败,都要恢复终端
+    let _ = disable_raw_mode();
+    let _ = execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    );
+    let _ = terminal.show_cursor();
+
+    loop_result
+}
+
+/// 把当前字段的值格式化成"显示文本"(用于列表右侧)。
+pub(crate) fn get_field_display(doc: &DocumentMut, field: &Field) -> String {
+    match field.kind {
+        FieldKind::Text | FieldKind::Enum(_) | FieldKind::Color => {
+            io::get_string(doc, field.path).map_or_else(|| "—".to_string(), |v| format!("\"{v}\""))
+        }
+        FieldKind::Bool => io::get_bool(doc, field.path).map_or_else(
+            || "—".to_string(),
+            |v| if v { "true" } else { "false" }.to_string(),
+        ),
+        FieldKind::Int { .. } => {
+            io::get_int(doc, field.path).map_or_else(|| "—".to_string(), |v| v.to_string())
+        }
+        FieldKind::Float { .. } => {
+            io::get_float(doc, field.path).map_or_else(|| "—".to_string(), |v| format!("{v:.2}"))
+        }
+    }
+}
+
+/// mock 场景的中文友好标签。
+pub(crate) fn get_mock_label(name: &str) -> String {
+    match name {
+        "dev" => "dev · 开发会话".to_string(),
+        "critical" => "critical · 高负载".to_string(),
+        "thinking" => "thinking · 思考中".to_string(),
+        "complete" => "complete · 已完成".to_string(),
+        "error" => "error · 错误态".to_string(),
+        other => other.to_string(),
+    }
+}
