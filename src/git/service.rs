@@ -110,7 +110,7 @@ impl GitService {
     /// Estimate number of tracked entries (index size) in the repository.
     #[must_use]
     pub fn estimate_workdir_entries(&self) -> usize {
-        self.repo.index().map(|index| index.len()).unwrap_or(0)
+        self.repo.index().map_or(0, |index| index.len())
     }
 
     fn branch_info(&self) -> Result<GitBranchInfo> {
