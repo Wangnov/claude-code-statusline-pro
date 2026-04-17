@@ -305,7 +305,7 @@ mod tests {
     #[serial]
     async fn test_model_appends_effort_symbol_from_env() -> Result<()> {
         let original_effort = env::var_os("CLAUDE_CODE_EFFORT_LEVEL");
-        env::set_var("CLAUDE_CODE_EFFORT_LEVEL", "high");
+        env::set_var("CLAUDE_CODE_EFFORT_LEVEL", "xhigh");
 
         let input = build_input(|input| {
             input.model = Some(ModelInfo {
@@ -327,7 +327,7 @@ mod tests {
 
         let output = component.render(&ctx).await;
         assert!(output.visible);
-        assert_eq!(output.text, "O4.1 ●");
+        assert_eq!(output.text, "O4.1 ◉");
 
         restore_env("CLAUDE_CODE_EFFORT_LEVEL", original_effort);
         Ok(())
@@ -348,7 +348,7 @@ mod tests {
         if let Some(parent) = settings_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(settings_path, r#"{"effortLevel":"medium"}"#)?;
+        fs::write(settings_path, r#"{"effortLevel":"max"}"#)?;
 
         let input = build_input(|input| {
             input.model = Some(ModelInfo {
@@ -376,7 +376,7 @@ mod tests {
         let output = component.render(&ctx).await;
 
         assert!(output.visible);
-        assert_eq!(output.text, "S4.5 ◐");
+        assert_eq!(output.text, "S4.5 ◈");
 
         restore_env("HOME", original_home);
         restore_env("CLAUDE_CODE_EFFORT_LEVEL", original_effort);

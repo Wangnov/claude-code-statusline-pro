@@ -21,6 +21,7 @@ pub enum EffortLevel {
     Low,
     Medium,
     High,
+    XHigh,
     Max,
 }
 
@@ -31,6 +32,7 @@ impl EffortLevel {
             "low" => Some(Self::Low),
             "medium" => Some(Self::Medium),
             "high" => Some(Self::High),
+            "xhigh" => Some(Self::XHigh),
             "max" => Some(Self::Max),
             _ => None,
         }
@@ -42,7 +44,8 @@ impl EffortLevel {
             Self::Low => "○",
             Self::Medium => "◐",
             Self::High => "●",
-            Self::Max => "◉",
+            Self::XHigh => "◉",
+            Self::Max => "◈",
         }
     }
 }
@@ -115,7 +118,8 @@ mod tests {
         assert_eq!(EffortLevel::Low.symbol(), "○");
         assert_eq!(EffortLevel::Medium.symbol(), "◐");
         assert_eq!(EffortLevel::High.symbol(), "●");
-        assert_eq!(EffortLevel::Max.symbol(), "◉");
+        assert_eq!(EffortLevel::XHigh.symbol(), "◉");
+        assert_eq!(EffortLevel::Max.symbol(), "◈");
     }
 
     #[test]
@@ -127,7 +131,7 @@ mod tests {
         let original_effort = env::var_os(ENV_KEY);
 
         env::set_var("HOME", home.path());
-        env::set_var(ENV_KEY, "max");
+        env::set_var(ENV_KEY, "xhigh");
 
         write_settings(
             home.path().join(".claude/settings.json"),
@@ -139,7 +143,7 @@ mod tests {
         )?;
 
         let input = input_with_project(project.path().to_string_lossy().as_ref());
-        assert_eq!(resolve_effort_level(&input), Some(EffortLevel::Max));
+        assert_eq!(resolve_effort_level(&input), Some(EffortLevel::XHigh));
 
         restore_env("HOME", original_home);
         restore_env(ENV_KEY, original_effort);
@@ -172,6 +176,29 @@ mod tests {
 
         let input = input_with_project(project.path().to_string_lossy().as_ref());
         assert_eq!(resolve_effort_level(&input), Some(EffortLevel::High));
+
+        restore_env("HOME", original_home);
+        restore_env(ENV_KEY, original_effort);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_settings_support_max_level() -> Result<()> {
+        let home = tempdir()?;
+        let original_home = env::var_os("HOME");
+        let original_effort = env::var_os(ENV_KEY);
+
+        env::set_var("HOME", home.path());
+        env::remove_var(ENV_KEY);
+
+        write_settings(
+            home.path().join(".claude/settings.json"),
+            r#"{"effortLevel":"max"}"#,
+        )?;
+
+        let input = input_with_project(home.path().to_string_lossy().as_ref());
+        assert_eq!(resolve_effort_level(&input), Some(EffortLevel::Max));
 
         restore_env("HOME", original_home);
         restore_env(ENV_KEY, original_effort);
