@@ -55,9 +55,35 @@ async fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
         return Ok(handle_search(app, key));
     }
 
+    if app.widget_new.is_some() {
+        return Ok(handle_widget_new(app, key));
+    }
+
     match &app.mode {
         Mode::Normal => Ok(handle_normal(app, key)),
         Mode::EditText(_) => Ok(handle_edit_text(app, key)),
+    }
+}
+
+fn handle_widget_new(app: &mut App, key: KeyEvent) -> bool {
+    match key.code {
+        KeyCode::Esc => {
+            app.widget_close_new_dialog();
+            false
+        }
+        KeyCode::Enter => {
+            app.widget_new_commit();
+            true
+        }
+        KeyCode::Backspace => {
+            app.widget_new_backspace();
+            false
+        }
+        KeyCode::Char(c) => {
+            app.widget_new_insert_char(c);
+            false
+        }
+        _ => false,
     }
 }
 
@@ -92,6 +118,21 @@ fn handle_search(app: &mut App, key: KeyEvent) -> bool {
 }
 
 async fn handle_ctrl(app: &mut App, key: KeyEvent) -> Result<bool> {
+    // 文本编辑模式里 Ctrl+A/E 走行首/行尾,不被全局保存等吃掉
+    if matches!(app.mode, Mode::EditText(_)) {
+        match key.code {
+            KeyCode::Char('a') => {
+                app.edit_home();
+                return Ok(false);
+            }
+            KeyCode::Char('e') => {
+                app.edit_end();
+                return Ok(false);
+            }
+            _ => {}
+        }
+    }
+
     match key.code {
         KeyCode::Char('q') => {
             app.request_quit();
@@ -181,6 +222,10 @@ fn handle_widgets_tab(app: &mut App, key: KeyEvent) -> bool {
             app.widget_delete();
             true
         }
+        KeyCode::Char('n') => {
+            app.widget_open_new_dialog();
+            false
+        }
         KeyCode::Char('?') => {
             app.toggle_help();
             false
@@ -198,6 +243,7 @@ fn handle_widgets_tab(app: &mut App, key: KeyEvent) -> bool {
 }
 
 fn handle_edit_text(app: &mut App, key: KeyEvent) -> bool {
+    // Ctrl 组合键已经在外层 handle_ctrl 里处理了;这里只处理普通键。
     match key.code {
         KeyCode::Esc => {
             app.cancel_edit();
@@ -211,8 +257,28 @@ fn handle_edit_text(app: &mut App, key: KeyEvent) -> bool {
             app.edit_backspace();
             false
         }
+        KeyCode::Delete => {
+            app.edit_delete();
+            false
+        }
+        KeyCode::Left => {
+            app.edit_move_left();
+            false
+        }
+        KeyCode::Right => {
+            app.edit_move_right();
+            false
+        }
+        KeyCode::Home => {
+            app.edit_home();
+            false
+        }
+        KeyCode::End => {
+            app.edit_end();
+            false
+        }
         KeyCode::Char(c) => {
-            app.edit_push_char(c);
+            app.edit_insert_char(c);
             false
         }
         _ => false,

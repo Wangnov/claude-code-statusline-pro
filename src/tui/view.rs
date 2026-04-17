@@ -8,7 +8,7 @@ use ratatui::Frame;
 
 use claude_code_statusline_pro::config::ConfigSourceType;
 
-use crate::tui::app::{App, EditScope, Focus, MessageKind, Mode};
+use crate::tui::app::{App, EditBuffer, EditScope, Focus, MessageKind, Mode};
 use crate::tui::sections::{FieldKind, SECTIONS};
 use crate::tui::{get_field_display, get_mock_label};
 
@@ -32,11 +32,14 @@ pub fn render(frame: &mut Frame, app: &App) {
     render_preview(frame, chunks[3], app);
     render_footer(frame, chunks[4], app);
 
-    if let Mode::EditText(buf) = &app.mode {
-        render_edit_overlay(frame, size, app, buf);
+    if let Mode::EditText(buffer) = &app.mode {
+        render_edit_overlay(frame, size, app, buffer);
     }
     if app.search.is_some() {
         render_search_overlay(frame, size, app);
+    }
+    if app.widget_new.is_some() {
+        render_widget_new_overlay(frame, size, app);
     }
     if app.merge_report_visible {
         render_merge_report(frame, size, app);
@@ -182,6 +185,7 @@ fn render_widget_help(frame: &mut Frame, area: Rect, app: &App) {
         )),
         Line::from(""),
         Line::from("  ↑↓      上下选择"),
+        Line::from("  n       新增(输入名字)"),
         Line::from("  Space   切 enabled"),
         Line::from("  t       切 type (static ↔ api)"),
         Line::from("  d/Del   删除(无二次确认)"),
@@ -313,6 +317,43 @@ fn render_field_help(frame: &mut Frame, area: Rect, app: &App) {
             field.help,
             Style::default().fg(Color::LightYellow),
         )));
+
+        // Color 字段:渲染当前值 + 色板预览
+        if matches!(field.kind, FieldKind::Color) {
+            lines.push(Line::from(""));
+            let current = crate::tui::io::get_string(&app.document, field.path);
+            if let Some(value) = current.as_deref() {
+                let color = parse_color_name(value);
+                lines.push(Line::from(vec![
+                    Span::styled("当前: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("■■■", Style::default().fg(color)),
+                    Span::raw("  "),
+                    Span::styled(value.to_string(), Style::default().fg(Color::White)),
+                ]));
+            } else {
+                lines.push(Line::from(Span::styled(
+                    "当前: (未设置)",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+            lines.push(Line::from(Span::styled(
+                "色板(Space 循环):",
+                Style::default().fg(Color::DarkGray),
+            )));
+            // 渲染标准色板
+            for row_slice in crate::tui::sections::COLOR_PALETTE.chunks(6) {
+                let mut spans = vec![Span::raw("  ")];
+                for name in row_slice {
+                    let color = parse_color_name(name);
+                    spans.push(Span::styled("■ ", Style::default().fg(color)));
+                    spans.push(Span::styled(
+                        format!("{name:<15}"),
+                        Style::default().fg(Color::Gray),
+                    ));
+                }
+                lines.push(Line::from(spans));
+            }
+        }
     }
 
     // 多行 Tab 下追加 widgets 概览
@@ -416,7 +457,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(Paragraph::new(vec![help_line, status_line]), area);
 }
 
-fn render_edit_overlay(frame: &mut Frame, area: Rect, app: &App, buf: &str) {
+fn render_edit_overlay(frame: &mut Frame, area: Rect, app: &App, buffer: &EditBuffer) {
     let rect = centered_rect(60, 5, area);
     frame.render_widget(Clear, rect);
 
@@ -424,13 +465,27 @@ fn render_edit_overlay(frame: &mut Frame, area: Rect, app: &App, buf: &str) {
         .current_field()
         .map_or_else(|| "编辑".to_string(), |f| format!("编辑: {}", f.path));
 
+    // 三段渲染:光标前 + 光标块(高亮光标下字符或末尾方块) + 光标后
+    let before = buffer.before_cursor().to_string();
+    let after_str = buffer.after_cursor();
+    let (cursor_char, rest_after) = match after_str.chars().next() {
+        Some(ch) => (ch.to_string(), &after_str[ch.len_utf8()..]),
+        None => ("▌".to_string(), ""),
+    };
+
+    let cursor_style = Style::default()
+        .fg(Color::Black)
+        .bg(Color::Yellow)
+        .add_modifier(Modifier::BOLD);
+
     let text = Line::from(vec![
         Span::styled("▶ ", Style::default().fg(Color::Yellow)),
-        Span::raw(buf),
-        Span::styled("▌", Style::default().fg(Color::Yellow)),
+        Span::raw(before),
+        Span::styled(cursor_char, cursor_style),
+        Span::raw(rest_after.to_string()),
     ]);
     let hint = Line::from(Span::styled(
-        "Enter 提交   Esc 取消",
+        "Enter 提交   Esc 取消   ←→/Home/End/Ctrl+A/E 移光标   Delete 删后   Backspace 删前",
         Style::default().fg(Color::DarkGray),
     ));
 
@@ -444,7 +499,7 @@ fn render_edit_overlay(frame: &mut Frame, area: Rect, app: &App, buf: &str) {
 }
 
 fn render_help(frame: &mut Frame, area: Rect) {
-    let rect = centered_rect(70, 18, area);
+    let rect = centered_rect(72, 22, area);
     frame.render_widget(Clear, rect);
 
     let lines = vec![
@@ -460,15 +515,20 @@ fn render_help(frame: &mut Frame, area: Rect) {
         Line::from("  ↑ ↓                      字段上下移动"),
         Line::from("  Enter                     编辑当前字段(Color/Int/Float 进文本)"),
         Line::from("  Space                     Bool 翻转 / Enum / Color 循环下一个"),
-        Line::from("  Esc                       取消当前编辑 / 关闭浮层"),
         Line::from("  /                         跨分段搜索字段"),
         Line::from("  F2                        查看配置合并报告"),
         Line::from("  Ctrl+T                    切换 scope(user ↔ project)"),
-        Line::from("  Ctrl+S                    保存到文件"),
-        Line::from("  Ctrl+R                    撤销所有未保存修改"),
+        Line::from("  Ctrl+S / Ctrl+R           保存 / 撤销"),
         Line::from("  Ctrl+M                    切换 mock 场景"),
-        Line::from("  Ctrl+Q                    退出"),
-        Line::from("  ?                         显示/隐藏本帮助"),
+        Line::from("  Ctrl+Q / ? / Esc          退出 / 帮助 / 关闭浮层"),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  — 文本编辑模式下 —",
+            Style::default().fg(Color::DarkGray),
+        )),
+        Line::from("  ← → / Ctrl+A E / Home End  光标移动"),
+        Line::from("  Backspace / Delete         删前 / 删后"),
+        Line::from("  Enter / Esc                提交 / 放弃"),
         Line::from(""),
         Line::from(Span::styled(
             "  注意:保存前会做一次 TOML → Config 校验,不合法不会写盘。",
@@ -479,6 +539,63 @@ fn render_help(frame: &mut Frame, area: Rect) {
         Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Cyan)),
+    );
+    frame.render_widget(para, rect);
+}
+
+fn render_widget_new_overlay(frame: &mut Frame, area: Rect, app: &App) {
+    let Some(dialog) = app.widget_new.as_ref() else {
+        return;
+    };
+
+    let rect = centered_rect(60, 9, area);
+    frame.render_widget(Clear, rect);
+
+    let before = dialog.name.before_cursor().to_string();
+    let after = dialog.name.after_cursor();
+    let (cursor_char, rest) = match after.chars().next() {
+        Some(ch) => (ch.to_string(), &after[ch.len_utf8()..]),
+        None => ("▌".to_string(), ""),
+    };
+
+    let lines = vec![
+        Line::from(Span::styled(
+            format!("目标文件: {}", dialog.target_path.display()),
+            Style::default().fg(Color::DarkGray),
+        )),
+        Line::from(Span::styled(
+            format!("归属组件: {}", dialog.target_component),
+            Style::default().fg(Color::Cyan),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("新 widget 名字: ", Style::default().fg(Color::White)),
+            Span::raw(before),
+            Span::styled(
+                cursor_char,
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(rest.to_string()),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "默认模板: type=static, row=1, col=0, content=\"new widget\"",
+            Style::default().fg(Color::DarkGray),
+        )),
+        Line::from(Span::styled(
+            "Enter 创建   Esc 取消   只允许字母/数字/_/-",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ];
+
+    let para = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" 新增 widget ")
+            .border_style(Style::default().fg(Color::Yellow)),
     );
     frame.render_widget(para, rect);
 }
@@ -664,6 +781,42 @@ fn format_key_list(keys: &[String]) -> String {
     }
 }
 
+/// 把配置里的颜色名 / hex 字符串映射到 ratatui `Color`。不识别时回退到 `Reset`。
+fn parse_color_name(raw: &str) -> Color {
+    let s = raw.trim().to_ascii_lowercase();
+    match s.as_str() {
+        "black" => Color::Black,
+        "red" => Color::Red,
+        "green" => Color::Green,
+        "yellow" => Color::Yellow,
+        "blue" => Color::Blue,
+        "magenta" => Color::Magenta,
+        "cyan" => Color::Cyan,
+        "white" => Color::White,
+        "gray" | "grey" => Color::DarkGray,
+        "bright_black" => Color::DarkGray,
+        "bright_red" => Color::LightRed,
+        "bright_green" => Color::LightGreen,
+        "bright_yellow" => Color::LightYellow,
+        "bright_blue" => Color::LightBlue,
+        "bright_magenta" => Color::LightMagenta,
+        "bright_cyan" => Color::LightCyan,
+        "bright_white" => Color::White,
+        _ => parse_hex_color(&s).unwrap_or(Color::Reset),
+    }
+}
+
+fn parse_hex_color(s: &str) -> Option<Color> {
+    let hex = s.strip_prefix('#')?;
+    if hex.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    Some(Color::Rgb(r, g, b))
+}
+
 fn kind_label(kind: &FieldKind) -> String {
     match kind {
         FieldKind::Text => "文本".to_string(),
@@ -693,4 +846,31 @@ fn centered_rect(percent_x: u16, height: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(vertical[1])[1]
+}
+
+#[cfg(test)]
+mod color_tests {
+    use super::{parse_color_name, parse_hex_color};
+    use ratatui::style::Color;
+
+    #[test]
+    fn test_named_colors() {
+        assert_eq!(parse_color_name("red"), Color::Red);
+        assert_eq!(parse_color_name("WHITE"), Color::White);
+        assert_eq!(parse_color_name("bright_blue"), Color::LightBlue);
+        assert_eq!(parse_color_name("gray"), Color::DarkGray);
+    }
+
+    #[test]
+    fn test_hex_color() {
+        assert_eq!(parse_color_name("#808080"), Color::Rgb(0x80, 0x80, 0x80));
+        assert_eq!(parse_hex_color("#ff0000"), Some(Color::Rgb(255, 0, 0)));
+        assert_eq!(parse_hex_color("#abc"), None); // 3-digit hex not supported
+        assert_eq!(parse_hex_color("abc"), None); // no '#'
+    }
+
+    #[test]
+    fn test_unknown_color_falls_back() {
+        assert_eq!(parse_color_name("not-a-color"), Color::Reset);
+    }
 }

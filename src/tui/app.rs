@@ -43,7 +43,92 @@ pub enum Focus {
 #[derive(Debug, Clone)]
 pub enum Mode {
     Normal,
-    EditText(String),
+    EditText(EditBuffer),
+}
+
+/// 带光标的文本缓冲。光标位置是 `text` 的字节偏移,始终对齐到 char 边界。
+#[derive(Debug, Clone, Default)]
+pub struct EditBuffer {
+    pub text: String,
+    pub cursor: usize,
+}
+
+impl EditBuffer {
+    pub fn new(initial: String) -> Self {
+        let cursor = initial.len();
+        Self {
+            text: initial,
+            cursor,
+        }
+    }
+
+    pub fn insert_char(&mut self, c: char) {
+        self.text.insert(self.cursor, c);
+        self.cursor += c.len_utf8();
+    }
+
+    pub fn backspace(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+        let prev = self.prev_char_boundary();
+        self.text.replace_range(prev..self.cursor, "");
+        self.cursor = prev;
+    }
+
+    pub fn delete_forward(&mut self) {
+        if self.cursor >= self.text.len() {
+            return;
+        }
+        let next = self.next_char_boundary();
+        self.text.replace_range(self.cursor..next, "");
+    }
+
+    pub fn move_left(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+        self.cursor = self.prev_char_boundary();
+    }
+
+    pub fn move_right(&mut self) {
+        if self.cursor >= self.text.len() {
+            return;
+        }
+        self.cursor = self.next_char_boundary();
+    }
+
+    pub fn home(&mut self) {
+        self.cursor = 0;
+    }
+
+    pub fn end(&mut self) {
+        self.cursor = self.text.len();
+    }
+
+    /// 光标前的 `text[..cursor]` 部分(用于渲染)。
+    pub fn before_cursor(&self) -> &str {
+        &self.text[..self.cursor]
+    }
+
+    /// 光标处到末尾的 `text[cursor..]` 部分(用于渲染)。
+    pub fn after_cursor(&self) -> &str {
+        &self.text[self.cursor..]
+    }
+
+    fn prev_char_boundary(&self) -> usize {
+        self.text[..self.cursor]
+            .char_indices()
+            .last()
+            .map_or(0, |(i, _)| i)
+    }
+
+    fn next_char_boundary(&self) -> usize {
+        self.text[self.cursor..]
+            .char_indices()
+            .nth(1)
+            .map_or(self.text.len(), |(offset, _)| self.cursor + offset)
+    }
 }
 
 /// 底部 toast 的性质。
@@ -52,6 +137,14 @@ pub enum MessageKind {
     Info,
     Success,
     Error,
+}
+
+/// 按 `n` 在 Widgets Tab 里新增 widget 时的对话框状态。
+#[derive(Debug, Clone)]
+pub struct NewWidgetDialog {
+    pub target_path: PathBuf,
+    pub target_component: String,
+    pub name: EditBuffer,
 }
 
 /// 跨 section 搜索字段时的中间状态。
@@ -111,6 +204,7 @@ pub struct App {
     pub merge_report: Option<MergeReport>,
     pub merge_report_visible: bool,
     pub search: Option<SearchState>,
+    pub widget_new: Option<NewWidgetDialog>,
 }
 
 impl App {
@@ -148,6 +242,7 @@ impl App {
             merge_report,
             merge_report_visible: false,
             search: None,
+            widget_new: None,
         };
 
         app.refresh_preview().await;
@@ -248,6 +343,72 @@ impl App {
                 self.success(format!("已删除 widget: {name}"));
             }
             Err(err) => self.error(format!("删除失败: {err}")),
+        }
+    }
+
+    /// 打开新增 widget 对话框。目标文件默认是光标所在文件;
+    /// 如果没有任何文件则拒绝(需要用户先准备好 components/*.toml)。
+    pub fn widget_open_new_dialog(&mut self) {
+        let Some(file) = self
+            .widget_files
+            .get(
+                self.flat_widgets()
+                    .get(self.widget_cursor)
+                    .map_or(0, |&(fi, _)| fi),
+            )
+            .or_else(|| self.widget_files.first())
+        else {
+            self.error(
+                "尚未检测到任何 components/*.toml;请先 `ccsp config init -w` 准备模板。"
+                    .to_string(),
+            );
+            return;
+        };
+        self.widget_new = Some(NewWidgetDialog {
+            target_path: file.path.clone(),
+            target_component: file.component.clone(),
+            name: EditBuffer::default(),
+        });
+    }
+
+    pub fn widget_close_new_dialog(&mut self) {
+        self.widget_new = None;
+    }
+
+    pub fn widget_new_insert_char(&mut self, c: char) {
+        if let Some(dialog) = self.widget_new.as_mut() {
+            dialog.name.insert_char(c);
+        }
+    }
+
+    pub fn widget_new_backspace(&mut self) {
+        if let Some(dialog) = self.widget_new.as_mut() {
+            dialog.name.backspace();
+        }
+    }
+
+    pub fn widget_new_commit(&mut self) {
+        let Some(dialog) = self.widget_new.take() else {
+            return;
+        };
+        let name = dialog.name.text.trim().to_string();
+        if name.is_empty() {
+            self.error("widget 名字不能为空".to_string());
+            return;
+        }
+        match widgets::create_widget(&dialog.target_path, &name) {
+            Ok(()) => {
+                self.rescan_widgets();
+                // 把光标移到新创建的 widget
+                if let Some(idx) = self.flat_widgets().iter().position(|&(fi, ei)| {
+                    self.widget_files[fi].path == dialog.target_path
+                        && self.widget_files[fi].entries[ei].name == name
+                }) {
+                    self.widget_cursor = idx;
+                }
+                self.success(format!("已创建 widget {}:{name}", dialog.target_component));
+            }
+            Err(err) => self.error(format!("创建失败: {err}")),
         }
     }
 
@@ -379,20 +540,20 @@ impl App {
         };
         match field.kind {
             FieldKind::Text | FieldKind::Color => {
-                let buf = io::get_string(&self.document, field.path).unwrap_or_default();
-                self.mode = Mode::EditText(buf);
+                let initial = io::get_string(&self.document, field.path).unwrap_or_default();
+                self.mode = Mode::EditText(EditBuffer::new(initial));
             }
             FieldKind::Int { .. } => {
-                let buf = io::get_int(&self.document, field.path)
+                let initial = io::get_int(&self.document, field.path)
                     .map(|v| v.to_string())
                     .unwrap_or_default();
-                self.mode = Mode::EditText(buf);
+                self.mode = Mode::EditText(EditBuffer::new(initial));
             }
             FieldKind::Float { .. } => {
-                let buf = io::get_float(&self.document, field.path)
+                let initial = io::get_float(&self.document, field.path)
                     .map(|v| format!("{v}"))
                     .unwrap_or_default();
-                self.mode = Mode::EditText(buf);
+                self.mode = Mode::EditText(EditBuffer::new(initial));
             }
             FieldKind::Bool => self.space_action(),
             FieldKind::Enum(options) => self.cycle_enum(field.path, options),
@@ -441,15 +602,45 @@ impl App {
         }
     }
 
-    pub fn edit_push_char(&mut self, c: char) {
+    pub fn edit_insert_char(&mut self, c: char) {
         if let Mode::EditText(buf) = &mut self.mode {
-            buf.push(c);
+            buf.insert_char(c);
         }
     }
 
     pub fn edit_backspace(&mut self) {
         if let Mode::EditText(buf) = &mut self.mode {
-            buf.pop();
+            buf.backspace();
+        }
+    }
+
+    pub fn edit_delete(&mut self) {
+        if let Mode::EditText(buf) = &mut self.mode {
+            buf.delete_forward();
+        }
+    }
+
+    pub fn edit_move_left(&mut self) {
+        if let Mode::EditText(buf) = &mut self.mode {
+            buf.move_left();
+        }
+    }
+
+    pub fn edit_move_right(&mut self) {
+        if let Mode::EditText(buf) = &mut self.mode {
+            buf.move_right();
+        }
+    }
+
+    pub fn edit_home(&mut self) {
+        if let Mode::EditText(buf) = &mut self.mode {
+            buf.home();
+        }
+    }
+
+    pub fn edit_end(&mut self) {
+        if let Mode::EditText(buf) = &mut self.mode {
+            buf.end();
         }
     }
 
@@ -458,33 +649,34 @@ impl App {
     }
 
     pub fn commit_edit(&mut self) {
-        let buf = match std::mem::replace(&mut self.mode, Mode::Normal) {
+        let buffer = match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::EditText(buf) => buf,
             Mode::Normal => return,
         };
+        let text = buffer.text;
         let Some(field) = self.current_field() else {
             return;
         };
 
         let result = match field.kind {
-            FieldKind::Text => io::set_string(&mut self.document, field.path, &buf),
+            FieldKind::Text => io::set_string(&mut self.document, field.path, &text),
             FieldKind::Color => {
-                let trimmed = buf.trim();
+                let trimmed = text.trim();
                 if trimmed.is_empty() {
                     Err(anyhow!("颜色不能为空"))
                 } else {
                     io::set_string(&mut self.document, field.path, trimmed)
                 }
             }
-            FieldKind::Int { min, max } => match buf.trim().parse::<i64>() {
+            FieldKind::Int { min, max } => match text.trim().parse::<i64>() {
                 Ok(n) if n >= min && n <= max => io::set_int(&mut self.document, field.path, n),
                 Ok(_) => Err(anyhow!("值不在范围 [{min}, {max}]")),
-                Err(_) => Err(anyhow!("不是有效整数: {buf}")),
+                Err(_) => Err(anyhow!("不是有效整数: {text}")),
             },
-            FieldKind::Float { min, max } => match buf.trim().parse::<f64>() {
+            FieldKind::Float { min, max } => match text.trim().parse::<f64>() {
                 Ok(n) if n >= min && n <= max => io::set_float(&mut self.document, field.path, n),
                 Ok(_) => Err(anyhow!("值不在范围 [{min}, {max}]")),
-                Err(_) => Err(anyhow!("不是有效浮点数: {buf}")),
+                Err(_) => Err(anyhow!("不是有效浮点数: {text}")),
             },
             FieldKind::Bool | FieldKind::Enum(_) => Ok(()),
         };
@@ -628,4 +820,82 @@ async fn load_merge_report() -> Option<MergeReport> {
     let mut loader = ConfigLoader::new();
     loader.load(None).await.ok()?;
     loader.merge_report().cloned()
+}
+
+#[cfg(test)]
+mod edit_buffer_tests {
+    use super::EditBuffer;
+
+    #[test]
+    fn test_insert_at_end() {
+        let mut buf = EditBuffer::new("hi".to_string());
+        assert_eq!(buf.cursor, 2);
+        buf.insert_char('!');
+        assert_eq!(buf.text, "hi!");
+        assert_eq!(buf.cursor, 3);
+    }
+
+    #[test]
+    fn test_insert_in_middle() {
+        let mut buf = EditBuffer::new("abc".to_string());
+        buf.move_left(); // cursor at index 2 (between 'b' and 'c')
+        buf.insert_char('X');
+        assert_eq!(buf.text, "abXc");
+        assert_eq!(buf.cursor, 3);
+    }
+
+    #[test]
+    fn test_backspace() {
+        let mut buf = EditBuffer::new("abc".to_string());
+        buf.backspace();
+        assert_eq!(buf.text, "ab");
+        assert_eq!(buf.cursor, 2);
+    }
+
+    #[test]
+    fn test_backspace_at_start_noop() {
+        let mut buf = EditBuffer::new("a".to_string());
+        buf.home();
+        buf.backspace();
+        assert_eq!(buf.text, "a");
+        assert_eq!(buf.cursor, 0);
+    }
+
+    #[test]
+    fn test_delete_forward() {
+        let mut buf = EditBuffer::new("abc".to_string());
+        buf.home();
+        buf.delete_forward();
+        assert_eq!(buf.text, "bc");
+        assert_eq!(buf.cursor, 0);
+    }
+
+    #[test]
+    fn test_home_end() {
+        let mut buf = EditBuffer::new("abc".to_string());
+        buf.home();
+        assert_eq!(buf.cursor, 0);
+        buf.end();
+        assert_eq!(buf.cursor, 3);
+    }
+
+    #[test]
+    fn test_utf8_handling() {
+        // "α" is 2 bytes in UTF-8
+        let mut buf = EditBuffer::new("αβ".to_string());
+        assert_eq!(buf.cursor, 4);
+        buf.move_left();
+        assert_eq!(buf.cursor, 2);
+        buf.backspace();
+        assert_eq!(buf.text, "β");
+        assert_eq!(buf.cursor, 0);
+    }
+
+    #[test]
+    fn test_chinese_insert() {
+        let mut buf = EditBuffer::new("中英".to_string());
+        buf.move_left();
+        buf.insert_char('日');
+        assert_eq!(buf.text, "中日英");
+    }
 }

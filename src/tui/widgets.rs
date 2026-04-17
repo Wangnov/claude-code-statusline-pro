@@ -133,6 +133,45 @@ pub fn cycle_type(path: &Path, widget_name: &str) -> Result<String> {
     Ok(next.to_string())
 }
 
+/// 创建一个默认模板的静态 widget。
+/// 模板:enabled=true, type=static, row=1, col=0, content="new widget"。
+pub fn create_widget(path: &Path, widget_name: &str) -> Result<()> {
+    if widget_name.is_empty() {
+        bail!("widget 名字不能为空");
+    }
+    if !widget_name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    {
+        bail!("widget 名字只能是字母/数字/下划线/短横");
+    }
+
+    let mut doc = load_document(path).unwrap_or_default();
+
+    let widgets = doc
+        .entry("widgets")
+        .or_insert(Item::Table(toml_edit::Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| anyhow!("widgets 不是表"))?;
+
+    if widgets.contains_key(widget_name) {
+        bail!("widget '{widget_name}' 已存在,不能重复创建");
+    }
+
+    let mut table = toml_edit::Table::new();
+    table.insert("enabled", toml_value(true));
+    table.insert("type", toml_value("static"));
+    table.insert("row", toml_value(1_i64));
+    table.insert("col", toml_value(0_i64));
+    table.insert("nerd_icon", toml_value(""));
+    table.insert("emoji_icon", toml_value("📌"));
+    table.insert("text_icon", toml_value("[?]"));
+    table.insert("content", toml_value("new widget"));
+    widgets.insert(widget_name, Item::Table(table));
+
+    save_document(path, &doc)
+}
+
 /// 删除整个 widget 表。
 pub fn delete_widget(path: &Path, widget_name: &str) -> Result<()> {
     let mut doc = load_document(path)?;
@@ -275,6 +314,25 @@ text_icon = "[y]"
         assert_eq!(new_type, "api");
         let new_type = cycle_type(&path, "foo")?;
         assert_eq!(new_type, "static");
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_widget() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = write_sample(temp.path())?;
+        create_widget(&path, "freshy")?;
+        let files = scan_files(Some(temp.path()));
+        let usage = files.iter().find(|f| f.component == "usage");
+        let usage = match usage {
+            Some(u) => u,
+            None => return Ok(()),
+        };
+        assert!(usage.entries.iter().any(|e| e.name == "freshy"));
+        // 重复创建应报错
+        assert!(create_widget(&path, "freshy").is_err());
+        // 非法名字应报错
+        assert!(create_widget(&path, "bad name").is_err());
         Ok(())
     }
 
