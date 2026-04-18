@@ -1,7 +1,6 @@
 [workspace]
 members = ["cargo:."]
 
-# Config for 'dist'
 [dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
 cargo-dist-version = "0.30.3"
@@ -27,3 +26,7 @@ publish-jobs = ["homebrew"]
 # Windows ARM64 使用 GitHub 官方 native runner,避免交叉编译问题
 [dist.github-custom-runners]
 aarch64-pc-windows-msvc = "windows-11-arm"
+
+[dist.github-action-commits]
+"actions/checkout" = "de0fac2e4500dabe0009e67214ff5f5447ce83dd"
+"actions/upload-artifact" = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
