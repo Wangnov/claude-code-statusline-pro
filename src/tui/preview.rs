@@ -128,6 +128,34 @@ fn walk_json_bool(root: &serde_json::Value, dotted: &str) -> Option<bool> {
     current.as_bool()
 }
 
+/// 和 `effective_bool` 同一套语义,但返回 `String`。`cycle_enum`(Enum / Color
+/// 快捷切换)必须走这条路径:以前只读 `self.document` 就忽略了用户/项目层
+/// 已经设好的值,用户第一次按空格时,"下一个"选项是相对于 option[0](而不是
+/// 相对于当前生效值)计算的——举例:用户层 `theme = "powerline"`,本地 buffer
+/// 完全没提 theme,按一次空格应该切到 "capsule",但旧实现读到 "" 找不到
+/// 匹配就回 index 0,把 theme 设回 "classic"(即 options[0]),等于倒退一步。
+pub fn effective_string(
+    document: &DocumentMut,
+    inherited: &serde_json::Value,
+    dotted: &str,
+) -> Option<String> {
+    let buffer_overlay: serde_json::Value = toml_edit::de::from_str(&document.to_string()).ok()?;
+    if !buffer_overlay.is_object() {
+        return walk_json_string(inherited, dotted);
+    }
+    let mut merged = inherited.clone();
+    merge_json(&mut merged, buffer_overlay);
+    walk_json_string(&merged, dotted)
+}
+
+fn walk_json_string(root: &serde_json::Value, dotted: &str) -> Option<String> {
+    let mut current = root;
+    for seg in dotted.split('.') {
+        current = current.get(seg)?;
+    }
+    current.as_str().map(std::string::ToString::to_string)
+}
+
 /// 与 `ConfigLoader::merge_value` 语义保持一致:object 合并,其他直接覆盖。
 ///
 /// `pub(crate)` 是为了让 `tui::app` 在计算 inherited baseline 时能直接复用
@@ -357,6 +385,39 @@ enabled = "yes"
         inherited["components"]["project"]["enabled"] = serde_json::Value::Bool(false);
         let v = effective_bool(&doc, &inherited, "components.project.enabled");
         assert_eq!(v, Some(false));
+        Ok(())
+    }
+
+    /// 回归 Codex round 8 / P2:enum/color cycle 必须从 effective 值起跳。
+    /// 典型场景:用户层 `theme = "powerline"`,项目 buffer 没提 theme;
+    /// cycle_enum 需要从 effective string "powerline" 开始算"下一个"。
+    #[test]
+    fn test_effective_string_reads_inherited_when_buffer_silent() -> Result<()> {
+        let doc: DocumentMut = "".parse()?;
+        let mut inherited = defaults_json();
+        inherited["theme"] = serde_json::Value::String("powerline".to_string());
+        let v = effective_string(&doc, &inherited, "theme");
+        assert_eq!(v.as_deref(), Some("powerline"));
+        Ok(())
+    }
+
+    /// buffer 显式写了 theme,必须盖过 inherited。
+    #[test]
+    fn test_effective_string_buffer_beats_inherited() -> Result<()> {
+        let doc: DocumentMut = "theme = \"capsule\"\n".parse()?;
+        let mut inherited = defaults_json();
+        inherited["theme"] = serde_json::Value::String("powerline".to_string());
+        let v = effective_string(&doc, &inherited, "theme");
+        assert_eq!(v.as_deref(), Some("capsule"));
+        Ok(())
+    }
+
+    /// 拿不到就返回 None,交给调用方决定怎么 fallback。
+    #[test]
+    fn test_effective_string_missing_key_returns_none() -> Result<()> {
+        let doc: DocumentMut = "".parse()?;
+        let v = effective_string(&doc, &defaults_json(), "totally.not.a.real.key");
+        assert_eq!(v, None);
         Ok(())
     }
 }

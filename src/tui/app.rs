@@ -611,9 +611,22 @@ impl App {
         if options.is_empty() {
             return;
         }
-        let current = io::get_string(&self.document, path).unwrap_or_default();
+        // 和 bool 切换同样的修复思路:当前值要从"生效值"开始算,而不是只看
+        // buffer 里有没有显式写过。举例:用户层 `theme = "powerline"`,项目
+        // buffer 没提 theme,以前 get_string(buffer).unwrap_or_default() 读到 "",
+        // 找不到匹配就回 index 0,"下一个"等于把 theme 强制写成 options[0]
+        // (即 "classic"),相当于倒退;现在从 powerline 起跳,下一个是 "capsule",
+        // 行为和 bool toggle 以及用户的心智模型一致。Color 也复用这条路径。
+        let current = preview::effective_string(&self.document, &self.inherited_json, path)
+            .unwrap_or_default();
         let idx = options.iter().position(|o| *o == current).unwrap_or(0);
-        let next = (idx + 1) % options.len();
+        // 匹配到时 +1,未匹配(包括 current 为空)时从 0 起步 —— 保留了旧行为
+        // 里"没设过就从第一个开始"的语义,同时不会再把 inherited 的值往回拽。
+        let next = if options.iter().any(|o| *o == current) {
+            (idx + 1) % options.len()
+        } else {
+            0
+        };
         match io::set_string(&mut self.document, path, options[next]) {
             Ok(()) => {
                 self.dirty = true;
