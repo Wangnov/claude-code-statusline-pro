@@ -159,6 +159,33 @@ async fn handle_ctrl(app: &mut App, key: KeyEvent) -> Result<bool> {
         }
     }
 
+    // widget_new 对话框进行中:dialog 持有 target_path 指向打开对话框时的
+    // scope。如果放行 Ctrl+T,switch_scope 会切目标文件但 target_path 不动,
+    // 用户下一下 Enter 就把新 widget 写进旧 layer 的文件,UI 却已经切到新
+    // scope —— 静默写错 layer。一并挡掉 Ctrl+S / Ctrl+R:它们会操作主
+    // document(保存/回滚),但此刻用户心智在 modal 上,背景里悄悄改持久化
+    // 状态一样糟糕。Ctrl+Q 允许(明确意图:放弃一切退出),Ctrl+M 允许
+    // (只改 mock_idx,不碰持久化状态)。
+    if app.widget_new.is_some() {
+        match key.code {
+            KeyCode::Char('t') => {
+                app.notify_error(
+                    "新建 widget 进行中,请先 Enter 提交或 Esc 取消,再 Ctrl+T 切 scope",
+                );
+                return Ok(false);
+            }
+            KeyCode::Char('s') => {
+                app.notify_error("新建 widget 进行中,请先 Enter 提交或 Esc 取消,再 Ctrl+S 保存");
+                return Ok(false);
+            }
+            KeyCode::Char('r') => {
+                app.notify_error("新建 widget 进行中,请先 Enter 提交或 Esc 取消,再 Ctrl+R 撤销");
+                return Ok(false);
+            }
+            _ => {}
+        }
+    }
+
     match key.code {
         KeyCode::Char('q') => {
             app.request_quit();
