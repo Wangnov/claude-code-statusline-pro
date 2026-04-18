@@ -152,6 +152,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         }
     }
 
@@ -190,6 +191,7 @@ mod tests {
             input: Arc::new(InputData::default()),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let output = component.render(&ctx).await;
@@ -215,6 +217,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let component = ProjectComponent::new(ProjectComponentConfig::default());
@@ -239,6 +242,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let component = ProjectComponent::new(ProjectComponentConfig::default());
@@ -263,6 +267,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let component = ProjectComponent::new(ProjectComponentConfig::default());

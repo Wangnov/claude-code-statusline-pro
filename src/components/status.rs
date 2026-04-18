@@ -558,6 +558,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         }
     }
 
@@ -628,6 +629,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let component = StatusComponent::new(StatusComponentConfig::default());
@@ -666,6 +668,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let component = StatusComponent::new(StatusComponentConfig::default());
@@ -709,6 +712,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let component = StatusComponent::new(config);

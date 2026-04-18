@@ -20,6 +20,7 @@ use dialoguer::Confirm;
 use toml_edit::{Array, DocumentMut, Item, Table, Value as TomlEditValue};
 
 mod mock_data;
+mod tui;
 use mock_data::MockDataGenerator;
 
 #[derive(Parser, Debug)]
@@ -124,6 +125,23 @@ enum ConfigAction {
     Set(ConfigSetArgs),
     /// 初始化配置文件
     Init(ConfigInitArgs),
+    /// 启动 TUI 配置编辑器
+    Edit(ConfigEditArgs),
+}
+
+#[derive(ClapArgs, Debug, Default)]
+struct ConfigEditArgs {
+    /// 编辑用户级配置(默认优先项目级,无项目级回退到用户级)
+    #[arg(short = 'g', long = "global", action = clap::ArgAction::SetTrue)]
+    global: bool,
+
+    /// 指定配置文件路径(覆盖 --global)
+    #[arg(short = 'f', long = "file")]
+    file: Option<String>,
+
+    /// 预览使用的 mock 场景(dev / critical / thinking / complete / error)
+    #[arg(long = "mock", default_value = "dev")]
+    mock: String,
 }
 
 #[derive(ClapArgs, Debug)]
@@ -284,6 +302,10 @@ async fn handle_config(args: &ConfigArgs) -> Result<()> {
             }
             ConfigAction::Init(init_args) => {
                 handle_config_init(&mut loader, args, init_args)?;
+                return Ok(());
+            }
+            ConfigAction::Edit(edit_args) => {
+                handle_config_edit(&mut loader, args, edit_args).await?;
                 return Ok(());
             }
         }
@@ -463,6 +485,50 @@ fn handle_config_init(
     }
 
     Ok(())
+}
+
+async fn handle_config_edit(
+    loader: &mut ConfigLoader,
+    parent_args: &ConfigArgs,
+    edit_args: &ConfigEditArgs,
+) -> Result<()> {
+    let explicit = parent_args
+        .file
+        .as_deref()
+        .or(edit_args.file.as_deref())
+        .map(PathBuf::from);
+
+    let want_global = edit_args.global || parent_args.global;
+
+    let (path, scope) = if let Some(custom) = explicit {
+        (custom, tui::EditScope::Custom)
+    } else if want_global {
+        let user = loader
+            .user_config_path()
+            .ok_or_else(|| anyhow!("无法确定用户级配置路径"))?;
+        (user, tui::EditScope::User)
+    } else {
+        // 只有在项目级配置文件实际存在时,才默认进入 Project scope。
+        // `project_config_path()` 即使没有文件也会算出一个路径,直接用会让
+        // 任意目录下的 `config edit` 意外创建项目级 config。
+        let project_existing = loader.project_config_path().ok().filter(|p| p.exists());
+        if let Some(p) = project_existing {
+            (p, tui::EditScope::Project)
+        } else {
+            let user = loader
+                .user_config_path()
+                .ok_or_else(|| anyhow!("无法确定用户级配置路径"))?;
+            (user, tui::EditScope::User)
+        }
+    };
+
+    let options = tui::EditOptions {
+        path,
+        scope,
+        mock_scenario: edit_args.mock.clone(),
+    };
+
+    tui::run(options).await
 }
 
 fn handle_config_set(

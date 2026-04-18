@@ -229,6 +229,7 @@ mod tests {
         RenderContext {
             input: Arc::new(InputData::default()),
             config: Arc::new(config),
+            preview_mode: false,
             terminal: TerminalCapabilities {
                 color_support: if colors {
                     ColorSupport::TrueColor

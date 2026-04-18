@@ -117,18 +117,25 @@ impl TokensComponent {
             return Some(usage);
         }
 
-        if let Some(session_id) = ctx.input.session_id.as_deref() {
-            if let Ok(Some(tokens)) = storage::get_session_tokens(session_id).await {
-                let used = tokens.input + tokens.cache_creation_input + tokens.cache_read_input;
-                if used == 0 && !self.config.show_zero {
-                    return None;
+        // preview 模式跳过 storage:`storage::get_session_tokens` 底层
+        // `StorageManager::new()` 会 `ensure_directories()`,在用户真实
+        // `~/.claude/statusline-pro/...` 下建目录,违反"preview 无副作用"
+        // 契约。preview 场景下直接落到下面的 show_zero / None 分支即可,
+        // 预览里 token 用量的位置和图标仍然可见,具体数字不需要真实。
+        if !ctx.preview_mode {
+            if let Some(session_id) = ctx.input.session_id.as_deref() {
+                if let Ok(Some(tokens)) = storage::get_session_tokens(session_id).await {
+                    let used = tokens.input + tokens.cache_creation_input + tokens.cache_read_input;
+                    if used == 0 && !self.config.show_zero {
+                        return None;
+                    }
+                    let window = self.context_window_for_model(ctx);
+                    return Some(TokenUsageInfo {
+                        used,
+                        total: window,
+                        percentage: None,
+                    });
                 }
-                let window = self.context_window_for_model(ctx);
-                return Some(TokenUsageInfo {
-                    used,
-                    total: window,
-                    percentage: None,
-                });
             }
         }
         if self.config.show_zero {
@@ -531,6 +538,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         }
     }
 
@@ -657,6 +665,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let config = build_tokens_config(|config| {
@@ -694,6 +703,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let config = build_tokens_config(|config| {
@@ -731,6 +741,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let config = build_tokens_config(|config| {
@@ -761,6 +772,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let config = build_tokens_config(|config| {
@@ -800,6 +812,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let config = build_tokens_config(|config| {
@@ -839,6 +852,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let config = build_tokens_config(|config| {
@@ -882,6 +896,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let config = build_tokens_config(|config| {
