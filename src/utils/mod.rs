@@ -50,7 +50,13 @@ mod tests {
     use std::ffi::OsString;
     use tempfile::tempdir;
 
+    // 也必须 #[serial]:此测试 set_var(HOME, tempdir) 再恢复,和 falls_back
+    // 那条(remove_var + 读 dirs::home_dir())互为镜像 —— falls_back 读取时
+    // 需要 HOME 真的被移除,如果这个测试并发地把 HOME 设回 tempdir,断言
+    // 就会看到 `detected == dirs::home_dir()` 两边不一致。必须用同一把
+    // serial_test 锁串起来。
     #[test]
+    #[serial_test::serial]
     fn respects_home_env_when_present() -> Result<()> {
         let dir = tempdir()?;
         let original = env::var_os("HOME");
