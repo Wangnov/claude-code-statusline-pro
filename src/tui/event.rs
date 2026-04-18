@@ -10,7 +10,10 @@ use ratatui::Terminal;
 use crate::tui::app::{App, Focus, Mode};
 use crate::tui::view;
 
-pub async fn run_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
+pub async fn run_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>
+where
+    B::Error: std::error::Error + Send + Sync + 'static,
+{
     while !app.should_quit {
         terminal.draw(|frame| view::render(frame, app))?;
 

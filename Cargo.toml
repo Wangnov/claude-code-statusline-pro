@@ -43,9 +43,9 @@ thiserror = "2.0.18"
 crossterm = "0.29.0"
 
 # TUI config editor (uses its own crossterm 0.28 internally; types accessed via ratatui::crossterm)
-ratatui = "0.29"
+ratatui = "0.30"
 # ANSI → ratatui Line 转换(给 TUI 实时预览上色)
-ansi-to-tui = "7"
+ansi-to-tui = "8.0.1"
 
 # System utilities
 dirs = "6.0.0"
