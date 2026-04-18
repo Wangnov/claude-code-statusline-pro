@@ -108,8 +108,7 @@ pub fn effective_bool(
     inherited: &serde_json::Value,
     dotted: &str,
 ) -> Option<bool> {
-    let buffer_overlay: serde_json::Value =
-        toml_edit::de::from_str(&document.to_string()).ok()?;
+    let buffer_overlay: serde_json::Value = toml_edit::de::from_str(&document.to_string()).ok()?;
     if !buffer_overlay.is_object() {
         // 空文档或不完整 buffer 解析出来可能不是 Object。不进行 merge
         // (merge_json 对非 Object overlay 会整体替换 base,会把 inherited
@@ -355,8 +354,7 @@ enabled = "yes"
     fn test_effective_bool_inherited_beats_default() -> Result<()> {
         let doc: DocumentMut = "".parse()?;
         let mut inherited = defaults_json();
-        inherited["components"]["project"]["enabled"] =
-            serde_json::Value::Bool(false);
+        inherited["components"]["project"]["enabled"] = serde_json::Value::Bool(false);
         let v = effective_bool(&doc, &inherited, "components.project.enabled");
         assert_eq!(v, Some(false));
         Ok(())

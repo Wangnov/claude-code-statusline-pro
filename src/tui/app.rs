@@ -591,9 +591,8 @@ impl App {
                 // false,按一次空格写进去 true,等于没变;用户要按两次才
                 // 真的能把默认开启的开关关掉。现在先合并 inherited+buffer
                 // 再取,和运行时一致。
-                let current =
-                    preview::effective_bool(&self.document, &self.inherited_json, path)
-                        .unwrap_or(false);
+                let current = preview::effective_bool(&self.document, &self.inherited_json, path)
+                    .unwrap_or(false);
                 match io::set_bool(&mut self.document, path, !current) {
                     Ok(()) => {
                         self.dirty = true;
@@ -915,9 +914,7 @@ async fn load_merge_report(options: &EditOptions) -> Option<MergeReport> {
 async fn compute_inherited_json(options: &EditOptions) -> serde_json::Value {
     match try_compute_inherited(options).await {
         Ok(v) => v,
-        Err(_) => {
-            serde_json::to_value(Config::default()).unwrap_or(serde_json::Value::Null)
-        }
+        Err(_) => serde_json::to_value(Config::default()).unwrap_or(serde_json::Value::Null),
     }
 }
 
@@ -936,8 +933,9 @@ async fn try_compute_inherited(options: &EditOptions) -> Result<serde_json::Valu
             let loader = ConfigLoader::new();
             if let Some(user_path) = loader.user_config_path() {
                 if user_path.exists() {
-                    let text = std::fs::read_to_string(&user_path)
-                        .map_err(|err| anyhow!("读取用户配置 {} 失败: {err}", user_path.display()))?;
+                    let text = std::fs::read_to_string(&user_path).map_err(|err| {
+                        anyhow!("读取用户配置 {} 失败: {err}", user_path.display())
+                    })?;
                     if !text.trim().is_empty() {
                         let overlay: serde_json::Value = toml_edit::de::from_str(&text)
                             .map_err(|err| anyhow!("解析用户配置失败: {err}"))?;
@@ -954,8 +952,8 @@ async fn try_compute_inherited(options: &EditOptions) -> Result<serde_json::Valu
                 .load(None)
                 .await
                 .map_err(|err| anyhow!("加载 default+user+project 层失败: {err}"))?;
-            merged = serde_json::to_value(cfg)
-                .map_err(|err| anyhow!("序列化基础配置失败: {err}"))?;
+            merged =
+                serde_json::to_value(cfg).map_err(|err| anyhow!("序列化基础配置失败: {err}"))?;
         }
     }
     Ok(merged)
