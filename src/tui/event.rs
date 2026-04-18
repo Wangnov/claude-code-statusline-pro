@@ -146,6 +146,15 @@ async fn handle_ctrl(app: &mut App, key: KeyEvent) -> Result<bool> {
                 app.notify_error("编辑进行中,请先 Enter 提交或 Esc 取消,再 Ctrl+S 保存");
                 return Ok(false);
             }
+            KeyCode::Char('r') => {
+                // 和 Ctrl+S / Ctrl+T 一样:revert 只会重置 document 和 dirty,
+                // 不会清 EditBuffer。如果这里放行,用户会看到"已撤销"的提示,
+                // 然后下一下 Enter 就把旧 buffer 的内容原封不动地写进刚刚
+                // revert 回来的 document,等于"revert 一下反而写进了旧修改"。
+                // 显式 block 并告诉用户怎么操作。
+                app.notify_error("编辑进行中,请先 Enter 提交或 Esc 取消,再 Ctrl+R 撤销");
+                return Ok(false);
+            }
             _ => {}
         }
     }
