@@ -108,10 +108,13 @@ jobs:
           esac
 
           bin="${tmp}/claude-code-statusline-pro-${target}/${bin_name}"
-          if [ ! -x "$bin" ] && [ ! -f "$bin" ]; then
-            echo "::error::binary not found at $bin"
-            ls -la "$tmp" || true
-            ls -la "${tmp}/claude-code-statusline-pro-${target}" || true
+          if [ ! -f "$bin" ]; then
+            bin="$(find "$tmp" -maxdepth 2 -type f -name "$bin_name" | head -n 1)"
+          fi
+
+          if [ -z "${bin:-}" ] || [ ! -f "$bin" ]; then
+            echo "::error::binary not found after extracting $archive"
+            find "$tmp" -maxdepth 2 -mindepth 1 -print || true
             exit 1
           fi
 

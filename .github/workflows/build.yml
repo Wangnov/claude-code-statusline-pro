@@ -135,7 +135,18 @@ jobs:
             else
               tar -xf "$archive" -C "$tmp"
             fi
-            cp "${tmp}/claude-code-statusline-pro-${target}/${bin}" "$dest"
+
+            bin_path="${tmp}/claude-code-statusline-pro-${target}/${bin}"
+            if [[ ! -f "$bin_path" ]]; then
+              bin_path="$(find "$tmp" -maxdepth 2 -type f -name "$bin" | head -n 1)"
+            fi
+            if [[ -z "${bin_path:-}" || ! -f "$bin_path" ]]; then
+              echo "::error::binary not found after extracting ${archive}"
+              find "$tmp" -maxdepth 2 -mindepth 1 -print || true
+              exit 1
+            fi
+
+            cp "$bin_path" "$dest"
             rm -rf "$tmp"
           done
 
