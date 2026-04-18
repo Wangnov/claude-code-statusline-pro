@@ -46,15 +46,32 @@ quick: fmt clippy check test
 clean:
 	cargo clean
 
-# 版本更新 (用法: make bump V=3.0.4)
+# 版本更新
+#
+# 已废弃：请使用 cargo-release + cargo-dist 的两阶段发布流程。
+#
+# npm 平台包的 version 字段不再需要手动维护——build.yml 会在发布时从
+# GitHub Release 的 tag 自动写回 package.json。只有 Cargo.toml 的
+# version 字段由 cargo-release 管理。
+#
+# 详见 CLAUDE.md「发布流程」章节。
 bump:
-ifndef V
-	$(error 请指定版本号，例如: make bump V=3.0.4)
-endif
-	sed -i '' 's/^version = "[^"]*"/version = "$(V)"/' Cargo.toml
-	find npm -name "package.json" -exec sed -i '' 's/"version": "[^"]*"/"version": "$(V)"/g' {} \;
-	cargo generate-lockfile
-	@echo "✅ Version bumped to $(V)"
+	@echo "⚠️  'make bump' 已废弃。"
+	@echo ""
+	@echo "请改用 cargo-release + cargo-dist 的两阶段发布流程："
+	@echo ""
+	@echo "  # 阶段 1：本地改版本号 + push + 手动触发候选 workflow"
+	@echo "  cargo release <patch|minor|major> --execute --no-publish --no-tag --no-push --no-confirm"
+	@echo "  git push origin main"
+	@echo "  # 然后在 GitHub Actions 页面手动触发 'Release candidate' workflow"
+	@echo ""
+	@echo "  # 阶段 2：候选全绿后，本地依次推 crates.io → 打 tag → 推 tag"
+	@echo "  cargo release publish --execute --no-confirm"
+	@echo "  cargo release tag --execute --no-confirm"
+	@echo "  cargo release push --execute --no-confirm"
+	@echo ""
+	@echo "详见 CLAUDE.md。"
+	@exit 1
 
 # 帮助信息
 help:
@@ -68,4 +85,5 @@ help:
 	@echo "  make test    - 运行测试"
 	@echo "  make build   - Release 构建"
 	@echo "  make clean   - 清理构建产物"
-	@echo "  make bump V=x.x.x - 更新版本号"
+	@echo ""
+	@echo "发布流程: 使用 cargo-release + cargo-dist (详见 CLAUDE.md)"

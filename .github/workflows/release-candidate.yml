@@ -1,0 +1,124 @@
+# Release candidate gate for the cargo-release + cargo-dist flow.
+#
+# Purpose: *before* running `cargo release publish/tag/push` locally, the
+# maintainer manually dispatches this workflow to verify that the same build
+# that Release.yml will run on tag-push actually succeeds on every target.
+# Failing here means the release commit is reverted/amended; crates.io is
+# untouched.
+#
+# This workflow intentionally duplicates plan/build-local-artifacts from the
+# auto-generated release.yml so the dist planner, runner mapping, and
+# packaging logic are identical. It does NOT create a GitHub Release,
+# publish to any registry, or push the Homebrew formula.
+name: Release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Ref (branch/tag/sha) to build from. Leave empty for the default branch."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-22.04
+    outputs:
+      val: ${{ steps.plan.outputs.manifest }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+          submodules: recursive
+      - name: Install dist
+        shell: bash
+        run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.30.3/cargo-dist-installer.sh | sh"
+      - id: plan
+        run: |
+          dist plan --output-format=json > plan-dist-manifest.json
+          echo "dist plan succeeded"
+          cat plan-dist-manifest.json
+          echo "manifest=$(jq -c . plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
+      - name: Upload plan manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-dist-manifest
+          path: plan-dist-manifest.json
+
+  build-and-smoke:
+    name: build+smoke (${{ join(matrix.targets, ', ') }})
+    needs: plan
+    if: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix }}
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container && matrix.container.image || null }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: enable windows longpaths
+        run: git config --global core.longpaths true
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+          submodules: recursive
+      - name: Install Rust non-interactively if not already installed
+        if: ${{ matrix.container }}
+        run: |
+          if ! command -v cargo > /dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          fi
+      - name: Install dist
+        run: ${{ matrix.install_dist.run }}
+      - name: Install dependencies
+        run: |
+          ${{ matrix.packages_install }}
+      - name: Build artifacts (dist build)
+        run: |
+          dist build --print=linkage --output-format=json ${{ matrix.dist_args }}
+          echo "dist build succeeded"
+      - name: Smoke test release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ matrix.targets[0] }}"
+          archive_dir="target/distrib"
+          tmp="$(mktemp -d)"
+
+          case "$target" in
+            *-windows-*)
+              archive="${archive_dir}/claude-code-statusline-pro-${target}.zip"
+              bin_name="claude-code-statusline-pro.exe"
+              unzip -q "$archive" -d "$tmp"
+              ;;
+            *)
+              archive="${archive_dir}/claude-code-statusline-pro-${target}.tar.xz"
+              bin_name="claude-code-statusline-pro"
+              tar -xf "$archive" -C "$tmp"
+              ;;
+          esac
+
+          bin="${tmp}/claude-code-statusline-pro-${target}/${bin_name}"
+          if [ ! -x "$bin" ] && [ ! -f "$bin" ]; then
+            echo "::error::binary not found at $bin"
+            ls -la "$tmp" || true
+            ls -la "${tmp}/claude-code-statusline-pro-${target}" || true
+            exit 1
+          fi
+
+          echo "--- $bin --version ---"
+          "$bin" --version
+
+          echo "--- $bin --help (head) ---"
+          "$bin" --help | head -20
+
+          echo "OK: smoke test passed for $target"
