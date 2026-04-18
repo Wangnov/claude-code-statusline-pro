@@ -54,6 +54,13 @@ pub async fn run(options: EditOptions) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     if let Err(err) = execute!(stdout, EnterAlternateScreen, EnableMouseCapture) {
+        // execute! 失败不代表前面的 control sequence 一个都没写出:如果
+        // EnterAlternateScreen 已经成功、EnableMouseCapture 才失败,用户的
+        // 终端现在就卡在 alt screen + raw mode 里,我们这里只 disable_raw_mode
+        // 不够,alt screen 和鼠标捕获必须一起关掉。和下面 Terminal::new 失败
+        // 路径对齐。反向 execute! 本身也可能失败,用 let _ 忽略,优先把原始
+        // 错误吐出去让用户知道到底哪里挂了。
+        let _ = execute!(stdout, LeaveAlternateScreen, DisableMouseCapture);
         let _ = disable_raw_mode();
         return Err(err.into());
     }
