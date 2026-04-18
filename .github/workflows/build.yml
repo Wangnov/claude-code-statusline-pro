@@ -8,9 +8,20 @@
 #   ccsp, claude-code-statusline-pro, @wangnov/ccsp-{linux,macos,windows}-{x64,arm64}
 name: Build
 
+# Codex review flagged two problems with the previous `on: release: published`
+# trigger:
+#   P1 - GitHub does not dispatch new workflow runs for events created by the
+#        default GITHUB_TOKEN (anti-recursion). release.yml uses GITHUB_TOKEN
+#        to publish the GitHub Release, so a `release: published` listener
+#        here would never actually fire. `workflow_run` is exempt from that
+#        restriction.
+#   P2 - For workflow_dispatch re-runs we must check out the exact tag, not
+#        the default branch, or the npm wrappers on main get bundled with
+#        older binaries and republished under the old version.
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -26,24 +37,31 @@ jobs:
   assemble-npm:
     name: assemble npm package
     runs-on: ubuntu-latest
+    # Only fire when the upstream Release workflow finished successfully on a
+    # version tag, or on an explicit manual dispatch.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
     environment:
       name: npm-release
 
     steps:
-      - uses: actions/checkout@v6
-
       - name: Determine release tag
         id: tag
         env:
           GH_EVENT_NAME: ${{ github.event_name }}
           INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          # On workflow_run from a tag push, head_branch is the tag name
+          # (e.g. "v3.1.5"), not the source branch.
+          WORKFLOW_RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
           if [[ "$GH_EVENT_NAME" == "workflow_dispatch" ]]; then
             TAG="$INPUT_TAG"
           else
-            TAG="$RELEASE_TAG"
+            TAG="$WORKFLOW_RUN_BRANCH"
           fi
           if [[ -z "$TAG" ]]; then
             echo "::error::could not determine release tag"
@@ -53,6 +71,13 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Using tag=${TAG}, version=${VERSION}"
+
+      # Check out the exact commit the tag points at so the npm wrappers
+      # packaged here match the binaries in the GitHub Release (addresses
+      # Codex P2 for workflow_dispatch reruns after main has advanced).
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
 
       - name: Download cargo-dist release assets
         env:
