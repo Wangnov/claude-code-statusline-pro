@@ -161,7 +161,14 @@ pub fn create_widget(path: &Path, widget_name: &str) -> Result<()> {
         bail!("widget 名字只能是字母/数字/下划线/短横");
     }
 
-    let mut doc = load_document(path).unwrap_or_default();
+    // 文件存在时必须严格解析,parse 失败绝不能用空 DocumentMut 覆盖
+    // (否则新建 widget 的同时会把原文件的所有注释和 widgets 一起抹掉)。
+    // 文件不存在才是合法的"从空开始"场景。
+    let mut doc = if path.exists() {
+        load_document(path)?
+    } else {
+        DocumentMut::new()
+    };
 
     let widgets = doc
         .entry("widgets")
@@ -370,6 +377,26 @@ text_icon = "[y]"
         assert!(create_widget(&path, "freshy").is_err());
         // 非法名字应报错
         assert!(create_widget(&path, "bad name").is_err());
+        Ok(())
+    }
+
+    /// 回归:create_widget 在目标文件 TOML 解析失败时必须报错,
+    /// 不能静默用空 DocumentMut 覆盖掉用户的原文件。
+    #[test]
+    fn test_create_widget_refuses_to_clobber_malformed_file() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let comp_dir = temp.path().join("components");
+        fs::create_dir_all(&comp_dir)?;
+        let path = comp_dir.join("broken.toml");
+        let original = "this is not valid TOML = = [\n";
+        fs::write(&path, original)?;
+
+        let err = create_widget(&path, "anything").expect_err("should refuse to write");
+        let _ = err;
+
+        // 确认原文件内容没有被改写
+        let after = fs::read_to_string(&path)?;
+        assert_eq!(after, original, "malformed file must not be overwritten");
         Ok(())
     }
 

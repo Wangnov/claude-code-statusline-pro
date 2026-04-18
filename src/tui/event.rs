@@ -118,7 +118,11 @@ fn handle_search(app: &mut App, key: KeyEvent) -> bool {
 }
 
 async fn handle_ctrl(app: &mut App, key: KeyEvent) -> Result<bool> {
-    // 文本编辑模式里 Ctrl+A/E 走行首/行尾,不被全局保存等吃掉
+    // 文本编辑模式里只放行安全的 Ctrl 组合:
+    // - Ctrl+A / Ctrl+E 行首/行尾(编辑器自己的键)
+    // - Ctrl+Q 直接退出(用户放弃编辑,可接受)
+    // - Ctrl+T 会改 section_idx/field_idx,把 buffer 指向另一个字段后的
+    //   Enter 会把错误内容写进新字段。必须拒绝。
     if matches!(app.mode, Mode::EditText(_)) {
         match key.code {
             KeyCode::Char('a') => {
@@ -127,6 +131,10 @@ async fn handle_ctrl(app: &mut App, key: KeyEvent) -> Result<bool> {
             }
             KeyCode::Char('e') => {
                 app.edit_end();
+                return Ok(false);
+            }
+            KeyCode::Char('t') => {
+                app.notify_error("编辑进行中,请先 Enter 提交或 Esc 取消,再切 scope");
                 return Ok(false);
             }
             _ => {}

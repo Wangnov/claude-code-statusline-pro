@@ -817,6 +817,11 @@ impl App {
     fn error(&mut self, msg: String) {
         self.message = Some((msg, MessageKind::Error));
     }
+
+    /// 对外可见的错误提示。供 event 层等外部模块在拒绝操作时使用。
+    pub fn notify_error(&mut self, msg: impl Into<String>) {
+        self.error(msg.into());
+    }
 }
 
 /// 用一个"干净"的 `ConfigLoader` 解析一次配置,拿合并报告。失败时返回 None。
