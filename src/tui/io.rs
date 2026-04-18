@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{anyhow, bail, Context, Result};
-use toml_edit::{value as toml_value, DocumentMut, Item, Table};
+use toml_edit::{value as toml_value, DocumentMut, InlineTable, Item, Table, Value};
 
 /// 读取已有文件;不存在则返回空 `DocumentMut`。
 pub fn load_or_create(path: &Path) -> Result<DocumentMut> {
@@ -107,11 +107,49 @@ fn set_recursive(table: &mut Table, parts: &[&str], value: Item) -> Result<()> {
     let child = table
         .get_mut(head)
         .ok_or_else(|| anyhow!("内部错误: 无法定位 {head}"))?;
+    // 优先走普通 Table 分支(99% 的配置都长这样),其次接受 inline table。
+    // 以前这里只识别 as_table_mut(),导致 `style = { separator = "|" }`
+    // 这种完全合法的 TOML 一旦存在,编辑器写 `style.separator` 就会 bail
+    // "已存在但不是表",相当于让合法配置变只读。读路径用的是 as_table_like()
+    // 天然支持两者,写路径现在也对齐。
     if let Some(subtable) = child.as_table_mut() {
-        set_recursive(subtable, rest, value)
-    } else {
-        bail!("路径 {head} 已存在但不是表,无法继续写入")
+        return set_recursive(subtable, rest, value);
     }
+    if let Item::Value(Value::InlineTable(ref mut inline)) = child {
+        return set_recursive_inline(inline, rest, value);
+    }
+    bail!("路径 {head} 已存在但不是表,无法继续写入")
+}
+
+/// 沿 inline 表(`{ ... }`)继续下钻。
+///
+/// inline 表只能装 `Value`,不能直接塞 `Item::Table`。叶子值的写法跟
+/// 普通表基本一致,但要把 `Item::Value(v)` 拆成 `v`。所有现有的
+/// `set_string/set_bool/...` 都经 `toml_value(...)` 返回 `Item::Value`,
+/// 所以 `into_value()` 实际上永远成功;报错分支仅作未来兜底。
+fn set_recursive_inline(inline: &mut InlineTable, parts: &[&str], value: Item) -> Result<()> {
+    let (head, rest) = parts
+        .split_first()
+        .ok_or_else(|| anyhow!("内部错误: 路径为空"))?;
+    if rest.is_empty() {
+        let new_value = value
+            .into_value()
+            .map_err(|_| anyhow!("无法把非 Value 项写入 inline 表的叶子 {head}"))?;
+        replace_inline_preserving_decor(inline, head, new_value);
+        return Ok(());
+    }
+    if !inline.contains_key(head) {
+        // InlineTable::insert 的 key 要 impl Into<String>,`&&str` 不行,
+        // 手动 deref 成 `&str` 让编译器走 String::from 路径。
+        inline.insert(*head, Value::InlineTable(InlineTable::new()));
+    }
+    let child = inline
+        .get_mut(head)
+        .ok_or_else(|| anyhow!("内部错误: 无法定位 {head}"))?;
+    if let Some(subinline) = child.as_inline_table_mut() {
+        return set_recursive_inline(subinline, rest, value);
+    }
+    bail!("路径 {head} 已存在但不是表,无法继续写入")
 }
 
 /// 替换叶子值时尽量保留原有的格式 decor(前后空格、注释)。
@@ -126,6 +164,18 @@ fn replace_preserving_decor(table: &mut Table, key: &str, value: Item) {
         }
     }
     table.insert(key, value);
+}
+
+/// inline 表的叶子写入,同样尽量保留 decor。
+fn replace_inline_preserving_decor(inline: &mut InlineTable, key: &str, value: Value) {
+    if let Some(existing) = inline.get_mut(key) {
+        let decor = existing.decor().clone();
+        let mut new_value = value;
+        *new_value.decor_mut() = decor;
+        *existing = new_value;
+        return;
+    }
+    inline.insert(key, value);
 }
 
 #[cfg(test)]
@@ -167,5 +217,61 @@ mod tests {
         set_int(&mut doc, "multiline.max_rows", 7)?;
         assert_eq!(get_int(&doc, "multiline.max_rows"), Some(7));
         Ok(())
+    }
+
+    /// 回归:`style = { separator = "|" }` 这种合法 TOML 使用 inline table,
+    /// 以前 set_recursive 只认 as_table_mut(),会 bail "已存在但不是表"。
+    /// 修好以后 set_string 写 `style.separator` 必须成功,且读回来能拿到新值。
+    #[test]
+    fn test_set_updates_existing_inline_table_leaf() -> Result<()> {
+        let src = r#"style = { separator = "|", spacing = 1 }
+"#;
+        let mut doc = src.parse::<DocumentMut>()?;
+        set_string(&mut doc, "style.separator", " > ")?;
+        assert_eq!(get_string(&doc, "style.separator").as_deref(), Some(" > "));
+        // 同一 inline 表里的 sibling 必须保留,不能被整块替换
+        assert_eq!(get_int(&doc, "style.spacing"), Some(1));
+        // 序列化后仍然是 inline 格式(至少能读回来),不必强求 `{}` 字形
+        let out = doc.to_string();
+        assert!(out.contains(" > "));
+        assert!(out.contains("spacing"));
+        Ok(())
+    }
+
+    /// inline 表缺失要写入的 key 时,应该允许原地 insert,不是报错。
+    #[test]
+    fn test_set_adds_new_key_to_existing_inline_table() -> Result<()> {
+        let src = r#"style = { separator = "|" }
+"#;
+        let mut doc = src.parse::<DocumentMut>()?;
+        set_bool(&mut doc, "style.bold", true)?;
+        assert_eq!(get_bool(&doc, "style.bold"), Some(true));
+        assert_eq!(get_string(&doc, "style.separator").as_deref(), Some("|"));
+        Ok(())
+    }
+
+    /// 嵌套 inline(`a = { b = { c = "x" } }`)也得能写深层叶子。
+    #[test]
+    fn test_set_walks_nested_inline_tables() -> Result<()> {
+        let src = r#"a = { b = { c = "x" } }
+"#;
+        let mut doc = src.parse::<DocumentMut>()?;
+        set_string(&mut doc, "a.b.c", "y")?;
+        assert_eq!(get_string(&doc, "a.b.c").as_deref(), Some("y"));
+        Ok(())
+    }
+
+    /// 把 inline 表里原本是 Value 的字段当成子表继续下钻,必须报错,
+    /// 不能因为新增了 inline 分支就悄悄把一个字符串变成子表。
+    #[test]
+    fn test_set_rejects_descending_into_inline_scalar() {
+        let src = r#"style = { separator = "|" }
+"#;
+        let mut doc = src.parse::<DocumentMut>().unwrap();
+        let err = set_string(&mut doc, "style.separator.sub", "x").unwrap_err();
+        assert!(
+            err.to_string().contains("不是表"),
+            "expected table-type error, got: {err}"
+        );
     }
 }

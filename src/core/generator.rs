@@ -45,6 +45,14 @@ pub struct GeneratorOptions {
     pub disable_cache: bool,
     /// Base directory for configuration
     pub config_base_dir: Option<String>,
+    /// Suppress ALL persistent side effects (storage init, session snapshot
+    /// writes, project-id mutation of global state). The TUI config editor
+    /// calls `generate` repeatedly with synthetic mock `InputData` to render
+    /// a preview; without this flag each refresh would write a synthetic
+    /// session snapshot to `~/.claude/.../sessions/mock-*.json`, polluting
+    /// real usage/cost history. When `true`, `generate` skips both
+    /// `ensure_storage_ready` and `update_session_snapshot`.
+    pub preview_mode: bool,
 }
 
 impl Default for GeneratorOptions {
@@ -54,6 +62,7 @@ impl Default for GeneratorOptions {
             update_throttling: true,
             disable_cache: false,
             config_base_dir: None,
+            preview_mode: false,
         }
     }
 }
@@ -87,6 +96,9 @@ pub struct StatuslineGenerator {
     storage_initialized: bool,
     active_project_id: Option<String>,
     config_base_dir: Option<PathBuf>,
+    /// See `GeneratorOptions::preview_mode`: when true, `generate` is
+    /// side-effect free (no storage init, no snapshot persistence).
+    preview_mode: bool,
 }
 
 impl StatuslineGenerator {
@@ -122,6 +134,7 @@ impl StatuslineGenerator {
             storage_initialized: false,
             active_project_id: None,
             config_base_dir,
+            preview_mode: options.preview_mode,
         };
         drop(config_arc);
 
@@ -241,14 +254,22 @@ impl StatuslineGenerator {
     /// Returns an error if component rendering fails or if required
     /// configuration initialization steps cannot complete successfully.
     pub async fn generate(&mut self, input_data: InputData) -> Result<String> {
-        // Check update rate limit
-        self.ensure_storage_ready(&input_data).await?;
+        // Preview mode(TUI 编辑器)完全跳过任何持久化副作用:
+        // 1. `ensure_storage_ready` 会把 mock 的 project_id 注册成全局状态,
+        //    再初始化 storage 子系统,会在 `~/.claude/.../sessions/` 下建目录;
+        // 2. `update_session_snapshot` 会把合成的 mock InputData 落盘成真正的
+        //    session snapshot,污染用户真实的 conversation 使用量/成本数据。
+        // 两者都不是渲染本身必须的,preview 只需要纯粹的 "这份 config 渲染出来
+        // 长什么样",所以直接短路。
+        if !self.preview_mode {
+            self.ensure_storage_ready(&input_data).await?;
 
-        if let Ok(snapshot_value) = serde_json::to_value(&input_data) {
-            if let Err(err) = storage::update_session_snapshot(&snapshot_value).await {
-                // Only log unexpected errors; missing session ID is expected in some scenarios
-                if !err.to_string().contains("No session ID found") {
-                    eprintln!("[statusline] failed to update session snapshot: {err}");
+            if let Ok(snapshot_value) = serde_json::to_value(&input_data) {
+                if let Err(err) = storage::update_session_snapshot(&snapshot_value).await {
+                    // Only log unexpected errors; missing session ID is expected in some scenarios
+                    if !err.to_string().contains("No session ID found") {
+                        eprintln!("[statusline] failed to update session snapshot: {err}");
+                    }
                 }
             }
         }
@@ -490,6 +511,27 @@ mod tests {
         assert_eq!(options.preset, Some("PMBT".to_string()));
         assert!(options.update_throttling);
         assert!(!options.disable_cache);
+        // preview_mode 默认必须 false,否则真实运行的 statusline 也会静默地
+        // 跳过 storage 初始化和 session snapshot 写入,usage/cost 历史就丢了。
+        assert!(!options.preview_mode);
+    }
+
+    /// 回归:`preview_mode=true` 的 generator 不能触碰持久化层。
+    /// 本测试不依赖真实 storage 子系统,只验证字段被如实持有;真正的"不写盘"
+    /// 靠 `generate` 里的 `if !self.preview_mode` 守卫保证,在 `tui::preview`
+    /// 的集成测试里验证。
+    #[test]
+    fn test_generator_preview_mode_is_recorded() {
+        let config = Config::default();
+        let options = GeneratorOptions {
+            preview_mode: true,
+            ..GeneratorOptions::default()
+        };
+        let generator = StatuslineGenerator::new(config, options);
+        assert!(
+            generator.preview_mode,
+            "preview_mode 必须从 options 透传到 generator"
+        );
     }
 
     #[tokio::test]

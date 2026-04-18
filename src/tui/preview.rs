@@ -29,6 +29,11 @@ pub async fn render(
         update_throttling: false, // 预览要立即反映,不走 300ms 节流
         disable_cache: true,
         config_base_dir: base_dir.map(|p| p.to_string_lossy().into_owned()),
+        // 预览只是把 mock 的 InputData 过一遍渲染管线,看配置长什么样,
+        // 绝不能顺手把合成的 session_id / cost 写到 `~/.claude/.../sessions/`
+        // 里去污染真实 usage / cost 历史。generator 内部的守卫会在
+        // `preview_mode=true` 时跳过 storage 初始化和 snapshot 写入。
+        preview_mode: true,
         ..GeneratorOptions::default()
     };
 
@@ -139,6 +144,53 @@ mod tests {
         let config = Config::default();
         let lines = render(&config, "dev", Some(temp.path())).await?;
         assert!(!lines.is_empty());
+        Ok(())
+    }
+
+    /// 回归:preview render 必须是"纯函数",不能在 `$HOME/.claude/.../sessions/`
+    /// 下落任何 snapshot 文件。之前 generator 无条件调用
+    /// `storage::update_session_snapshot`,只要编辑器打开或切一下 mock 场景,
+    /// 就会把合成的 `mock-dev-session` 写进真实 usage 历史。
+    #[tokio::test]
+    async fn test_render_does_not_persist_session_snapshot() -> Result<()> {
+        // 用临时 HOME 捕获所有可能的持久化 I/O;真实用户目录绝对不能被写到。
+        let fake_home = tempfile::tempdir()?;
+        let original_home = std::env::var_os("HOME");
+        // 安全起见,tests 在同一 process 里是串行运行的单个 test_render_*,
+        // 但 std::env 是全局的;设置后 test 末尾必须恢复。
+        std::env::set_var("HOME", fake_home.path());
+
+        let config = Config::default();
+        let render_result = render(&config, "dev", None).await;
+
+        // 恢复 HOME 后再断言,避免污染后续测试
+        match original_home {
+            Some(v) => std::env::set_var("HOME", v),
+            None => std::env::remove_var("HOME"),
+        }
+
+        let lines = render_result?;
+        assert!(!lines.is_empty());
+
+        // fake_home 里不能出现任何 sessions 目录。即使出现,也不能有文件。
+        let sessions_root = fake_home.path().join(".claude");
+        if sessions_root.exists() {
+            // 允许目录存在(不是我们建的也可能是测试辅助),但不能有 session json
+            let mut stack = vec![sessions_root];
+            while let Some(dir) = stack.pop() {
+                for entry in std::fs::read_dir(&dir)?.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        stack.push(path);
+                    } else {
+                        panic!(
+                            "preview render 不应该在 $HOME 下写任何文件,却发现: {}",
+                            path.display()
+                        );
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
