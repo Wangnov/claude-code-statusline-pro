@@ -720,7 +720,13 @@ mod tests {
     use std::env;
     use tempfile::tempdir;
 
+    // 必须 #[serial]:这个测试 env::set_var("HOME", ...) 但不恢复,
+    // 会和 utils::tests::falls_back_to_dirs_home_dir 以及 utils::effort
+    // 里的 HOME-mutating 测试发生竞态。serial_test 已经在用它们给 HOME
+    // 敏感测试做全局互斥,这里必须加入同一把锁,不然在 1.85 这种特定的
+    // 调度下 MSRV CI 会偶发失败(main 分支上就能复现,这是 pre-existing bug)。
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_load_default_config() -> Result<()> {
         // Create a temporary directory for the test
         let temp_dir = tempdir()?;
