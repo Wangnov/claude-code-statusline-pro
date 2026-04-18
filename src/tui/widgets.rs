@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
-use toml_edit::{value as toml_value, DocumentMut, Item};
+use toml_edit::{value as toml_value, DocumentMut, InlineTable, Item, Value};
 
 use claude_code_statusline_pro::config::ComponentMultilineConfig;
 
@@ -170,26 +170,48 @@ pub fn create_widget(path: &Path, widget_name: &str) -> Result<()> {
         DocumentMut::new()
     };
 
+    // 先决定新 widget 要以 inline 还是常规 [widgets.name] 表头写进去。
+    // 判定基于外层 `widgets` 现在的形态:如果用户用的是 inline
+    // `widgets = { foo = { ... } }`,新加的也用 inline 保留一致的风格;
+    // 如果是常规表 `[widgets.foo]` 或不存在(新文件),就用常规表头。
+    // 硬塞 Item::Table 进 inline 会破坏原文件的格式甚至失败。
+    let widgets_is_inline = matches!(doc.get("widgets"), Some(Item::Value(Value::InlineTable(_))));
+
     let widgets = doc
         .entry("widgets")
         .or_insert(Item::Table(toml_edit::Table::new()))
-        .as_table_mut()
+        .as_table_like_mut()
         .ok_or_else(|| anyhow!("widgets 不是表"))?;
 
     if widgets.contains_key(widget_name) {
         bail!("widget '{widget_name}' 已存在,不能重复创建");
     }
 
-    let mut table = toml_edit::Table::new();
-    table.insert("enabled", toml_value(true));
-    table.insert("type", toml_value("static"));
-    table.insert("row", toml_value(1_i64));
-    table.insert("col", toml_value(0_i64));
-    table.insert("nerd_icon", toml_value(""));
-    table.insert("emoji_icon", toml_value("📌"));
-    table.insert("text_icon", toml_value("[?]"));
-    table.insert("content", toml_value("new widget"));
-    widgets.insert(widget_name, Item::Table(table));
+    let new_entry = if widgets_is_inline {
+        // inline 分支:构造一张 InlineTable,字段顺序和常规表一致,便于阅读。
+        let mut inline = InlineTable::new();
+        inline.insert("enabled", Value::from(true));
+        inline.insert("type", Value::from("static"));
+        inline.insert("row", Value::from(1_i64));
+        inline.insert("col", Value::from(0_i64));
+        inline.insert("nerd_icon", Value::from(""));
+        inline.insert("emoji_icon", Value::from("📌"));
+        inline.insert("text_icon", Value::from("[?]"));
+        inline.insert("content", Value::from("new widget"));
+        Item::Value(Value::InlineTable(inline))
+    } else {
+        let mut table = toml_edit::Table::new();
+        table.insert("enabled", toml_value(true));
+        table.insert("type", toml_value("static"));
+        table.insert("row", toml_value(1_i64));
+        table.insert("col", toml_value(0_i64));
+        table.insert("nerd_icon", toml_value(""));
+        table.insert("emoji_icon", toml_value("📌"));
+        table.insert("text_icon", toml_value("[?]"));
+        table.insert("content", toml_value("new widget"));
+        Item::Table(table)
+    };
+    widgets.insert(widget_name, new_entry);
 
     save_document(path, &doc)
 }
@@ -197,9 +219,11 @@ pub fn create_widget(path: &Path, widget_name: &str) -> Result<()> {
 /// 删除整个 widget 表。
 pub fn delete_widget(path: &Path, widget_name: &str) -> Result<()> {
     let mut doc = load_document(path)?;
+    // 同样用 as_table_like_mut:inline `widgets = { ... }` 也要能删除子项,
+    // 不能因为外层是 inline 写法就拒绝。
     let widgets = doc
         .get_mut("widgets")
-        .and_then(|i| i.as_table_mut())
+        .and_then(|i| i.as_table_like_mut())
         .ok_or_else(|| anyhow!("{} 中没有 [widgets] 表", path.display()))?;
     if widgets.remove(widget_name).is_none() {
         bail!("widget '{widget_name}' 不存在于 {}", path.display());
@@ -245,15 +269,20 @@ fn widget_get_string(doc: &DocumentMut, widget: &str, key: &str) -> Option<Strin
 }
 
 fn widget_set(doc: &mut DocumentMut, widget: &str, key: &str, value: Item) -> Result<()> {
+    // 之前这里直接 as_table_mut(),对 `widgets = { foo = { enabled = true } }`
+    // 这种完全合法的 inline-table 写法就走不通:读的时候 as_table_like 是通的,
+    // 写的时候 as_table_mut 只认 Item::Table,inline 被当成"不是表"拒绝,
+    // 整份用户配置就变成只读的了。切到 as_table_like_mut + TableLike 接口,
+    // 同时支持 Item::Table 和 Item::Value(InlineTable)。
     let widgets = doc
         .entry("widgets")
         .or_insert(Item::Table(toml_edit::Table::new()))
-        .as_table_mut()
+        .as_table_like_mut()
         .ok_or_else(|| anyhow!("widgets 不是表"))?;
     let widget_table = widgets
         .entry(widget)
         .or_insert(Item::Table(toml_edit::Table::new()))
-        .as_table_mut()
+        .as_table_like_mut()
         .ok_or_else(|| anyhow!("widgets.{widget} 不是表"))?;
     widget_table.insert(key, value);
     Ok(())
@@ -453,6 +482,94 @@ content = "from user layer"
             None => return Ok(()),
         };
         assert!(usage.entries.iter().all(|e| e.name != "bar"));
+        Ok(())
+    }
+
+    /// 写一份"外层 + 每个 widget 都用 inline 写法"的样本,用来校验 CRUD
+    /// 对 `widgets = { foo = { ... } }` 这种合法但少见的 TOML 形态同样生效。
+    fn write_inline_sample(dir: &Path) -> Result<PathBuf> {
+        let comp_dir = dir.join("components");
+        fs::create_dir_all(&comp_dir)?;
+        let path = comp_dir.join("inline.toml");
+        fs::write(
+            &path,
+            r#"widgets = { foo = { enabled = true, type = "static", row = 1, col = 0, nerd_icon = "x", emoji_icon = "x", text_icon = "[x]", content = "hi" }, bar = { enabled = false, type = "api", row = 1, col = 1, nerd_icon = "y", emoji_icon = "y", text_icon = "[y]" } }
+"#,
+        )?;
+        Ok(path)
+    }
+
+    /// 回归 Codex round 9 / P2:toggle_enabled 必须支持 inline widgets。
+    /// 以前 widget_set 用 as_table_mut,外层 inline `widgets = { ... }` 或
+    /// 内层 inline `foo = { ... }` 都会走不通,报 "不是表"。
+    #[test]
+    fn test_toggle_enabled_on_inline_widget() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = write_inline_sample(temp.path())?;
+        // foo 默认 enabled = true → 翻到 false
+        let new_value = toggle_enabled(&path, "foo")?;
+        assert!(!new_value);
+        // 再翻一次应该回到 true
+        let new_value = toggle_enabled(&path, "foo")?;
+        assert!(new_value);
+        Ok(())
+    }
+
+    /// inline widgets 里切换 type 也得可行。
+    #[test]
+    fn test_cycle_type_on_inline_widget() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = write_inline_sample(temp.path())?;
+        let new_type = cycle_type(&path, "foo")?;
+        assert_eq!(new_type, "api");
+        Ok(())
+    }
+
+    /// 外层 inline 的情况下,delete_widget 依然能移除子项。
+    #[test]
+    fn test_delete_widget_from_inline_root() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = write_inline_sample(temp.path())?;
+        delete_widget(&path, "bar")?;
+        // bar 应被移除,foo 依然存在
+        let files = scan_files(Some(temp.path()));
+        let inline = files
+            .iter()
+            .find(|f| f.component == "inline")
+            .expect("inline component should still be readable");
+        assert!(inline.entries.iter().any(|e| e.name == "foo"));
+        assert!(inline.entries.iter().all(|e| e.name != "bar"));
+        Ok(())
+    }
+
+    /// 外层 inline 的情况下,create_widget 应以 inline 子表形式写入,
+    /// 保留用户选择的风格而不是硬加一个 [widgets.name] 表头把文件弄混。
+    #[test]
+    fn test_create_widget_on_inline_root_preserves_inline_style() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = write_inline_sample(temp.path())?;
+        create_widget(&path, "baz")?;
+
+        // scan_files 必须能读到新加的 baz
+        let files = scan_files(Some(temp.path()));
+        let inline = files
+            .iter()
+            .find(|f| f.component == "inline")
+            .expect("inline component should survive create");
+        assert!(inline.entries.iter().any(|e| e.name == "baz"));
+
+        // 文本层面:外层仍然是 inline 写法(第一行依然 `widgets = {`),
+        // 而不是被升级成了 `[widgets.baz]` 表头。
+        let text = fs::read_to_string(&path)?;
+        let first_line = text.lines().next().unwrap_or("");
+        assert!(
+            first_line.starts_with("widgets = {"),
+            "expected inline widgets to stay inline, got: {first_line:?}"
+        );
+        assert!(
+            !text.contains("[widgets.baz]"),
+            "create_widget 不应在 inline 根下插入表头语法"
+        );
         Ok(())
     }
 

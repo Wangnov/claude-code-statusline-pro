@@ -123,6 +123,11 @@ async fn handle_ctrl(app: &mut App, key: KeyEvent) -> Result<bool> {
     // - Ctrl+Q 直接退出(用户放弃编辑,可接受)
     // - Ctrl+T 会改 section_idx/field_idx,把 buffer 指向另一个字段后的
     //   Enter 会把错误内容写进新字段。必须拒绝。
+    // - Ctrl+S 如果直接放行,save() 看到的是 *还没 commit 的 document*;
+    //   写盘后报 "已保存",但用户刚打的字只在 EditBuffer 里,退出就丢了。
+    //   策略和 Ctrl+T 一致:显式报错,不做隐式 commit-then-save(commit
+    //   可能因类型校验失败而回滚 buffer,那时再 save 等于把脏旧 doc 写盘,
+    //   产生"明明提示更新失败却还是保存成功"的矛盾 UX)。
     if matches!(app.mode, Mode::EditText(_)) {
         match key.code {
             KeyCode::Char('a') => {
@@ -135,6 +140,10 @@ async fn handle_ctrl(app: &mut App, key: KeyEvent) -> Result<bool> {
             }
             KeyCode::Char('t') => {
                 app.notify_error("编辑进行中,请先 Enter 提交或 Esc 取消,再切 scope");
+                return Ok(false);
+            }
+            KeyCode::Char('s') => {
+                app.notify_error("编辑进行中,请先 Enter 提交或 Esc 取消,再 Ctrl+S 保存");
                 return Ok(false);
             }
             _ => {}
