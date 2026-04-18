@@ -58,9 +58,41 @@ pub fn available_mocks() -> Vec<String> {
     v
 }
 
-/// 从 `DocumentMut` 字符串反序列化到 `Config`;解析错误时包一层上下文。
+/// 把 TOML 当作 `Config::default()` 之上的稀疏 overlay 反序列化。
+///
+/// `ConfigLoader::load_config_layers` 就是这么干的:用户/项目/自定义层都
+/// 按"增量叠加"语义处理,最后再把合并后的 JSON 反序列化到 `Config`。
+/// 如果这里直接 `toml_edit::de::from_str::<Config>`,像 flattened
+/// `BaseComponentConfig`(`emoji_icon` / `nerd_icon` / `text_icon`
+/// 没有 serde default)就会拒绝一切省略了这些键的局部配置 —— 包括
+/// 空文件和首次从最小 override 起步的配置,直接砍掉编辑器的使用场景。
 pub fn parse_config(toml_text: &str) -> Result<Config> {
-    toml_edit::de::from_str::<Config>(toml_text).map_err(|err| anyhow!("{err}"))
+    let mut merged = serde_json::to_value(Config::default())
+        .map_err(|err| anyhow!("序列化默认配置失败: {err}"))?;
+    if !toml_text.trim().is_empty() {
+        let overlay: serde_json::Value =
+            toml_edit::de::from_str(toml_text).map_err(|err| anyhow!("{err}"))?;
+        merge_json(&mut merged, overlay);
+    }
+    serde_json::from_value(merged).map_err(|err| anyhow!("{err}"))
+}
+
+/// 与 `ConfigLoader::merge_value` 语义保持一致:object 合并,其他直接覆盖。
+fn merge_json(base: &mut serde_json::Value, overlay: serde_json::Value) {
+    use serde_json::Value;
+    match (base, overlay) {
+        (Value::Object(base_map), Value::Object(overlay_map)) => {
+            for (k, v) in overlay_map {
+                match base_map.get_mut(&k) {
+                    Some(existing) => merge_json(existing, v),
+                    None => {
+                        base_map.insert(k, v);
+                    }
+                }
+            }
+        }
+        (slot, other) => *slot = other,
+    }
 }
 
 #[cfg(test)]
@@ -108,5 +140,42 @@ mod tests {
         let lines = render(&config, "dev", Some(temp.path())).await?;
         assert!(!lines.is_empty());
         Ok(())
+    }
+
+    /// 回归:稀疏配置(没有覆盖 components.*.emoji_icon 等 flatten 必填字段)
+    /// 必须能通过 parse_config,否则编辑器里首次保存就会被误判为"校验失败"。
+    #[test]
+    fn test_parse_config_accepts_empty_overlay() -> Result<()> {
+        let cfg = parse_config("")?;
+        // 空文件 → 等于全默认
+        assert_eq!(cfg.theme, Config::default().theme);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_config_accepts_sparse_partial_override() -> Result<()> {
+        // 只改一个 preset + 一个嵌套字段,不重复声明 components.project 的 icon
+        let toml = r#"
+preset = "PMBT"
+
+[components.project]
+enabled = false
+"#;
+        let cfg = parse_config(toml)?;
+        assert_eq!(cfg.preset.as_deref(), Some("PMBT"));
+        assert!(!cfg.components.project.base.enabled);
+        // 其他默认值保留
+        assert!(!cfg.components.project.base.emoji_icon.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_config_rejects_type_mismatch() {
+        // 类型错了应该仍然报错(enabled 被写成字符串)
+        let toml = r#"
+[components.project]
+enabled = "yes"
+"#;
+        assert!(parse_config(toml).is_err());
     }
 }

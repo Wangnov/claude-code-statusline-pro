@@ -219,7 +219,7 @@ impl App {
             .unwrap_or(0);
         let widget_summaries = scan_summaries(options.path.parent());
         let widget_files = widgets::scan_files(options.path.parent());
-        let merge_report = load_merge_report().await;
+        let merge_report = load_merge_report(&options).await;
 
         let mut app = Self {
             options,
@@ -751,6 +751,8 @@ impl App {
         // widget_summaries 只是旧字段帮助面板展示用的别名。
         self.widget_files = widgets::scan_files(target_path.parent());
         self.widget_summaries = scan_summaries(target_path.parent());
+        // 合并报告也是按旧 scope 算的,切 scope 后要重新按新目标算一次
+        self.merge_report = load_merge_report(&self.options).await;
         self.refresh_preview().await;
         let label = match target_scope {
             EditScope::User => "用户级",
@@ -825,10 +827,18 @@ impl App {
     }
 }
 
-/// 用一个"干净"的 `ConfigLoader` 解析一次配置,拿合并报告。失败时返回 None。
-async fn load_merge_report() -> Option<MergeReport> {
+/// 按当前编辑目标解析一次合并报告。
+///
+/// - `Custom` scope:把文件当成 custom 层顶在 default→user→project 之上;
+/// - `User` / `Project` scope:仍用 `None`,让 loader 从当前 cwd 走完整层级
+///   链,这样报告反映的就是该文件在真实运行时会落在哪一层、会被谁覆盖。
+async fn load_merge_report(options: &EditOptions) -> Option<MergeReport> {
     let mut loader = ConfigLoader::new();
-    loader.load(None).await.ok()?;
+    let custom = match options.scope {
+        EditScope::Custom => Some(options.path.to_string_lossy().into_owned()),
+        EditScope::User | EditScope::Project => None,
+    };
+    loader.load(custom.as_deref()).await.ok()?;
     loader.merge_report().cloned()
 }
 
