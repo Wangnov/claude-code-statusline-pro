@@ -213,10 +213,11 @@ impl App {
         let document = io::load_or_create(&options.path)?;
         let original = document.clone();
         let mocks = preview::available_mocks();
-        let mock_idx = mocks
-            .iter()
-            .position(|name| name == &options.mock_scenario)
-            .unwrap_or(0);
+        // --mock 写错名字时不能静默用 index 0(排序后可能不是 dev,
+        // 会让用户看到一个和自己输入完全无关的预览场景)。先尝试匹配
+        // 用户输入,匹配不到再回退到文档里承诺的默认 `dev`,同时
+        // 攒一条错误提示,等 App 建好后推到 message 区让用户能看见。
+        let (mock_idx, mock_warning) = resolve_mock_idx(&mocks, &options.mock_scenario);
         let widget_summaries = scan_summaries(options.path.parent());
         let widget_files = widgets::scan_files(options.path.parent());
         let merge_report = load_merge_report(&options).await;
@@ -246,6 +247,9 @@ impl App {
         };
 
         app.refresh_preview().await;
+        if let Some(msg) = mock_warning {
+            app.error(msg);
+        }
         Ok(app)
     }
 
@@ -762,7 +766,7 @@ impl App {
         self.success(format!("已切到 {label}: {}", target_path.display()));
     }
 
-    pub fn save(&mut self) -> Result<()> {
+    pub async fn save(&mut self) -> Result<()> {
         let doc_str = self.document.to_string();
         if let Err(err) = preview::parse_config(&doc_str) {
             self.error(format!("校验失败,未保存: {err}"));
@@ -772,6 +776,10 @@ impl App {
             .with_context(|| format!("保存到 {} 失败", self.options.path.display()))?;
         self.original = self.document.clone();
         self.dirty = false;
+        // 保存后磁盘上合并结果已经变了,F2 overlay 必须重算一次;
+        // 否则用户刚写入的 override 还会留在 added_keys / updated_keys
+        // 里,显示的是"保存前会变成什么",和当前真实文件不一致。
+        self.merge_report = load_merge_report(&self.options).await;
         self.success(format!("已保存 {}", self.options.path.display()));
         Ok(())
     }
@@ -825,6 +833,34 @@ impl App {
     pub fn notify_error(&mut self, msg: impl Into<String>) {
         self.error(msg.into());
     }
+}
+
+/// `--mock` 默认场景,和 `ConfigEditArgs::mock` 的 `default_value` 对齐。
+const DEFAULT_MOCK: &str = "dev";
+
+/// 把用户传进来的 mock 名字解析成 `mocks` 里的索引。
+///
+/// - 命中就直接返回该索引,无警告。
+/// - 没命中就回落到 `dev`(文档承诺的默认场景);同时返回一段中文提示,
+///   让调用方在 App 建好后推到 message 区。回落到 index 0 是之前的行为,
+///   问题是 `mocks` 排序后 index 0 不一定是 `dev`,会让用户看到一个和
+///   自己输入完全无关的预览场景,还以为 TUI 真的支持那个名字。
+fn resolve_mock_idx(mocks: &[String], requested: &str) -> (usize, Option<String>) {
+    if let Some(idx) = mocks.iter().position(|n| n == requested) {
+        return (idx, None);
+    }
+    let fallback_idx = mocks.iter().position(|n| n == DEFAULT_MOCK).unwrap_or(0);
+    let fallback_name = mocks
+        .get(fallback_idx)
+        .map(String::as_str)
+        .unwrap_or(DEFAULT_MOCK);
+    let available = mocks.join(", ");
+    (
+        fallback_idx,
+        Some(format!(
+            "未知 mock 场景 '{requested}',已回落到 '{fallback_name}'。可用:{available}"
+        )),
+    )
 }
 
 /// 按当前编辑目标解析一次合并报告。
@@ -917,5 +953,53 @@ mod edit_buffer_tests {
         buf.move_left();
         buf.insert_char('日');
         assert_eq!(buf.text, "中日英");
+    }
+}
+
+#[cfg(test)]
+mod mock_resolver_tests {
+    use super::{resolve_mock_idx, DEFAULT_MOCK};
+
+    fn sample_mocks() -> Vec<String> {
+        // 与 preview::available_mocks 一样按字典序排;故意让 "dev" 不在 0 号位,
+        // 这样才能证明我们回退到的是 "dev",而不是巧合落在 index 0。
+        let mut v = vec![
+            "critical".to_string(),
+            "complete".to_string(),
+            DEFAULT_MOCK.to_string(),
+            "error".to_string(),
+            "thinking".to_string(),
+        ];
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn test_resolves_known_mock_without_warning() {
+        let mocks = sample_mocks();
+        let (idx, warn) = resolve_mock_idx(&mocks, "thinking");
+        assert_eq!(mocks[idx], "thinking");
+        assert!(warn.is_none());
+    }
+
+    #[test]
+    fn test_unknown_mock_falls_back_to_dev_with_warning() {
+        let mocks = sample_mocks();
+        let (idx, warn) = resolve_mock_idx(&mocks, "totally-bogus");
+        // 必须回到 dev,而不是排序后的 index 0(`complete`)
+        assert_eq!(mocks[idx], DEFAULT_MOCK);
+        let warn = warn.expect("未知 mock 必须返回一条提示");
+        assert!(warn.contains("totally-bogus"));
+        assert!(warn.contains(DEFAULT_MOCK));
+    }
+
+    /// 边界:如果 DEFAULT_MOCK 本身都不在列表里(理论上不该发生,
+    /// 但要保证不会 panic),就兜底到 0 号位且仍有提示。
+    #[test]
+    fn test_unknown_mock_with_missing_default() {
+        let mocks = vec!["alpha".to_string(), "beta".to_string()];
+        let (idx, warn) = resolve_mock_idx(&mocks, "unknown");
+        assert_eq!(idx, 0);
+        assert!(warn.is_some());
     }
 }

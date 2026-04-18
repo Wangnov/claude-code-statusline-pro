@@ -12,7 +12,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use toml_edit::{value as toml_value, DocumentMut, Item};
 
 use claude_code_statusline_pro::config::ComponentMultilineConfig;
-use claude_code_statusline_pro::utils;
 
 /// 旧版本只读摘要(向后兼容,其他 v2 代码还在用)。
 pub struct WidgetSummary {
@@ -57,21 +56,22 @@ pub fn scan_summaries(project_base_dir: Option<&Path>) -> Vec<WidgetSummary> {
 
 /// 扫描并返回每个文件里的 widget 完整元信息。
 ///
-/// 在 user scope 下,`project_base_dir` 解析出的组件目录会与用户级目录
-/// 指向同一位置(`~/.claude/statusline-pro/components`),必须去重避免
-/// 同一个 widget 被扫两次。去重基于 canonicalize 后的绝对路径。
-pub fn scan_files(project_base_dir: Option<&Path>) -> Vec<WidgetFile> {
+/// 只扫描传入的 `base_dir/components`。以前会把 `~/.claude/statusline-pro
+/// /components` 无条件拼进来,在 project / custom scope 下同一个组件会
+/// 同时冒出用户层和项目层两份;选到用户层那条执行 toggle / delete,
+/// 写的是用户文件,但预览和运行时都优先读项目层,结果就是"改了没效果"
+/// 但用户文件已被悄悄动过。widget CRUD 必须只作用于当前正在编辑的这一层。
+///
+/// 调用方只需传入"正在编辑的那份 config 的目录"(一般就是
+/// `options.path.parent()`):user scope 传用户配置目录、project scope
+/// 传项目配置目录、custom scope 传 custom 文件所在目录,语义统一。
+///
+/// 仍保留基于 canonicalize 的去重,主要挡住调用者重复传同一路径的情况。
+pub fn scan_files(base_dir: Option<&Path>) -> Vec<WidgetFile> {
     let mut out = Vec::new();
     let mut seen: HashSet<PathBuf> = HashSet::new();
 
-    if let Some(home) = utils::home_dir() {
-        collect_from_dir(
-            &home.join(".claude/statusline-pro/components"),
-            &mut out,
-            &mut seen,
-        );
-    }
-    if let Some(base) = project_base_dir {
+    if let Some(base) = base_dir {
         collect_from_dir(&base.join("components"), &mut out, &mut seen);
     }
 
@@ -335,6 +335,47 @@ text_icon = "[y]"
         };
         assert!(foo.enabled);
         assert_eq!(foo.kind, "static");
+        Ok(())
+    }
+
+    /// 回归:scan_files 只能读传入 base_dir 下的 components,不能把
+    /// 用户配置目录或别的层级的 widget 混进来。之前 scan_files 会无条件
+    /// 附带 `~/.claude/statusline-pro/components`,在 project / custom
+    /// scope 下会把用户层 widget 和项目层 widget 混在一起,toggle/delete
+    /// 可能写到错误层。
+    #[test]
+    fn test_scan_files_is_scoped_to_base_dir() -> Result<()> {
+        // 故意构造两个独立目录,模拟"project 层"和"user 层";
+        // 只把 project 层传进 scan_files,就不能看到 user 层的条目。
+        let project_dir = tempfile::tempdir()?;
+        write_sample(project_dir.path())?;
+
+        let user_dir = tempfile::tempdir()?;
+        let user_components = user_dir.path().join("components");
+        fs::create_dir_all(&user_components)?;
+        fs::write(
+            user_components.join("user_only.toml"),
+            r#"
+[widgets.user_widget]
+enabled = true
+type = "static"
+row = 1
+col = 0
+nerd_icon = "u"
+emoji_icon = "u"
+text_icon = "[u]"
+content = "from user layer"
+"#,
+        )?;
+
+        let files = scan_files(Some(project_dir.path()));
+        // 项目层应该能看到
+        assert!(files.iter().any(|f| f.component == "usage"));
+        // 用户层的文件无论如何都不能混进来
+        assert!(
+            files.iter().all(|f| f.component != "user_only"),
+            "scan_files 不应越过 base_dir 去读其他层的 components"
+        );
         Ok(())
     }
 

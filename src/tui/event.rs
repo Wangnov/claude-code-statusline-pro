@@ -147,7 +147,7 @@ async fn handle_ctrl(app: &mut App, key: KeyEvent) -> Result<bool> {
             Ok(false)
         }
         KeyCode::Char('s') => {
-            app.save()?;
+            app.save().await?;
             Ok(true)
         }
         KeyCode::Char('r') => {
