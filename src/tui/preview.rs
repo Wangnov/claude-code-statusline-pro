@@ -8,6 +8,7 @@ use std::path::Path;
 use ansi_to_tui::IntoText;
 use anyhow::{anyhow, Result};
 use ratatui::text::Line;
+use toml_edit::DocumentMut;
 
 use claude_code_statusline_pro::config::Config;
 use claude_code_statusline_pro::core::{GeneratorOptions, StatuslineGenerator};
@@ -63,7 +64,16 @@ pub fn available_mocks() -> Vec<String> {
     v
 }
 
-/// 把 TOML 当作 `Config::default()` 之上的稀疏 overlay 反序列化。
+/// 把 TOML 当作 `inherited` 之上的稀疏 overlay 反序列化。
+///
+/// `inherited` 一般由调用方(App)按当前编辑的 scope 预先算好:
+/// - `User` 编辑 → inherited = `Config::default()` 的 JSON
+/// - `Project` 编辑 → inherited = default + 用户层
+/// - `Custom` 编辑 → inherited = default + 用户层 + 项目层(走 `ConfigLoader`)
+///
+/// 这样预览才会和真实运行时一致:如果用户层写了 `theme = "powerline"`,
+/// 而项目级配置只覆盖了一个图标,预览里仍然能看到 powerline 主题;
+/// 否则就会错误地回落成默认主题,编辑器等于在假数据上工作。
 ///
 /// `ConfigLoader::load_config_layers` 就是这么干的:用户/项目/自定义层都
 /// 按"增量叠加"语义处理,最后再把合并后的 JSON 反序列化到 `Config`。
@@ -71,9 +81,8 @@ pub fn available_mocks() -> Vec<String> {
 /// `BaseComponentConfig`(`emoji_icon` / `nerd_icon` / `text_icon`
 /// 没有 serde default)就会拒绝一切省略了这些键的局部配置 —— 包括
 /// 空文件和首次从最小 override 起步的配置,直接砍掉编辑器的使用场景。
-pub fn parse_config(toml_text: &str) -> Result<Config> {
-    let mut merged = serde_json::to_value(Config::default())
-        .map_err(|err| anyhow!("序列化默认配置失败: {err}"))?;
+pub fn parse_config(toml_text: &str, inherited: &serde_json::Value) -> Result<Config> {
+    let mut merged = inherited.clone();
     if !toml_text.trim().is_empty() {
         let overlay: serde_json::Value =
             toml_edit::de::from_str(toml_text).map_err(|err| anyhow!("{err}"))?;
@@ -82,8 +91,49 @@ pub fn parse_config(toml_text: &str) -> Result<Config> {
     serde_json::from_value(merged).map_err(|err| anyhow!("{err}"))
 }
 
+/// 返回点路径 `dotted`(形如 `components.project.enabled`)的"最终生效值"
+/// ,按 inherited baseline → 当前 buffer 的顺序合并后再读,拿不到就返回 `None`。
+///
+/// Codex round 7 / P2 的 bool 快捷切换必须走这条路径:之前 `space_action`
+/// 用 `io::get_bool(buffer).unwrap_or(false)`,在 sparse 配置里默认值为 true
+/// 的字段(比如 `enabled`)读到的是 false;第一次按空格只写入 true = 等于没
+/// 变化,用户得按两次才能真关掉一个默认开的开关。现在先合并 inherited
+/// + buffer 再查,就和运行时的"有效值"一致了。
+///
+/// 解析 buffer 失败(不是合法 TOML)时直接返回 `None`,让调用方按"拿不到
+/// 有效值"处理;bail 到 false fallback 是更糟的决策,因为会丢 inherited
+/// 里可能已经有的正确值。
+pub fn effective_bool(
+    document: &DocumentMut,
+    inherited: &serde_json::Value,
+    dotted: &str,
+) -> Option<bool> {
+    let buffer_overlay: serde_json::Value =
+        toml_edit::de::from_str(&document.to_string()).ok()?;
+    if !buffer_overlay.is_object() {
+        // 空文档或不完整 buffer 解析出来可能不是 Object。不进行 merge
+        // (merge_json 对非 Object overlay 会整体替换 base,会把 inherited
+        // 抹平成非对象,从而导致后面的 .get 走不下去),直接查 inherited。
+        return walk_json_bool(inherited, dotted);
+    }
+    let mut merged = inherited.clone();
+    merge_json(&mut merged, buffer_overlay);
+    walk_json_bool(&merged, dotted)
+}
+
+fn walk_json_bool(root: &serde_json::Value, dotted: &str) -> Option<bool> {
+    let mut current = root;
+    for seg in dotted.split('.') {
+        current = current.get(seg)?;
+    }
+    current.as_bool()
+}
+
 /// 与 `ConfigLoader::merge_value` 语义保持一致:object 合并,其他直接覆盖。
-fn merge_json(base: &mut serde_json::Value, overlay: serde_json::Value) {
+///
+/// `pub(crate)` 是为了让 `tui::app` 在计算 inherited baseline 时能直接复用
+/// 这套合并逻辑,免得在两个地方写两份容易漂的规则。
+pub(crate) fn merge_json(base: &mut serde_json::Value, overlay: serde_json::Value) {
     use serde_json::Value;
     match (base, overlay) {
         (Value::Object(base_map), Value::Object(overlay_map)) => {
@@ -194,11 +244,15 @@ mod tests {
         Ok(())
     }
 
+    fn defaults_json() -> serde_json::Value {
+        serde_json::to_value(Config::default()).expect("default config serializable")
+    }
+
     /// 回归:稀疏配置(没有覆盖 components.*.emoji_icon 等 flatten 必填字段)
     /// 必须能通过 parse_config,否则编辑器里首次保存就会被误判为"校验失败"。
     #[test]
     fn test_parse_config_accepts_empty_overlay() -> Result<()> {
-        let cfg = parse_config("")?;
+        let cfg = parse_config("", &defaults_json())?;
         // 空文件 → 等于全默认
         assert_eq!(cfg.theme, Config::default().theme);
         Ok(())
@@ -213,7 +267,7 @@ preset = "PMBT"
 [components.project]
 enabled = false
 "#;
-        let cfg = parse_config(toml)?;
+        let cfg = parse_config(toml, &defaults_json())?;
         assert_eq!(cfg.preset.as_deref(), Some("PMBT"));
         assert!(!cfg.components.project.base.enabled);
         // 其他默认值保留
@@ -228,6 +282,83 @@ enabled = false
 [components.project]
 enabled = "yes"
 "#;
-        assert!(parse_config(toml).is_err());
+        assert!(parse_config(toml, &defaults_json()).is_err());
+    }
+
+    /// 回归:当 inherited(= 用户层/项目层)里已经设置了某字段而 buffer
+    /// 没提到它,parse_config 必须透传 inherited 的值,不能让它回落到
+    /// `Config::default()`。这是 Codex round 7 的 P1 核心场景:以前编辑
+    /// 项目级配置时预览完全看不到用户层的 theme,等于在错误 baseline 上工作。
+    #[test]
+    fn test_parse_config_inherits_lower_layer_values() -> Result<()> {
+        let mut inherited = defaults_json();
+        inherited["theme"] = serde_json::Value::String("powerline".to_string());
+
+        let buffer = r#"preset = "PMBT"
+"#;
+        let cfg = parse_config(buffer, &inherited)?;
+        assert_eq!(cfg.theme, "powerline", "inherited theme 必须保留");
+        assert_eq!(cfg.preset.as_deref(), Some("PMBT"));
+        Ok(())
+    }
+
+    /// buffer 显式写同一个 key 时必须能覆盖 inherited 的值。
+    #[test]
+    fn test_parse_config_buffer_overrides_inherited() -> Result<()> {
+        let mut inherited = defaults_json();
+        inherited["theme"] = serde_json::Value::String("powerline".to_string());
+
+        let buffer = r#"theme = "classic"
+"#;
+        let cfg = parse_config(buffer, &inherited)?;
+        assert_eq!(cfg.theme, "classic");
+        Ok(())
+    }
+
+    /// 回归 Codex round 7 / P2:bool 快捷切换必须从"最终生效值"起跳。
+    /// Config::default() 里 `components.project.enabled = true`,如果 buffer
+    /// 完全没提到这个 key,effective_bool 要拿到 true;之前 unwrap_or(false)
+    /// 会读到 false,第一次按空格写入 true 等于没变化。
+    #[test]
+    fn test_effective_bool_reads_default_true_when_buffer_silent() -> Result<()> {
+        let doc: DocumentMut = "".parse()?;
+        let inherited = defaults_json();
+        // default 里这个字段应该就是 true(components.project.enabled)
+        let v = effective_bool(&doc, &inherited, "components.project.enabled");
+        assert_eq!(v, Some(true));
+        Ok(())
+    }
+
+    /// buffer 覆盖 inherited 的情况。
+    #[test]
+    fn test_effective_bool_buffer_beats_inherited() -> Result<()> {
+        let doc: DocumentMut = "[components.project]\nenabled = false\n".parse()?;
+        let inherited = defaults_json();
+        let v = effective_bool(&doc, &inherited, "components.project.enabled");
+        assert_eq!(v, Some(false));
+        Ok(())
+    }
+
+    /// inherited 里不存在的字段,effective_bool 返回 None,交给调用方决定 fallback。
+    #[test]
+    fn test_effective_bool_missing_key_returns_none() -> Result<()> {
+        let doc: DocumentMut = "".parse()?;
+        let inherited = defaults_json();
+        let v = effective_bool(&doc, &inherited, "components.project.not_a_field");
+        assert_eq!(v, None);
+        Ok(())
+    }
+
+    /// inherited 里用户层已经把默认 true 的开关改成 false,buffer 又没提,
+    /// effective_bool 必须拿到 inherited 的 false,而不是回落到 default 的 true。
+    #[test]
+    fn test_effective_bool_inherited_beats_default() -> Result<()> {
+        let doc: DocumentMut = "".parse()?;
+        let mut inherited = defaults_json();
+        inherited["components"]["project"]["enabled"] =
+            serde_json::Value::Bool(false);
+        let v = effective_bool(&doc, &inherited, "components.project.enabled");
+        assert_eq!(v, Some(false));
+        Ok(())
     }
 }

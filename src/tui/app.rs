@@ -6,7 +6,7 @@ use anyhow::{anyhow, Context, Result};
 use ratatui::text::Line;
 use toml_edit::DocumentMut;
 
-use claude_code_statusline_pro::config::{ConfigLoader, MergeReport};
+use claude_code_statusline_pro::config::{Config, ConfigLoader, MergeReport};
 
 use crate::tui::io;
 use crate::tui::preview;
@@ -205,6 +205,11 @@ pub struct App {
     pub merge_report_visible: bool,
     pub search: Option<SearchState>,
     pub widget_new: Option<NewWidgetDialog>,
+    /// 预览和校验的基线层级。编辑的当前文件之下的所有层(default / user /
+    /// project)按真实 `ConfigLoader` 的合并顺序叠好,作为 `parse_config` 的
+    /// inherited 参数传入。scope 切换时必须一起更新,否则 P1 回归:
+    /// "项目级配置预览丢掉用户层设置"就会复现。
+    pub inherited_json: serde_json::Value,
 }
 
 impl App {
@@ -221,6 +226,10 @@ impl App {
         let widget_summaries = scan_summaries(options.path.parent());
         let widget_files = widgets::scan_files(options.path.parent());
         let merge_report = load_merge_report(&options).await;
+        // inherited_json 必须在 App 构造前算出来:refresh_preview / save 校验
+        // 都要拿它当 parse_config 的 baseline。失败就 graceful-degrade 到
+        // 纯 default,TUI 仍然可用,不会因为一条坏配置打不开编辑器。
+        let inherited_json = compute_inherited_json(&options).await;
 
         let mut app = Self {
             options,
@@ -244,6 +253,7 @@ impl App {
             merge_report_visible: false,
             search: None,
             widget_new: None,
+            inherited_json,
         };
 
         app.refresh_preview().await;
@@ -575,7 +585,15 @@ impl App {
         match field.kind {
             FieldKind::Bool => {
                 let path = field.path;
-                let current = io::get_bool(&self.document, path).unwrap_or(false);
+                // 关键:取"最终生效值"而不是"buffer 里显式写了什么"。
+                // 之前用 io::get_bool(buffer).unwrap_or(false),当 buffer
+                // 没写这个 key 而 default/inherited 是 true 时,会误读成
+                // false,按一次空格写进去 true,等于没变;用户要按两次才
+                // 真的能把默认开启的开关关掉。现在先合并 inherited+buffer
+                // 再取,和运行时一致。
+                let current =
+                    preview::effective_bool(&self.document, &self.inherited_json, path)
+                        .unwrap_or(false);
                 match io::set_bool(&mut self.document, path, !current) {
                     Ok(()) => {
                         self.dirty = true;
@@ -755,8 +773,13 @@ impl App {
         // widget_summaries 只是旧字段帮助面板展示用的别名。
         self.widget_files = widgets::scan_files(target_path.parent());
         self.widget_summaries = scan_summaries(target_path.parent());
-        // 合并报告也是按旧 scope 算的,切 scope 后要重新按新目标算一次
+        // 合并报告也是按旧 scope 算的,切 scope 后要重新按新目标算一次。
+        // inherited_json 同理:新 scope 之下的层完全不一样
+        // (user→空,project→只有 user,custom→user+project),refresh_preview
+        // 必须拿到新的 baseline,否则 P1 回归:切到项目级后 preview 还按用户级
+        // 的 baseline 算 "inherited+buffer",等于多叠了一层用户配置。
         self.merge_report = load_merge_report(&self.options).await;
+        self.inherited_json = compute_inherited_json(&self.options).await;
         self.refresh_preview().await;
         let label = match target_scope {
             EditScope::User => "用户级",
@@ -768,7 +791,7 @@ impl App {
 
     pub async fn save(&mut self) -> Result<()> {
         let doc_str = self.document.to_string();
-        if let Err(err) = preview::parse_config(&doc_str) {
+        if let Err(err) = preview::parse_config(&doc_str, &self.inherited_json) {
             self.error(format!("校验失败,未保存: {err}"));
             return Ok(());
         }
@@ -789,7 +812,7 @@ impl App {
     /// 重新渲染预览。解析失败时优雅降级为提示文案。
     pub async fn refresh_preview(&mut self) {
         let doc_str = self.document.to_string();
-        let config = match preview::parse_config(&doc_str) {
+        let config = match preview::parse_config(&doc_str, &self.inherited_json) {
             Ok(cfg) => cfg,
             Err(err) => {
                 self.preview_lines = vec![Line::from(format!("(预览暂不可用: {err})"))];
@@ -878,6 +901,66 @@ async fn load_merge_report(options: &EditOptions) -> Option<MergeReport> {
     loader.merge_report().cloned()
 }
 
+/// 为"正在编辑的那一层"算出 inherited baseline(= 它之下的所有层合并后的值)。
+///
+/// 这是 Codex round 7 / P1 的核心修复:之前预览永远从 `Config::default()`
+/// 开始叠当前 buffer,等于丢光了用户层 / 项目层之前已经写好的东西。现在按
+/// scope 走和 `ConfigLoader` 一致的层级链,保证预览结果和真实运行时一致。
+///
+/// 失败时不让编辑器开不起来,所以兜底返回 `Config::default()` 的 JSON:
+/// - User 层文件读失败 → 继续;
+/// - ConfigLoader 加载失败 → 继续(Custom scope);
+/// - 最兜底的 `serde_json::to_value(Config::default())` 理论不会失败,
+///   真失败了就给 `Value::Null`,preview 后面会优雅降级成错误提示。
+async fn compute_inherited_json(options: &EditOptions) -> serde_json::Value {
+    match try_compute_inherited(options).await {
+        Ok(v) => v,
+        Err(_) => {
+            serde_json::to_value(Config::default()).unwrap_or(serde_json::Value::Null)
+        }
+    }
+}
+
+async fn try_compute_inherited(options: &EditOptions) -> Result<serde_json::Value> {
+    let mut merged = serde_json::to_value(Config::default())
+        .map_err(|err| anyhow!("序列化默认配置失败: {err}"))?;
+
+    match options.scope {
+        EditScope::User => {
+            // User 是最低的用户可写层,下面就只有 Config::default()。
+        }
+        EditScope::Project => {
+            // Project 之下是 user;直接读用户文件,按稀疏 overlay 叠。
+            // 这里故意不经 ConfigLoader — loader 会同时拉起 project 层本身,
+            // 把我们正在编辑的那份文件也叠进来,得到的就不是"baseline"了。
+            let loader = ConfigLoader::new();
+            if let Some(user_path) = loader.user_config_path() {
+                if user_path.exists() {
+                    let text = std::fs::read_to_string(&user_path)
+                        .map_err(|err| anyhow!("读取用户配置 {} 失败: {err}", user_path.display()))?;
+                    if !text.trim().is_empty() {
+                        let overlay: serde_json::Value = toml_edit::de::from_str(&text)
+                            .map_err(|err| anyhow!("解析用户配置失败: {err}"))?;
+                        preview::merge_json(&mut merged, overlay);
+                    }
+                }
+            }
+        }
+        EditScope::Custom => {
+            // Custom 之下是 default+user+project;`ConfigLoader::load(None)`
+            // 就是这条链的完整合并结果,直接拿来当 baseline 用。
+            let mut loader = ConfigLoader::new();
+            let cfg = loader
+                .load(None)
+                .await
+                .map_err(|err| anyhow!("加载 default+user+project 层失败: {err}"))?;
+            merged = serde_json::to_value(cfg)
+                .map_err(|err| anyhow!("序列化基础配置失败: {err}"))?;
+        }
+    }
+    Ok(merged)
+}
+
 #[cfg(test)]
 mod edit_buffer_tests {
     use super::EditBuffer;
@@ -953,6 +1036,43 @@ mod edit_buffer_tests {
         buf.move_left();
         buf.insert_char('日');
         assert_eq!(buf.text, "中日英");
+    }
+}
+
+#[cfg(test)]
+mod inherited_tests {
+    use super::*;
+
+    /// User scope 之下没有任何层,compute_inherited_json 必须返回纯
+    /// `Config::default()` 的 JSON,等价于旧行为 — 这个 case 是保证
+    /// P1 修复不会破坏 user scope 的既有语义。
+    #[tokio::test]
+    async fn test_compute_inherited_user_scope_returns_defaults() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let options = EditOptions {
+            path: temp.path().join("config.toml"),
+            scope: EditScope::User,
+            mock_scenario: "dev".into(),
+        };
+        let got = compute_inherited_json(&options).await;
+        let defaults = serde_json::to_value(Config::default()).expect("serialize defaults");
+        assert_eq!(got, defaults);
+    }
+
+    /// 兜底逻辑:所有 scope 在输入目录完全不存在等异常路径下,也至少
+    /// 能返回一个可序列化回 Config 的 JSON,不让 TUI 崩。
+    #[tokio::test]
+    async fn test_compute_inherited_degrades_to_defaults_on_missing_dirs() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        // Custom scope 下即使 path 指向一个完全不存在的地方,也不能 panic
+        let options = EditOptions {
+            path: temp.path().join("definitely_missing/config.toml"),
+            scope: EditScope::Custom,
+            mock_scenario: "dev".into(),
+        };
+        let got = compute_inherited_json(&options).await;
+        // 至少能回转成 Config,不是 Null
+        let _roundtrip: Config = serde_json::from_value(got).expect("inherited must deserialize");
     }
 }
 
