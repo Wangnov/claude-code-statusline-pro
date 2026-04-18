@@ -1,7 +1,8 @@
 # npm publishing pipeline. Binaries are built by the cargo-dist generated
-# release.yml on tag-push; this workflow fires *after* that, downloads the
-# platform archives from the GitHub Release, extracts the binaries into the
-# npm platform packages, and publishes them via trusted publishing.
+# release.yml on tag-push; this workflow fires after Release completes,
+# downloads the platform archives from the GitHub Release, extracts the
+# binaries into the npm platform packages, and publishes them via trusted
+# publishing.
 #
 # Keeping this file's name (build.yml) and the job name (assemble-npm)
 # unchanged preserves the existing npm trusted-publisher bindings for:
@@ -37,12 +38,15 @@ jobs:
   assemble-npm:
     name: assemble npm package
     runs-on: ubuntu-latest
-    # Only fire when the upstream Release workflow finished successfully on a
-    # version tag, or on an explicit manual dispatch.
+    # Fire on any version-tag Release completion, or on an explicit manual
+    # dispatch. cargo-dist creates the GitHub Release in the `host` job before
+    # later publish jobs such as Homebrew, so a downstream publish failure can
+    # leave a valid GitHub Release behind while the overall workflow concludes
+    # failure. We key npm publishing off release asset availability instead of
+    # the final workflow conclusion.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
        startsWith(github.event.workflow_run.head_branch, 'v'))
     environment:
       name: npm-release
@@ -72,14 +76,39 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Using tag=${TAG}, version=${VERSION}"
 
+      - name: Check GitHub Release availability
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub Release $TAG is available"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "GitHub Release $TAG is not available yet"
+          fi
+
+      - name: Fail manual rebuild when release is missing
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          steps.release.outputs.exists != 'true'
+        run: |
+          echo "::error::GitHub Release ${{ steps.tag.outputs.tag }} does not exist"
+          exit 1
+
       # Check out the exact commit the tag points at so the npm wrappers
       # packaged here match the binaries in the GitHub Release (addresses
       # Codex P2 for workflow_dispatch reruns after main has advanced).
       - uses: actions/checkout@v6
+        if: ${{ steps.release.outputs.exists == 'true' }}
         with:
           ref: ${{ steps.tag.outputs.tag }}
 
       - name: Download cargo-dist release assets
+        if: ${{ steps.release.outputs.exists == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.tag.outputs.tag }}
@@ -94,6 +123,7 @@ jobs:
           ls -la dist/release
 
       - name: Extract platform binaries
+        if: ${{ steps.release.outputs.exists == 'true' }}
         run: |
           set -euo pipefail
           mkdir -p dist/bin
@@ -153,6 +183,7 @@ jobs:
           ls -la ../bin
 
       - name: Patch package.json versions to match release tag
+        if: ${{ steps.release.outputs.exists == 'true' }}
         env:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
@@ -184,6 +215,7 @@ jobs:
           NODE
 
       - name: Arrange binaries for npm packages
+        if: ${{ steps.release.outputs.exists == 'true' }}
         run: |
           set -euo pipefail
           for platform in macos-arm64 macos-x64 linux-x64 linux-arm64; do
@@ -201,12 +233,14 @@ jobs:
           done
 
       - name: Setup Node
+        if: ${{ steps.release.outputs.exists == 'true' }}
         uses: actions/setup-node@v6
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Pack platform packages
+        if: ${{ steps.release.outputs.exists == 'true' }}
         run: |
           set -euo pipefail
           packages=(
@@ -224,6 +258,7 @@ jobs:
           done
 
       - name: Pack main package (ccsp)
+        if: ${{ steps.release.outputs.exists == 'true' }}
         run: |
           set -euo pipefail
           cp README.md npm/ccsp/
@@ -231,6 +266,7 @@ jobs:
           (cd npm/ccsp && npm pack)
 
       - name: Pack legacy package (claude-code-statusline-pro)
+        if: ${{ steps.release.outputs.exists == 'true' }}
         run: |
           set -euo pipefail
           cp README.md npm/claude-code-statusline-pro/
@@ -238,6 +274,7 @@ jobs:
           (cd npm/claude-code-statusline-pro && npm pack)
 
       - name: Smoke test assembled packages (linux-x64)
+        if: ${{ steps.release.outputs.exists == 'true' }}
         run: |
           set -euo pipefail
           PLATFORM_TARBALL=$(ls npm/platforms/ccsp-linux-x64/*.tgz)
@@ -254,6 +291,7 @@ jobs:
           NODE_PATH="$TMP_DIR/node_modules" node "$TMP_DIR/node_modules/claude-code-statusline-pro/index.js" --help >/dev/null
 
       - name: Ensure npm versions are unpublished
+        if: ${{ steps.release.outputs.exists == 'true' }}
         env:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
@@ -276,6 +314,7 @@ jobs:
           done
 
       - name: Publish npm packages
+        if: ${{ steps.release.outputs.exists == 'true' }}
         run: |
           set -euo pipefail
 
@@ -288,6 +327,7 @@ jobs:
           npm publish "$(ls npm/claude-code-statusline-pro/*.tgz)" --access public
 
       - name: Upload npm tarballs
+        if: ${{ steps.release.outputs.exists == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: npm-packages
