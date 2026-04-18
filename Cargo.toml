@@ -101,3 +101,16 @@ path = "src/main.rs"
 [profile.dev]
 opt-level = 0
 debug = true
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
+# cargo-release 配置：保持与现有 git log 风格一致（"chore: release vX.Y.Z"）
+# 两阶段发布流程详见 CONTRIBUTING.md
+[package.metadata.release]
+tag-name = "v{{version}}"
+pre-release-commit-message = "chore: release v{{version}}"
+tag-message = "Release v{{version}}"
+allow-branch = ["main"]
