@@ -4,6 +4,7 @@
 //! widget 元信息,并提供三个 CRUD 操作(toggle_enabled / cycle_type / delete)。
 //! 所有写入都走 `toml_edit::DocumentMut`,保留注释与顺序。
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -55,22 +56,36 @@ pub fn scan_summaries(project_base_dir: Option<&Path>) -> Vec<WidgetSummary> {
 // ---- v3 完整扫描 ----
 
 /// 扫描并返回每个文件里的 widget 完整元信息。
+///
+/// 在 user scope 下,`project_base_dir` 解析出的组件目录会与用户级目录
+/// 指向同一位置(`~/.claude/statusline-pro/components`),必须去重避免
+/// 同一个 widget 被扫两次。去重基于 canonicalize 后的绝对路径。
 pub fn scan_files(project_base_dir: Option<&Path>) -> Vec<WidgetFile> {
     let mut out = Vec::new();
+    let mut seen: HashSet<PathBuf> = HashSet::new();
 
     if let Some(home) = utils::home_dir() {
-        collect_from_dir(&home.join(".claude/statusline-pro/components"), &mut out);
+        collect_from_dir(
+            &home.join(".claude/statusline-pro/components"),
+            &mut out,
+            &mut seen,
+        );
     }
     if let Some(base) = project_base_dir {
-        collect_from_dir(&base.join("components"), &mut out);
+        collect_from_dir(&base.join("components"), &mut out, &mut seen);
     }
 
     out.sort_by(|a, b| a.component.cmp(&b.component));
     out
 }
 
-fn collect_from_dir(dir: &Path, out: &mut Vec<WidgetFile>) {
+fn collect_from_dir(dir: &Path, out: &mut Vec<WidgetFile>, seen: &mut HashSet<PathBuf>) {
     if !dir.exists() {
+        return;
+    }
+    // canonicalize 在目录存在时一定成功,fallback 只是保守兜底
+    let canonical = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    if !seen.insert(canonical) {
         return;
     }
     let Ok(entries) = fs::read_dir(dir) else {
@@ -270,6 +285,28 @@ text_icon = "[y]"
 "#,
         )?;
         Ok(path)
+    }
+
+    /// 模拟 user scope:project_base_dir 就是组件目录的父目录,
+    /// 和 utils::home_dir() 得到的路径重合时不应该扫出重复条目。
+    #[test]
+    fn test_scan_files_dedups_same_dir() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = write_sample(temp.path())?;
+        // 用相同路径调两次 collect_from_dir
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        let dir = path
+            .parent()
+            .ok_or_else(|| anyhow!("sample path missing parent"))?;
+        collect_from_dir(dir, &mut out, &mut seen);
+        collect_from_dir(dir, &mut out, &mut seen);
+        assert_eq!(
+            out.iter().filter(|f| f.component == "usage").count(),
+            1,
+            "same dir scanned twice should not duplicate"
+        );
+        Ok(())
     }
 
     #[test]

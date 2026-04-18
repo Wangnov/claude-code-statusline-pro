@@ -508,14 +508,17 @@ async fn handle_config_edit(
             .ok_or_else(|| anyhow!("无法确定用户级配置路径"))?;
         (user, tui::EditScope::User)
     } else {
-        match loader.project_config_path() {
-            Ok(p) => (p, tui::EditScope::Project),
-            Err(_) => {
-                let user = loader
-                    .user_config_path()
-                    .ok_or_else(|| anyhow!("无法确定用户级配置路径"))?;
-                (user, tui::EditScope::User)
-            }
+        // 只有在项目级配置文件实际存在时,才默认进入 Project scope。
+        // `project_config_path()` 即使没有文件也会算出一个路径,直接用会让
+        // 任意目录下的 `config edit` 意外创建项目级 config。
+        let project_existing = loader.project_config_path().ok().filter(|p| p.exists());
+        if let Some(p) = project_existing {
+            (p, tui::EditScope::Project)
+        } else {
+            let user = loader
+                .user_config_path()
+                .ok_or_else(|| anyhow!("无法确定用户级配置路径"))?;
+            (user, tui::EditScope::User)
         }
     };
 

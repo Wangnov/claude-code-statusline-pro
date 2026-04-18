@@ -745,7 +745,11 @@ impl App {
         self.original = new_document;
         self.section_idx = 0;
         self.field_idx = 0;
+        self.widget_cursor = 0;
         self.dirty = false;
+        // Widgets Tab 读的是 widget_files,scope 切换后必须一起刷新;
+        // widget_summaries 只是旧字段帮助面板展示用的别名。
+        self.widget_files = widgets::scan_files(target_path.parent());
         self.widget_summaries = scan_summaries(target_path.parent());
         self.refresh_preview().await;
         let label = match target_scope {

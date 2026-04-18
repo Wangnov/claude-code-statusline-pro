@@ -47,17 +47,32 @@ pub async fn run(options: EditOptions) -> Result<()> {
         bail!("`config edit` 需要交互式终端(TTY),当前 stdin/stdout 不是 TTY。");
     }
 
+    // 先构造 App。任何 IO / 解析错误要在进入 raw mode 之前发生,
+    // 否则错误返回路径会把用户终端留在 raw mode + alternate screen 里。
+    let mut app = app::App::from_options(options).await?;
+
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    if let Err(err) = execute!(stdout, EnterAlternateScreen, EnableMouseCapture) {
+        let _ = disable_raw_mode();
+        return Err(err.into());
+    }
 
+    // 从这里起必须保证 cleanup 被执行
     let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    let mut terminal = match Terminal::new(backend) {
+        Ok(t) => t,
+        Err(err) => {
+            let mut out = std::io::stdout();
+            let _ = execute!(out, LeaveAlternateScreen, DisableMouseCapture);
+            let _ = disable_raw_mode();
+            return Err(err.into());
+        }
+    };
 
-    let mut app = app::App::from_options(options).await?;
     let loop_result = event::run_loop(&mut terminal, &mut app).await;
 
-    // 无论成功还是失败,都要恢复终端
+    // 无论 loop 成功还是失败都恢复终端
     let _ = disable_raw_mode();
     let _ = execute!(
         terminal.backend_mut(),
