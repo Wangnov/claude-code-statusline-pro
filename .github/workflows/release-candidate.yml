@@ -31,7 +31,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
@@ -46,7 +46,7 @@ jobs:
           cat plan-dist-manifest.json
           echo "manifest=$(jq -c . plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
       - name: Upload plan manifest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: plan-dist-manifest
           path: plan-dist-manifest.json
@@ -65,7 +65,7 @@ jobs:
     steps:
       - name: enable windows longpaths
         run: git config --global core.longpaths true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
