@@ -3,9 +3,11 @@
 //! 用 `toml_edit` 而不是 `toml::to_string`,保留配置文件里的注释和顺序。
 
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 
 use anyhow::{anyhow, bail, Context, Result};
+use tempfile::NamedTempFile;
 use toml_edit::{value as toml_value, DocumentMut, InlineTable, Item, Table, Value};
 
 /// 读取已有文件;不存在则返回空 `DocumentMut`。
@@ -22,15 +24,32 @@ pub fn load_or_create(path: &Path) -> Result<DocumentMut> {
 }
 
 /// 原子写入。
+///
+/// 使用 `NamedTempFile::persist`:同卷内临时文件 → 原子替换目标。这点很关键
+/// —— 以前用 `fs::rename(&tmp, path)`,在 Windows 某些版本和某些路径下会
+/// 因为目标文件已存在而失败(`fs::rename` 的 replace 语义在 Windows 上有
+/// 历史坑),导致"编辑现有 config.toml 时第二次保存必挂"。
+/// NamedTempFile::persist 底层走 `MoveFileExW` + `MOVEFILE_REPLACE_EXISTING`,
+/// 把"目标存在就替换"的语义落实到平台 API,跨平台一致。
 pub fn save(path: &Path, doc: &DocumentMut) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("无法创建目录: {}", parent.display()))?;
     }
-    let tmp = path.with_extension("toml.tmp");
-    fs::write(&tmp, doc.to_string())
-        .with_context(|| format!("写临时文件失败: {}", tmp.display()))?;
-    fs::rename(&tmp, path).with_context(|| format!("原子重命名失败: {}", path.display()))?;
+    // 把临时文件创建在目标文件所在目录,persist 就是同卷 rename,必然原子。
+    // 放在系统默认 temp dir 会跨卷,persist 降级成 copy+delete,不原子。
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut tmp = NamedTempFile::new_in(parent)
+        .with_context(|| format!("创建临时文件失败(目录 {})", parent.display()))?;
+    tmp.write_all(doc.to_string().as_bytes())
+        .with_context(|| format!("写临时文件失败: {}", tmp.path().display()))?;
+    // 显式 sync 让内容真正落盘再 rename,配合 tempfile 就是 write-temp
+    // + fsync + atomic-replace 的标准三步。
+    tmp.as_file_mut()
+        .sync_all()
+        .with_context(|| format!("flush 临时文件失败: {}", tmp.path().display()))?;
+    tmp.persist(path)
+        .map_err(|err| anyhow!("原子替换失败 {}: {}", path.display(), err.error))?;
     Ok(())
 }
 
@@ -216,6 +235,33 @@ mod tests {
         let mut doc = DocumentMut::new();
         set_int(&mut doc, "multiline.max_rows", 7)?;
         assert_eq!(get_int(&doc, "multiline.max_rows"), Some(7));
+        Ok(())
+    }
+
+    /// 回归 Codex round 13 / P1:save() 必须能覆盖已经存在的目标文件。
+    /// 以前用 `fs::rename(&tmp, path)`,在 Windows 上遇到已存在文件会失败,
+    /// 导致"编辑现有 config.toml 的第二次保存永远挂"。这个测试在类 Unix
+    /// 上本来就能过,但它记录了这项不变式,跨平台 CI 会帮我们校验 Windows。
+    #[test]
+    fn test_save_overwrites_existing_file() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("config.toml");
+
+        // 第一次写
+        let mut doc1 = DocumentMut::new();
+        set_string(&mut doc1, "preset", "PMBT")?;
+        save(&path, &doc1)?;
+        let content1 = std::fs::read_to_string(&path)?;
+        assert!(content1.contains("\"PMBT\""));
+
+        // 第二次写同一个路径(关键:这次目标文件已经存在)
+        let mut doc2 = DocumentMut::new();
+        set_string(&mut doc2, "preset", "PMBTUS")?;
+        save(&path, &doc2)?;
+
+        let content2 = std::fs::read_to_string(&path)?;
+        assert!(content2.contains("\"PMBTUS\""));
+        assert!(!content2.contains("\"PMBT\"\n"));
         Ok(())
     }
 

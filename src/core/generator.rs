@@ -283,11 +283,16 @@ impl StatuslineGenerator {
         // Detect terminal capabilities
         let capabilities = self.detect_terminal_capabilities();
 
-        // Create render context
+        // Create render context. preview_mode 从 generator 透传到组件,
+        // 让 Usage/Tokens 这种依赖 storage 的组件能跳过 storage 调用 ——
+        // 否则就算 generator 这层已经不写 session snapshot,组件里
+        // `storage::get_*` 的 `StorageManager::new()` 仍会在用户真实目录
+        // 下 `ensure_directories()`,一样算副作用。
         let context = RenderContext {
             input: Arc::new(input_data),
             config: self.config.clone(),
             terminal: capabilities,
+            preview_mode: self.preview_mode,
         };
 
         // Render components

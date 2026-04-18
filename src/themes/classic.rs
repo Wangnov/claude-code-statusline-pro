@@ -132,6 +132,7 @@ mod tests {
         RenderContext {
             input: Arc::new(InputData::default()),
             config: Arc::new(config),
+            preview_mode: false,
             terminal: TerminalCapabilities {
                 color_support: ColorSupport::None,
                 ..Default::default()
@@ -198,6 +199,7 @@ mod tests {
         let ctx = RenderContext {
             input: Arc::new(InputData::default()),
             config: Arc::new(config),
+            preview_mode: false,
             terminal: TerminalCapabilities {
                 color_support: ColorSupport::None,
                 ..Default::default()

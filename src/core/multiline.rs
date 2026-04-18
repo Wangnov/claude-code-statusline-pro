@@ -1331,6 +1331,7 @@ content = "Hello"
                 supports_emoji: true,
                 supports_nerd_font: false,
             },
+            preview_mode: false,
         };
 
         let result = renderer.render_extension_lines(&context).await;
@@ -1383,6 +1384,7 @@ method = "GET"
             input: Arc::new(InputData::default()),
             config: Arc::new(config),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let result = renderer.render_extension_lines(&context).await;

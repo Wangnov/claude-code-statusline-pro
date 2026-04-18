@@ -213,6 +213,18 @@ impl UsageComponent {
     ) -> ComponentOutput {
         let icon = self.select_icon(ctx);
 
+        // preview 模式下绝对不能走真实 storage:`storage::get_conversation_cost_display`
+        // 内部会调 `StorageManager::new()`,其构造会 `ensure_directories()`,
+        // 在用户真实的 `~/.claude/statusline-pro/...` 下建目录,违反"preview
+        // 无副作用"的契约。返回一个稳定的 $0.00 占位,预览里只是让用户能看到
+        // 这个组件会出现在状态行的哪个位置,数字不需要是真实的。
+        if ctx.preview_mode {
+            return ComponentOutput::new("$0.00")
+                .with_icon_color("gray".to_string())
+                .with_text_color("gray".to_string())
+                .with_icon(icon.unwrap_or_default());
+        }
+
         // 使用新的conversation cost API
         match storage::get_conversation_cost_display(session_id).await {
             Ok(cost) => {

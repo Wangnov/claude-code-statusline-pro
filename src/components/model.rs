@@ -150,6 +150,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         }
     }
 
@@ -321,6 +322,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let component = ModelComponent::new(ModelComponentConfig::default());
@@ -370,6 +372,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let component = ModelComponent::new(ModelComponentConfig::default());
@@ -410,6 +413,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let output = component.render(&ctx).await;

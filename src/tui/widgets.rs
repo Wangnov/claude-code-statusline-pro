@@ -6,9 +6,11 @@
 
 use std::collections::HashSet;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
+use tempfile::NamedTempFile;
 use toml_edit::{value as toml_value, DocumentMut, InlineTable, Item, Value};
 
 use claude_code_statusline_pro::config::ComponentMultilineConfig;
@@ -243,9 +245,20 @@ fn load_document(path: &Path) -> Result<DocumentMut> {
 }
 
 fn save_document(path: &Path, doc: &DocumentMut) -> Result<()> {
-    let tmp = path.with_extension("toml.tmp");
-    fs::write(&tmp, doc.to_string()).with_context(|| format!("写 {} 失败", tmp.display()))?;
-    fs::rename(&tmp, path).with_context(|| format!("重命名失败: {}", path.display()))?;
+    // 和 tui::io::save 走同一套 write-temp + fsync + atomic-replace 路径:
+    // Windows 上旧实现用 `fs::rename` 在目标已存在时会失败,导致修改现有
+    // components/*.toml 文件的 toggle/delete/cycle/create 全部写不进去。
+    // NamedTempFile::persist 跨平台保证替换语义正确。
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut tmp = NamedTempFile::new_in(parent)
+        .with_context(|| format!("创建临时文件失败(目录 {})", parent.display()))?;
+    tmp.write_all(doc.to_string().as_bytes())
+        .with_context(|| format!("写 {} 失败", tmp.path().display()))?;
+    tmp.as_file_mut()
+        .sync_all()
+        .with_context(|| format!("flush 临时文件失败: {}", tmp.path().display()))?;
+    tmp.persist(path)
+        .map_err(|err| anyhow!("原子替换失败 {}: {}", path.display(), err.error))?;
     Ok(())
 }
 

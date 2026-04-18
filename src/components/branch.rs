@@ -411,6 +411,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         }
     }
 
@@ -464,6 +465,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let output = component.render(&ctx).await;
@@ -502,6 +504,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let component = BranchComponent::new(config);
@@ -523,6 +526,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let component = BranchComponent::new(config);
@@ -566,6 +570,7 @@ mod tests {
             input: Arc::new(input),
             config: Arc::new(Config::default()),
             terminal: TerminalCapabilities::default(),
+            preview_mode: false,
         };
 
         let resolved = BranchComponent::resolve_repo_path(&ctx);

@@ -82,6 +82,17 @@ pub struct RenderContext {
     pub config: Arc<Config>,
     /// Terminal capabilities
     pub terminal: TerminalCapabilities,
+    /// 预览模式标记:TUI 编辑器在用 mock data 渲染"这份配置长什么样"。
+    ///
+    /// 非 preview 渲染完全不受影响。preview 时组件必须绕开所有会触碰
+    /// `~/.claude/statusline-pro/...` 的 storage 调用 —— 即便 generator
+    /// 那一层已经跳过了 `ensure_storage_ready` 和 `update_session_snapshot`,
+    /// `UsageComponent` / `TokensComponent` 仍会在 conversation usage 模式下
+    /// 走 `storage::get_*`,底层 `StorageManager::new()` 又会顺手
+    /// `ensure_directories()`,预览就又会在用户真实目录下建文件夹,违反
+    /// "preview 无副作用"的契约。组件看到 `preview_mode = true` 时一律
+    /// 返回占位输出。
+    pub preview_mode: bool,
 }
 
 /// Output from a component

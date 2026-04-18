@@ -64,10 +64,16 @@ tokio = { version = "1.51", features = [
     "io-util",
 ] }
 
+# TUI editor 的原子保存路径。NamedTempFile::persist 在 Windows 上通过
+# MoveFileEx + MOVEFILE_REPLACE_EXISTING 正确实现"目标文件存在时也能替换"
+# 的 atomic rename 语义;标准库 fs::rename 在 Windows 旧版本 / 部分情况下
+# 无法覆盖已存在文件,会让 `ccsp config edit` 的第二次保存直接失败。
+# (dev-dependencies 里原本也有一份,promoted 过来,自动对 tests 可见。)
+tempfile = "3.27"
+
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports"] }
 pretty_assertions = "1.4"
-tempfile = "3.27"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 serial_test = "3.4"
 tokio = { version = "1.51", features = ["rt", "macros", "test-util"] }
