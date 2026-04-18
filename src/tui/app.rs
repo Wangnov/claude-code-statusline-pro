@@ -788,7 +788,8 @@ impl App {
         };
 
         let scenario = self.current_mock().to_string();
-        match preview::render(&config, &scenario).await {
+        let base_dir = self.options.path.parent();
+        match preview::render(&config, &scenario, base_dir).await {
             Ok(lines) => self.preview_lines = lines,
             Err(err) => {
                 self.preview_lines = vec![Line::from(format!("(预览渲染失败: {err})"))];
