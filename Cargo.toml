@@ -6,11 +6,25 @@ rust-version = "1.85"
 authors = ["wangnov"]
 license = "MIT"
 description = "Enhanced statusline for Claude Code with 10x performance"
-repository = "https://github.com/wangnov/claude-code-statusline-pro"
-homepage = "https://github.com/wangnov/claude-code-statusline-pro"
+repository = "https://github.com/Wangnov/claude-code-statusline-pro"
+homepage = "https://github.com/Wangnov/claude-code-statusline-pro"
 readme = "README.md"
 keywords = ["cli", "statusline", "claude", "terminal", "git"]
 categories = ["command-line-utilities", "development-tools"]
+exclude = [
+    "npm/**",
+    "assets/**",
+    "package.json",
+    "Makefile",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    ".omc/**",
+    ".claude/**",
+    ".github/**",
+    "clippy.toml",
+    "rustfmt.toml",
+    "rust-toolchain.toml",
+]
 
 [dependencies]
 # CLI framework
