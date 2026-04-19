@@ -27,6 +27,9 @@ pub enum WidgetType {
     #[default]
     Static,
     Api,
+    /// Reads fields directly from the Claude Code stdin payload
+    /// (e.g. `rate_limits`, `version`, `agent.name`).
+    Input,
 }
 
 /// Widget configuration

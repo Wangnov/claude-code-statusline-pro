@@ -116,6 +116,7 @@ fn parse_file(path: &Path) -> Option<WidgetFile> {
             kind: match cfg.kind {
                 claude_code_statusline_pro::config::WidgetType::Static => "static".to_string(),
                 claude_code_statusline_pro::config::WidgetType::Api => "api".to_string(),
+                claude_code_statusline_pro::config::WidgetType::Input => "input".to_string(),
             },
             row: cfg.row,
             col: cfg.col,

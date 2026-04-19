@@ -58,9 +58,42 @@ pub struct InputData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cost: Option<CostInfo>,
 
+    /// Claude.ai subscription rate limits (Pro/Max only).
+    ///
+    /// Populated by Claude Code after the first API response in the session.
+    /// Contains usage percentages and reset timestamps for the 5-hour rolling
+    /// window and the 7-day weekly window. May be absent for non-subscribers
+    /// or before the first API call.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rate_limits: Option<RateLimitsInfo>,
+
     /// Additional fields for future expansion
     #[serde(flatten)]
     pub extra: Value,
+}
+
+/// Claude.ai subscription rate limits (Pro/Max only).
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct RateLimitsInfo {
+    /// 5-hour rolling window
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub five_hour: Option<RateLimitWindow>,
+
+    /// 7-day weekly window
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seven_day: Option<RateLimitWindow>,
+}
+
+/// Per-window rate-limit state.
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct RateLimitWindow {
+    /// Percentage of the window consumed, 0.0–100.0
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub used_percentage: Option<f64>,
+
+    /// Unix epoch **seconds** when the window resets
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resets_at: Option<i64>,
 }
 
 /// Model information
