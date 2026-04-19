@@ -187,7 +187,7 @@ fn render_widget_help(frame: &mut Frame, area: Rect, app: &App) {
         Line::from("  ↑↓      上下选择"),
         Line::from("  n       新增(输入名字)"),
         Line::from("  Space   切 enabled"),
-        Line::from("  t       切 type (static ↔ api)"),
+        Line::from("  t       切 type (static → api → input)"),
         Line::from("  d/Del   删除(无二次确认)"),
         Line::from(""),
     ];

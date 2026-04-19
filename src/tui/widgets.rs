@@ -35,7 +35,7 @@ pub struct WidgetFile {
 pub struct WidgetEntry {
     pub name: String,
     pub enabled: bool,
-    pub kind: String, // "static" | "api"
+    pub kind: String, // "static" | "api" | "input"
     pub row: u32,
     pub col: u32,
 }
@@ -141,11 +141,16 @@ pub fn toggle_enabled(path: &Path, widget_name: &str) -> Result<bool> {
     Ok(!current)
 }
 
-/// 在 static ↔ api 之间循环。返回新类型字符串。
+/// 在 static → api → input → static 之间循环。返回新类型字符串。
 pub fn cycle_type(path: &Path, widget_name: &str) -> Result<String> {
     let mut doc = load_document(path)?;
     let current = widget_get_string(&doc, widget_name, "type").unwrap_or_else(|| "static".into());
-    let next = if current == "static" { "api" } else { "static" };
+    let next = match current.as_str() {
+        "static" => "api",
+        "api" => "input",
+        "input" => "static",
+        _ => "static",
+    };
     widget_set(&mut doc, widget_name, "type", toml_value(next))?;
     save_document(path, &doc)?;
     Ok(next.to_string())
@@ -441,6 +446,8 @@ content = "from user layer"
         let new_type = cycle_type(&path, "foo")?;
         assert_eq!(new_type, "api");
         let new_type = cycle_type(&path, "foo")?;
+        assert_eq!(new_type, "input");
+        let new_type = cycle_type(&path, "foo")?;
         assert_eq!(new_type, "static");
         Ok(())
     }
@@ -536,6 +543,36 @@ content = "from user layer"
         let path = write_inline_sample(temp.path())?;
         let new_type = cycle_type(&path, "foo")?;
         assert_eq!(new_type, "api");
+        let new_type = cycle_type(&path, "foo")?;
+        assert_eq!(new_type, "input");
+        let new_type = cycle_type(&path, "foo")?;
+        assert_eq!(new_type, "static");
+        Ok(())
+    }
+
+    #[test]
+    fn test_cycle_type_from_input_widget() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let comp_dir = temp.path().join("components");
+        fs::create_dir_all(&comp_dir)?;
+        let path = comp_dir.join("usage.toml");
+        fs::write(
+            &path,
+            r#"
+[widgets.rl5h]
+enabled = true
+type = "input"
+row = 2
+col = 0
+nerd_icon = ""
+emoji_icon = ""
+text_icon = ""
+template = "{used_percentage:.0f}%"
+"#,
+        )?;
+
+        let new_type = cycle_type(&path, "rl5h")?;
+        assert_eq!(new_type, "static");
         Ok(())
     }
 
