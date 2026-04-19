@@ -718,7 +718,34 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use std::env;
+    use std::ffi::{OsStr, OsString};
     use tempfile::tempdir;
+
+    struct EnvVarGuard {
+        key: &'static str,
+        original: Option<OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set(value_key: &'static str, value: impl AsRef<OsStr>) -> Self {
+            let original = env::var_os(value_key);
+            env::set_var(value_key, value);
+            Self {
+                key: value_key,
+                original,
+            }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(value) = self.original.take() {
+                env::set_var(self.key, value);
+            } else {
+                env::remove_var(self.key);
+            }
+        }
+    }
 
     // 必须 #[serial]:这个测试 env::set_var("HOME", ...) 但不恢复,
     // 会和 utils::tests::falls_back_to_dirs_home_dir 以及 utils::effort
@@ -733,7 +760,7 @@ mod tests {
         let temp_path = temp_dir.path();
 
         // Set HOME to temp dir to avoid loading real user config
-        env::set_var("HOME", temp_path);
+        let _home_guard = EnvVarGuard::set("HOME", temp_path);
 
         let mut loader = ConfigLoader::new();
         let config = loader.load(None).await?;

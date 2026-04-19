@@ -7,10 +7,69 @@ use claude_code_statusline_pro::{
         generator::{GeneratorOptions, StatuslineGenerator},
         CostInfo, InputData, ModelInfo,
     },
+    storage::ProjectResolver,
 };
+use std::env;
+use std::ffi::OsString;
+use std::sync::OnceLock;
+use tempfile::tempdir;
+use tokio::sync::{Mutex, MutexGuard};
+
+fn integration_test_mutex() -> &'static Mutex<()> {
+    static MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+    MUTEX.get_or_init(|| Mutex::new(()))
+}
+
+struct TestEnvGuard {
+    _lock: MutexGuard<'static, ()>,
+    _home_dir: tempfile::TempDir,
+    _storage_dir: tempfile::TempDir,
+    original_home: Option<OsString>,
+    original_storage_path: Option<OsString>,
+}
+
+impl TestEnvGuard {
+    async fn new() -> Self {
+        let lock = integration_test_mutex().lock().await;
+        let home_dir = tempdir().expect("create temp home");
+        let storage_dir = tempdir().expect("create temp storage");
+        let original_home = env::var_os("HOME");
+        let original_storage_path = env::var_os("STATUSLINE_STORAGE_PATH");
+
+        ProjectResolver::set_global_project_id(None);
+        env::set_var("HOME", home_dir.path());
+        env::set_var("STATUSLINE_STORAGE_PATH", storage_dir.path());
+
+        Self {
+            _lock: lock,
+            _home_dir: home_dir,
+            _storage_dir: storage_dir,
+            original_home,
+            original_storage_path,
+        }
+    }
+}
+
+impl Drop for TestEnvGuard {
+    fn drop(&mut self) {
+        restore_env("HOME", self.original_home.take());
+        restore_env("STATUSLINE_STORAGE_PATH", self.original_storage_path.take());
+        ProjectResolver::set_global_project_id(None);
+    }
+}
+
+fn restore_env(key: &str, value: Option<OsString>) {
+    if let Some(value) = value {
+        env::set_var(key, value);
+    } else {
+        env::remove_var(key);
+    }
+}
 
 #[tokio::test]
 async fn test_basic_statusline_generation() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     // Create test input data
     let input = InputData {
         transcript_path: Some("/Users/test/project/transcript.txt".to_string()),
@@ -76,6 +135,8 @@ async fn test_basic_statusline_generation() -> Result<()> {
 
 #[tokio::test]
 async fn test_statusline_with_preset() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     // Create minimal input
     let input = InputData {
         transcript_path: Some("/test/project/transcript.txt".to_string()),
@@ -103,6 +164,8 @@ async fn test_statusline_with_preset() -> Result<()> {
 
 #[tokio::test]
 async fn test_empty_input_handling() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     // Empty input
     let input = InputData::default();
 
@@ -121,6 +184,8 @@ async fn test_empty_input_handling() -> Result<()> {
 
 #[tokio::test]
 async fn test_throttling_behavior() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     use std::time::Instant;
 
     let input = InputData::default();
@@ -150,6 +215,8 @@ async fn test_throttling_behavior() -> Result<()> {
 
 #[tokio::test]
 async fn test_no_throttling() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData::default();
     let config = Config::default();
 
@@ -174,6 +241,8 @@ async fn test_no_throttling() -> Result<()> {
 
 #[tokio::test]
 async fn test_extremely_long_branch_name() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData {
         git_branch: Some("feature/JIRA-12345-implement-very-long-feature-name-that-exceeds-normal-limits-and-should-be-truncated-properly".to_string()),
         ..Default::default()
@@ -190,6 +259,8 @@ async fn test_extremely_long_branch_name() -> Result<()> {
 
 #[tokio::test]
 async fn test_zero_token_usage() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData {
         cost: Some(CostInfo {
             total_tokens: Some(0),
@@ -223,6 +294,8 @@ async fn test_zero_token_usage() -> Result<()> {
 
 #[tokio::test]
 async fn test_maximum_token_usage() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData {
         cost: Some(CostInfo {
             total_tokens: Some(200_000), // Max context window
@@ -257,6 +330,8 @@ async fn test_maximum_token_usage() -> Result<()> {
 
 #[tokio::test]
 async fn test_over_limit_token_usage() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData {
         cost: Some(CostInfo {
             total_tokens: Some(250_000), // Over limit
@@ -291,6 +366,8 @@ async fn test_over_limit_token_usage() -> Result<()> {
 
 #[tokio::test]
 async fn test_special_characters_in_branch_name() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData {
         git_branch: Some("feature/user@domain/test-#123".to_string()),
         ..Default::default()
@@ -307,6 +384,8 @@ async fn test_special_characters_in_branch_name() -> Result<()> {
 
 #[tokio::test]
 async fn test_unicode_in_branch_name() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData {
         git_branch: Some("功能/测试-emoji-🚀".to_string()),
         ..Default::default()
@@ -323,6 +402,8 @@ async fn test_unicode_in_branch_name() -> Result<()> {
 
 #[tokio::test]
 async fn test_invalid_model_id_format() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData {
         model: Some(ModelInfo {
             id: Some("invalid-model-format-###".to_string()),
@@ -342,6 +423,8 @@ async fn test_invalid_model_id_format() -> Result<()> {
 
 #[tokio::test]
 async fn test_missing_session_id() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData {
         session_id: None,
         transcript_path: Some("/test/transcript.txt".to_string()),
@@ -358,6 +441,8 @@ async fn test_missing_session_id() -> Result<()> {
 
 #[tokio::test]
 async fn test_negative_cost_values() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     // This tests if the system handles unexpected negative values
     let input = InputData {
         cost: Some(CostInfo {
@@ -388,6 +473,8 @@ async fn test_negative_cost_values() -> Result<()> {
 
 #[tokio::test]
 async fn test_invalid_transcript_path() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData {
         transcript_path: Some("/nonexistent/path/to/transcript.jsonl".to_string()),
         ..Default::default()
@@ -403,6 +490,8 @@ async fn test_invalid_transcript_path() -> Result<()> {
 
 #[tokio::test]
 async fn test_malformed_json_in_extra_field() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData {
         extra: serde_json::json!({
             "__mock__": {
@@ -422,6 +511,8 @@ async fn test_malformed_json_in_extra_field() -> Result<()> {
 
 #[tokio::test]
 async fn test_concurrent_generations() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     use tokio::task;
 
     let input = InputData {
@@ -458,6 +549,8 @@ async fn test_concurrent_generations() -> Result<()> {
 
 #[tokio::test]
 async fn test_rapid_successive_generations() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData::default();
     let config = Config::default();
     let mut generator = StatuslineGenerator::new(config, GeneratorOptions::default());
@@ -472,6 +565,8 @@ async fn test_rapid_successive_generations() -> Result<()> {
 
 #[tokio::test]
 async fn test_all_presets() -> Result<()> {
+    let _env = TestEnvGuard::new().await;
+
     let input = InputData {
         model: Some(ModelInfo {
             id: Some("claude-3.5-sonnet".to_string()),
