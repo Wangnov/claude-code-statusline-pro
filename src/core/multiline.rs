@@ -242,6 +242,7 @@ impl MultiLineRenderer {
             }
 
             let cache_key = format!("{component_name}::{widget_name}");
+            let allow_stale_cache = matches!(widget_config.kind, WidgetType::Api);
             let widget_output = match widget_config.kind {
                 WidgetType::Static => Some(self.render_static_widget(widget_config, context)),
                 WidgetType::Api => match self.render_api_widget(widget_config, context).await {
@@ -272,8 +273,15 @@ impl MultiLineRenderer {
                 self.grid
                     .set_cell(row, widget_config.col, final_text.clone());
                 self.widget_cache.insert(cache_key, final_text);
-            } else if let Some(previous) = self.widget_cache.get(&cache_key) {
-                self.grid.set_cell(row, widget_config.col, previous.clone());
+            } else {
+                if allow_stale_cache {
+                    if let Some(previous) = self.widget_cache.get(&cache_key) {
+                        self.grid.set_cell(row, widget_config.col, previous.clone());
+                        continue;
+                    }
+                }
+
+                self.widget_cache.remove(&cache_key);
             }
         }
 
@@ -1587,6 +1595,74 @@ data_path = "$.rate_limits.five_hour"
             "expected empty lines when rate_limits absent, got {:?}",
             result.lines
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_input_widget_does_not_reuse_stale_cache() -> TestResult {
+        use crate::core::input::{RateLimitWindow, RateLimitsInfo};
+
+        let widget_toml = r#"
+[widgets.rl5h]
+enabled = true
+type = "input"
+row = 2
+col = 0
+nerd_icon = ""
+emoji_icon = ""
+text_icon = ""
+template = "{used_percentage:.0f}%"
+
+[widgets.rl5h.api]
+data_path = "$.rate_limits.five_hour"
+"#;
+
+        let input_with_limits = InputData {
+            rate_limits: Some(RateLimitsInfo {
+                five_hour: Some(RateLimitWindow {
+                    used_percentage: Some(42.0),
+                    resets_at: Some(9_999_999_999),
+                }),
+                seven_day: None,
+            }),
+            ..InputData::default()
+        };
+
+        let (mut renderer, first_context, _temp_dir) =
+            make_input_widget_test_case(input_with_limits, widget_toml)?;
+
+        let first_result = renderer.render_extension_lines(&first_context).await;
+        assert!(
+            first_result.success,
+            "first render failed: {:?}",
+            first_result.error
+        );
+        assert_eq!(first_result.lines.len(), 1);
+        assert!(
+            first_result.lines[0].contains("42%"),
+            "expected 42% in first render, got {:?}",
+            first_result.lines[0]
+        );
+
+        let second_context = RenderContext {
+            input: Arc::new(InputData::default()),
+            config: first_context.config.clone(),
+            terminal: first_context.terminal,
+            preview_mode: first_context.preview_mode,
+        };
+
+        let second_result = renderer.render_extension_lines(&second_context).await;
+        assert!(
+            second_result.success,
+            "second render failed: {:?}",
+            second_result.error
+        );
+        assert!(
+            second_result.lines.is_empty(),
+            "expected stale input widget cache to stay hidden, got {:?}",
+            second_result.lines
+        );
+
         Ok(())
     }
 
