@@ -242,6 +242,7 @@ impl MultiLineRenderer {
             }
 
             let cache_key = format!("{component_name}::{widget_name}");
+            let allow_stale_cache = matches!(widget_config.kind, WidgetType::Api);
             let widget_output = match widget_config.kind {
                 WidgetType::Static => Some(self.render_static_widget(widget_config, context)),
                 WidgetType::Api => match self.render_api_widget(widget_config, context).await {
@@ -265,14 +266,22 @@ impl MultiLineRenderer {
                         None
                     }
                 },
+                WidgetType::Input => self.render_input_widget(widget_config, context),
             };
 
             if let Some(final_text) = widget_output {
                 self.grid
                     .set_cell(row, widget_config.col, final_text.clone());
                 self.widget_cache.insert(cache_key, final_text);
-            } else if let Some(previous) = self.widget_cache.get(&cache_key) {
-                self.grid.set_cell(row, widget_config.col, previous.clone());
+            } else {
+                if allow_stale_cache {
+                    if let Some(previous) = self.widget_cache.get(&cache_key) {
+                        self.grid.set_cell(row, widget_config.col, previous.clone());
+                        continue;
+                    }
+                }
+
+                self.widget_cache.remove(&cache_key);
             }
         }
 
@@ -359,6 +368,68 @@ impl MultiLineRenderer {
             &context.terminal,
             &self.config,
         )))
+    }
+
+    /// Render a widget whose data source is the Claude Code stdin payload.
+    ///
+    /// Unlike API widgets, this runs synchronously: no HTTP, no I/O. The
+    /// entire `InputData` is serialized to JSON so every stdin field becomes
+    /// addressable from templates (e.g. `{rate_limits.five_hour.used_percentage}`).
+    ///
+    /// Optional `widget.api.data_path` acts as a JSONPath-based gate:
+    /// if it resolves to zero matches, the widget is hidden instead of
+    /// rendering a template with missing placeholders.
+    fn render_input_widget(
+        &self,
+        widget: &WidgetConfig,
+        context: &RenderContext,
+    ) -> Option<String> {
+        let input_json = match serde_json::to_value(&*context.input) {
+            Ok(value) => value,
+            Err(err) => {
+                eprintln!("[statusline] input widget serialize failed: {err}");
+                return None;
+            }
+        };
+
+        // data_path gate: if JSONPath yields zero matches, hide the widget.
+        // Reuses the `api.data_path` field to avoid introducing a new schema
+        // knob; only this field is read for input widgets (other api.* fields
+        // are ignored).
+        let selected =
+            if let Some(path) = widget.api.as_ref().and_then(|api| api.data_path.as_deref()) {
+                match jsonpath::select(&input_json, path) {
+                    Ok(matches) => match matches.first() {
+                        Some(value) => (*value).clone(),
+                        None => return None,
+                    },
+                    Err(err) => {
+                        eprintln!("[statusline] input widget JSONPath {path:?} error: {err}");
+                        return None;
+                    }
+                }
+            } else {
+                input_json.clone()
+            };
+
+        if !Self::passes_filter(widget, &input_json) {
+            return None;
+        }
+
+        let rendered_text = widget.template.as_deref().map_or_else(
+            || selected.to_string(),
+            |template| {
+                let template = substitute_env(template);
+                render_template(&template, &selected)
+            },
+        );
+
+        Some(Self::compose_with_icon(
+            widget,
+            &rendered_text,
+            &context.terminal,
+            &self.config,
+        ))
     }
 
     async fn fetch_api_data(&self, config: &WidgetApiConfig) -> Result<ApiData> {
@@ -1276,6 +1347,7 @@ fn f64_to_i64(value: f64) -> i64 {
 }
 
 #[cfg(test)]
+#[allow(clippy::literal_string_with_formatting_args)] // TOML test fixtures embed template syntax like {x:.0f}
 mod tests {
     use super::*;
     use crate::config::Config;
@@ -1408,6 +1480,190 @@ method = "GET"
 
         let rendered_percent = render_template("{quota / 500000:.2f%}", &data);
         assert_eq!(rendered_percent, "100.00%");
+    }
+
+    /// Helper: build a renderer + context for input-widget tests.
+    fn make_input_widget_test_case(
+        input: InputData,
+        widget_toml: &str,
+    ) -> TestResult<(
+        MultiLineRenderer,
+        RenderContext,
+        tempfile::TempDir, // keep alive for the duration of the test
+    )> {
+        let mut config = Config {
+            multiline: Some(MultilineConfig {
+                enabled: true,
+                max_rows: 5,
+                rows: HashMap::new(),
+            }),
+            ..Config::default()
+        };
+        config.components.order = vec!["usage".to_string()];
+
+        let temp_dir = tempfile::tempdir()?;
+        let component_path = temp_dir.path().join("components").join("usage.toml");
+        let component_dir = component_path
+            .parent()
+            .context("component path missing parent directory")?;
+        std::fs::create_dir_all(component_dir)?;
+        std::fs::write(&component_path, widget_toml)?;
+
+        let renderer = MultiLineRenderer::new(config.clone(), Some(temp_dir.path().to_path_buf()));
+        let context = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(config),
+            terminal: TerminalCapabilities {
+                color_support: ColorSupport::TrueColor,
+                supports_emoji: false,
+                supports_nerd_font: false,
+            },
+            preview_mode: false,
+        };
+        Ok((renderer, context, temp_dir))
+    }
+
+    #[tokio::test]
+    async fn test_input_widget_reads_rate_limits() -> TestResult {
+        use crate::core::input::{RateLimitWindow, RateLimitsInfo};
+
+        let input = InputData {
+            rate_limits: Some(RateLimitsInfo {
+                five_hour: Some(RateLimitWindow {
+                    used_percentage: Some(42.0),
+                    resets_at: Some(9_999_999_999),
+                }),
+                seven_day: None,
+            }),
+            ..InputData::default()
+        };
+
+        let (mut renderer, context, _temp_dir) = make_input_widget_test_case(
+            input,
+            r#"
+[widgets.rl5h]
+enabled = true
+type = "input"
+row = 2
+col = 0
+nerd_icon = ""
+emoji_icon = ""
+text_icon = ""
+template = "{used_percentage:.0f}%"
+
+[widgets.rl5h.api]
+data_path = "$.rate_limits.five_hour"
+"#,
+        )?;
+
+        let result = renderer.render_extension_lines(&context).await;
+        assert!(result.success, "render failed: {:?}", result.error);
+        assert_eq!(result.lines.len(), 1);
+        assert!(
+            result.lines[0].contains("42%"),
+            "expected 42% in line, got {:?}",
+            result.lines[0]
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_input_widget_hides_when_field_missing() -> TestResult {
+        // InputData without rate_limits: JSONPath gate should skip the widget.
+        let (mut renderer, context, _temp_dir) = make_input_widget_test_case(
+            InputData::default(),
+            r#"
+[widgets.rl5h]
+enabled = true
+type = "input"
+row = 2
+col = 0
+nerd_icon = ""
+emoji_icon = ""
+text_icon = ""
+template = "{used_percentage:.0f}%"
+
+[widgets.rl5h.api]
+data_path = "$.rate_limits.five_hour"
+"#,
+        )?;
+
+        let result = renderer.render_extension_lines(&context).await;
+        assert!(result.success);
+        assert!(
+            result.lines.is_empty(),
+            "expected empty lines when rate_limits absent, got {:?}",
+            result.lines
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_input_widget_does_not_reuse_stale_cache() -> TestResult {
+        use crate::core::input::{RateLimitWindow, RateLimitsInfo};
+
+        let widget_toml = r#"
+[widgets.rl5h]
+enabled = true
+type = "input"
+row = 2
+col = 0
+nerd_icon = ""
+emoji_icon = ""
+text_icon = ""
+template = "{used_percentage:.0f}%"
+
+[widgets.rl5h.api]
+data_path = "$.rate_limits.five_hour"
+"#;
+
+        let input_with_limits = InputData {
+            rate_limits: Some(RateLimitsInfo {
+                five_hour: Some(RateLimitWindow {
+                    used_percentage: Some(42.0),
+                    resets_at: Some(9_999_999_999),
+                }),
+                seven_day: None,
+            }),
+            ..InputData::default()
+        };
+
+        let (mut renderer, first_context, _temp_dir) =
+            make_input_widget_test_case(input_with_limits, widget_toml)?;
+
+        let first_result = renderer.render_extension_lines(&first_context).await;
+        assert!(
+            first_result.success,
+            "first render failed: {:?}",
+            first_result.error
+        );
+        assert_eq!(first_result.lines.len(), 1);
+        assert!(
+            first_result.lines[0].contains("42%"),
+            "expected 42% in first render, got {:?}",
+            first_result.lines[0]
+        );
+
+        let second_context = RenderContext {
+            input: Arc::new(InputData::default()),
+            config: first_context.config.clone(),
+            terminal: first_context.terminal,
+            preview_mode: first_context.preview_mode,
+        };
+
+        let second_result = renderer.render_extension_lines(&second_context).await;
+        assert!(
+            second_result.success,
+            "second render failed: {:?}",
+            second_result.error
+        );
+        assert!(
+            second_result.lines.is_empty(),
+            "expected stale input widget cache to stay hidden, got {:?}",
+            second_result.lines
+        );
+
+        Ok(())
     }
 
     #[test]

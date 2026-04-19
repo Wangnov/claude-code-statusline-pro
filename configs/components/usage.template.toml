@@ -440,6 +440,62 @@ data_path = "$.data.items[0]"          # 提取响应中数组的第一个元素
 # "User-Agent" = "claude-code-statusline-pro/2.3.0"
 
 # ====================================================================
+# Claude.ai 订阅 Rate Limits（官方 stdin payload，无需 API 请求）
+# ====================================================================
+# 适用于：Claude.ai Pro / Max 订阅用户
+# 数据源：Claude Code 注入 stdin 的 JSON 中的 rate_limits 字段
+# 检测方式：JSONPath 自动 gate；字段缺失时 widget 静默不渲染
+#
+# 使用步骤：
+# 1. 将本文件整体（或以下两段）复制到 ~/.claude/statusline-pro/components/usage.toml
+# 2. 主配置文件中确保 multiline.enabled = true
+# 3. 如需调整显示位置，修改 row（从 1 开始）和 col（从 0 开始）即可
+#
+# 本示例提供 2 个 widget：5 小时滚动窗口、7 天周窗口
+# 两个 widget 均放在第二行（row = 2），左右并排（col = 0, 1）
+
+[widgets.claude_rate_limit_5h]
+enabled = true
+type = "input"                # 🆕 从 Claude Code stdin payload 读取字段
+row = 2                       # 第二行
+col = 0                       # 最左列
+nerd_icon = "\uf2c8"          # clock 图标
+emoji_icon = "⏳"
+text_icon = "[5h]"
+# 模板字段说明：
+# - used_percentage: 百分比数字（0–100）
+# - resets_at: Unix epoch 秒；模板引擎自动识别秒/毫秒
+# - now(): 当前时间（毫秒，自动对齐）
+# - :.Hm 格式化为 "1小时23分钟"；其他选项见下
+template = "5h {used_percentage:.0f}% · 重置 {resets_at - now():.Hm}"
+
+# data_path: JSONPath 选中 rate_limits.five_hour 对象；
+# 若字段缺失（如非订阅用户或会话首次响应前）则 0 匹配，widget 不显示
+[widgets.claude_rate_limit_5h.api]
+data_path = "$.rate_limits.five_hour"
+
+[widgets.claude_rate_limit_7d]
+enabled = true
+type = "input"
+row = 2
+col = 1
+nerd_icon = "\uf073"          # calendar 图标
+emoji_icon = "📅"
+text_icon = "[7d]"
+template = "7d {used_percentage:.0f}% · 重置 {resets_at - now():.DHm}"
+
+[widgets.claude_rate_limit_7d.api]
+data_path = "$.rate_limits.seven_day"
+
+# 时间格式化选项备忘（与其他 widget 共享语法）：
+# {resets_at - now():.D}     → 天数（向上取整），例：3 天
+# {resets_at - now():.H}     → 小时数，例：51 小时
+# {resets_at - now():.m}     → 分钟数，例：3060 分钟
+# {resets_at - now():.Hm}    → 2小时15分钟
+# {resets_at - now():.DHm}   → 2天3小时15分钟
+# {resets_at - now():.HmS}   → 51小时15分钟30秒
+
+# ====================================================================
 # 配置说明和最佳实践
 # ====================================================================
 #
