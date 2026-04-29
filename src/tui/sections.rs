@@ -445,8 +445,8 @@ pub static SECTIONS: &[Section] = &[
             Field {
                 label: "currency",
                 path: "components.usage.currency",
-                kind: FieldKind::Enum(&["auto", "USD", "CNY", "EUR", "GBP", "JPY"]),
-                help: "auto=按 ANTHROPIC_BASE_URL 和模型名推断,也可强制指定币种。",
+                kind: FieldKind::Text,
+                help: "auto=自动推断;也可填任意固定币种代码,如 USD/CNY/AUD。",
             },
             Field {
                 label: "show_lines_added",

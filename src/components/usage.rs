@@ -578,6 +578,29 @@ mod tests {
 
     use super::*;
 
+    struct EnvVarGuard {
+        key: &'static str,
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn unset(key: &'static str) -> Self {
+            let original = std::env::var_os(key);
+            std::env::remove_var(key);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(value) = self.original.as_ref() {
+                std::env::set_var(self.key, value);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+
     fn component_with_config(config: UsageComponentConfig) -> UsageComponent {
         UsageComponent::new("usage".to_string(), config)
     }
@@ -602,7 +625,9 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn upstream_currency_is_used_in_auto_mode() {
+        let _env_guard = EnvVarGuard::unset("ANTHROPIC_BASE_URL");
         let component = component_with_config(UsageComponentConfig::default());
         let data = serde_json::json!({
             "model": { "id": "claude-sonnet-4" },
