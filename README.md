@@ -244,6 +244,8 @@ mode = "conversation"  # 或 "session"
 
 `usage` 组件默认使用 `currency = "auto"`。自动模式会先应用你配置的 endpoint/model 规则，再读取 Claude Code 传入的 `cost.currency`，随后匹配内置 endpoint/model 规则，最后回退到 USD。DeepSeek、MiniMax、Kimi、GLM、百炼、火山方舟、MiMo 等中外站点不同币种的 provider，建议优先用 endpoint 规则区分。
 
+注意：`conversation` 模式读取的是历史聚合的 `total_cost_usd` 存储值。为避免只换符号、不换金额，`currency = "auto"` 在该模式下会显示 USD；如果你确认自己的聚合成本已经是其他币种，可用 `currency = "CNY"` 等固定值强制显示。
+
 ```toml
 [components.usage]
 currency = "auto" # auto | USD | CNY | EUR | GBP | JPY ...
@@ -688,6 +690,8 @@ mode = "conversation"  # or "session"
 ##### 💱 Currency Display
 
 The `usage` component defaults to `currency = "auto"`. Auto mode first applies your custom endpoint/model rules, then trusts `cost.currency` from Claude Code when present, then matches built-in endpoint/model rules, and finally falls back to USD. For providers with different China/global pricing, such as DeepSeek, MiniMax, Kimi, GLM, Model Studio, Volcengine/BytePlus, and MiMo, prefer endpoint rules.
+
+Note: `conversation` mode reads historical `total_cost_usd` aggregate values from storage. To avoid changing only the symbol without converting the amount, `currency = "auto"` displays USD in that mode; use a fixed value such as `currency = "CNY"` only when you know the aggregate costs are already in that currency.
 
 ```toml
 [components.usage]

@@ -373,6 +373,7 @@ precision = 2
 
 # 货币显示 | Currency display
 # "auto": 根据自定义规则、ANTHROPIC_BASE_URL endpoint、上游 cost.currency 和模型名推断
+# conversation 模式的历史聚合值来自 total_cost_usd 存储，auto 会保持 USD 符号
 # 也可强制指定 "USD"、"CNY"、"EUR"、"GBP"、"JPY" 等
 currency = "auto"
 

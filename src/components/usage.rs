@@ -237,19 +237,34 @@ impl UsageComponent {
     }
 
     fn resolve_currency_prefix(&self, data: Option<&serde_json::Value>) -> String {
-        Self::currency_prefix_for_code(&self.resolve_currency_code(data))
+        let endpoint = std::env::var("ANTHROPIC_BASE_URL").ok();
+        Self::currency_prefix_for_code(&self.resolve_currency_code(data, endpoint.as_deref()))
     }
 
-    fn resolve_currency_code(&self, data: Option<&serde_json::Value>) -> String {
+    fn resolve_conversation_currency_prefix(&self) -> String {
+        let configured_currency = self.config.currency.trim();
+        let currency = if configured_currency.eq_ignore_ascii_case(AUTO_CURRENCY) {
+            DEFAULT_CURRENCY
+        } else {
+            configured_currency
+        };
+
+        Self::currency_prefix_for_code(currency)
+    }
+
+    fn resolve_currency_code(
+        &self,
+        data: Option<&serde_json::Value>,
+        endpoint: Option<&str>,
+    ) -> String {
         let configured_currency = self.config.currency.trim();
         if !configured_currency.eq_ignore_ascii_case(AUTO_CURRENCY) {
             return configured_currency.to_string();
         }
 
-        let endpoint = std::env::var("ANTHROPIC_BASE_URL").ok();
         let model_names = data.map_or_else(Vec::new, Self::extract_model_names);
 
-        if let Some(endpoint) = endpoint.as_deref() {
+        if let Some(endpoint) = endpoint {
             if let Some(currency) =
                 Self::match_endpoint_rules(endpoint, &self.config.currency_endpoint_rules)
             {
@@ -267,7 +282,7 @@ impl UsageComponent {
             return currency.to_string();
         }
 
-        if let Some(endpoint) = endpoint.as_deref() {
+        if let Some(endpoint) = endpoint {
             if let Some(currency) = Self::match_builtin_endpoint_rules(endpoint) {
                 return currency.to_string();
             }
@@ -523,7 +538,7 @@ impl Component for UsageComponent {
 
         if let Some(session_id) = input_data.session_id.as_deref() {
             if self.config.display_mode == "conversation" {
-                let currency_prefix = self.resolve_currency_prefix(serialized_input.as_ref());
+                let currency_prefix = self.resolve_conversation_currency_prefix();
                 return self
                     .render_conversation_cost_async(session_id, ctx, &currency_prefix)
                     .await;
@@ -578,29 +593,6 @@ mod tests {
 
     use super::*;
 
-    struct EnvVarGuard {
-        key: &'static str,
-        original: Option<std::ffi::OsString>,
-    }
-
-    impl EnvVarGuard {
-        fn unset(key: &'static str) -> Self {
-            let original = std::env::var_os(key);
-            std::env::remove_var(key);
-            Self { key, original }
-        }
-    }
-
-    impl Drop for EnvVarGuard {
-        fn drop(&mut self) {
-            if let Some(value) = self.original.as_ref() {
-                std::env::set_var(self.key, value);
-            } else {
-                std::env::remove_var(self.key);
-            }
-        }
-    }
-
     fn component_with_config(config: UsageComponentConfig) -> UsageComponent {
         UsageComponent::new("usage".to_string(), config)
     }
@@ -625,9 +617,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
     fn upstream_currency_is_used_in_auto_mode() {
-        let _env_guard = EnvVarGuard::unset("ANTHROPIC_BASE_URL");
         let component = component_with_config(UsageComponentConfig::default());
         let data = serde_json::json!({
             "model": { "id": "claude-sonnet-4" },
@@ -637,7 +627,29 @@ mod tests {
             }
         });
 
-        assert_eq!(component.resolve_currency_prefix(Some(&data)), "€");
+        assert_eq!(component.resolve_currency_code(Some(&data), None), "EUR");
+    }
+
+    #[test]
+    fn conversation_auto_currency_keeps_usd_for_stored_totals() {
+        let mut config = UsageComponentConfig::default();
+        config
+            .currency_endpoint_rules
+            .insert("api.example.cn".to_string(), "CNY".to_string());
+        let component = component_with_config(config);
+
+        assert_eq!(component.resolve_conversation_currency_prefix(), "$");
+    }
+
+    #[test]
+    fn conversation_explicit_currency_is_respected() {
+        let config = UsageComponentConfig {
+            currency: "AUD".to_string(),
+            ..UsageComponentConfig::default()
+        };
+        let component = component_with_config(config);
+
+        assert_eq!(component.resolve_conversation_currency_prefix(), "AUD ");
     }
 
     #[test]
