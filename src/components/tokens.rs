@@ -80,15 +80,22 @@ impl TokensComponent {
             .or_else(|| context_window.get("contextWindowSize"))
             .and_then(serde_json::Value::as_u64);
         let model_total = self.model_specific_context_window(ctx);
-        let total = model_total
-            .or(official_total)
-            .unwrap_or_else(|| self.context_window_for_model(ctx));
-        let percentage =
-            if model_total.is_some_and(|window| Some(window) != official_total) && used > 0 {
-                None
-            } else {
-                percentage
-            };
+        let should_override_official_total = matches!(
+            (official_total, model_total),
+            (Some(200_000), Some(model_window)) if model_window != 200_000
+        );
+        let total = if should_override_official_total {
+            model_total.unwrap_or(200_000)
+        } else {
+            official_total
+                .or(model_total)
+                .unwrap_or_else(|| self.context_window_for_model(ctx))
+        };
+        let percentage = if should_override_official_total && used > 0 {
+            None
+        } else {
+            percentage
+        };
 
         Some(TokenUsageInfo {
             used,
@@ -834,6 +841,49 @@ mod tests {
         assert!(output.visible);
         assert!(output.text.contains("5.3%"));
         assert!(output.text.contains("(53500/1000000)"));
+    }
+
+    #[tokio::test]
+    async fn test_tokens_specific_official_context_window_overrides_builtin_model_window() {
+        use crate::core::ModelInfo;
+
+        let input = build_input(|input| {
+            input.session_id = Some("deepseek-session".to_string());
+            input.model = Some(ModelInfo {
+                id: Some("deepseek-v4-pro".to_string()),
+                display_name: None,
+            });
+            input.extra = json!({
+                "context_window": {
+                    "context_window_size": 1_048_576u64,
+                    "used_percentage": 5.1f64,
+                    "current_usage": {
+                        "input_tokens": 53_500u64,
+                        "cache_creation_input_tokens": 0u64,
+                        "cache_read_input_tokens": 0u64
+                    }
+                }
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+            preview_mode: false,
+        };
+
+        let config = build_tokens_config(|config| {
+            config.show_progress_bar = false;
+            config.show_percentage = false;
+            config.show_raw_numbers = true;
+        });
+
+        let component = TokensComponent::new(config);
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert!(output.text.contains("(53500/1048576)"));
     }
 
     #[tokio::test]
