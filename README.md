@@ -240,6 +240,22 @@ contextUsedTokens = usage.input_tokens +
 mode = "conversation"  # 或 "session"
 ```
 
+##### 💱 货币显示
+
+`usage` 组件默认使用 `currency = "auto"`。自动模式会先应用你配置的 endpoint/model 规则，再读取 Claude Code 传入的 `cost.currency`，随后匹配内置 endpoint/model 规则，最后回退到 USD。DeepSeek、MiniMax、Kimi、GLM、百炼、火山方舟、MiMo 等中外站点不同币种的 provider，建议优先用 endpoint 规则区分。
+
+```toml
+[components.usage]
+currency = "auto" # auto | USD | CNY | EUR | GBP | JPY ...
+
+[components.usage.currency_endpoint_rules]
+"api.example.cn" = "CNY"
+"api.example.com" = "USD"
+
+[components.usage.currency_model_rules]
+"my-cny-model" = "CNY"
+```
+
 ##### 📊 成本计算公式
 
 ```javascript
@@ -667,6 +683,22 @@ Set in `config.toml`:
 ```toml
 [components.usage]
 mode = "conversation"  # or "session"
+```
+
+##### 💱 Currency Display
+
+The `usage` component defaults to `currency = "auto"`. Auto mode first applies your custom endpoint/model rules, then trusts `cost.currency` from Claude Code when present, then matches built-in endpoint/model rules, and finally falls back to USD. For providers with different China/global pricing, such as DeepSeek, MiniMax, Kimi, GLM, Model Studio, Volcengine/BytePlus, and MiMo, prefer endpoint rules.
+
+```toml
+[components.usage]
+currency = "auto" # auto | USD | CNY | EUR | GBP | JPY ...
+
+[components.usage.currency_endpoint_rules]
+"api.example.cn" = "CNY"
+"api.example.com" = "USD"
+
+[components.usage.currency_model_rules]
+"my-cny-model" = "CNY"
 ```
 
 ##### 📊 Cost Calculation Formula

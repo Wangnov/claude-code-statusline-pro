@@ -443,6 +443,12 @@ pub static SECTIONS: &[Section] = &[
                 help: "成本小数位数。",
             },
             Field {
+                label: "currency",
+                path: "components.usage.currency",
+                kind: FieldKind::Enum(&["auto", "USD", "CNY", "EUR", "GBP", "JPY"]),
+                help: "auto=按 ANTHROPIC_BASE_URL 和模型名推断,也可强制指定币种。",
+            },
+            Field {
                 label: "show_lines_added",
                 path: "components.usage.show_lines_added",
                 kind: FieldKind::Bool,

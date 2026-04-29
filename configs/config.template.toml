@@ -371,6 +371,11 @@ text_icon = "[$]"
 # 数值精度 | Decimal precision - 成本显示的小数位数
 precision = 2
 
+# 货币显示 | Currency display
+# "auto": 根据自定义规则、ANTHROPIC_BASE_URL endpoint、上游 cost.currency 和模型名推断
+# 也可强制指定 "USD"、"CNY"、"EUR"、"GBP"、"JPY" 等
+currency = "auto"
+
 # 显示模式 | Display mode
 # "session": 仅显示当前session成本（如 "$0.05"）
 # "conversation": 显示跨session累加成本（如 "$6.96 (2 sessions)"）
@@ -381,6 +386,17 @@ show_lines_added = true
 
 # 显示删除的代码行数 | Show lines removed  
 show_lines_removed = false
+
+# 自定义 endpoint -> currency 映射，优先级高于上游 cost.currency 和内置自动规则
+# 规则 key 可以写 host，也可以写完整 base URL；按 host 后缀匹配
+[components.usage.currency_endpoint_rules]
+# "api.example.cn" = "CNY"
+# "https://api.example.com/v1" = "USD"
+
+# 自定义 model name -> currency 映射，优先级低于 endpoint 映射，高于上游 cost.currency 和内置规则
+# 规则 key 按大小写不敏感的子串匹配
+[components.usage.currency_model_rules]
+# "my-cny-model" = "CNY"
 
 # -------------------- Status组件 --------------------
 # 显示Claude Code的当前状态和最近错误信息

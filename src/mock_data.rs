@@ -50,6 +50,7 @@ fn build_dev_scenario() -> InputData {
         }),
         cost: Some(CostInfo {
             total_cost_usd: Some(0.023),
+            currency: None,
             total_duration_ms: Some(12_000),
             total_api_duration_ms: Some(4_500),
             total_lines_added: Some(12),
@@ -87,6 +88,7 @@ fn build_critical_scenario() -> InputData {
         }),
         cost: Some(CostInfo {
             total_cost_usd: Some(1.284),
+            currency: None,
             total_duration_ms: Some(185_000),
             total_api_duration_ms: Some(52_000),
             total_lines_added: Some(150),
@@ -118,6 +120,7 @@ fn build_thinking_scenario() -> InputData {
         }),
         cost: Some(CostInfo {
             total_cost_usd: Some(0.157),
+            currency: None,
             total_duration_ms: Some(45_000),
             total_api_duration_ms: Some(12_000),
             total_lines_added: Some(6),
@@ -149,6 +152,7 @@ fn build_complete_scenario() -> InputData {
         }),
         cost: Some(CostInfo {
             total_cost_usd: Some(0.452),
+            currency: None,
             total_duration_ms: Some(98_000),
             total_api_duration_ms: Some(26_000),
             total_lines_added: Some(42),
@@ -180,6 +184,7 @@ fn build_error_scenario() -> InputData {
         }),
         cost: Some(CostInfo {
             total_cost_usd: Some(0.089),
+            currency: None,
             total_duration_ms: Some(18_000),
             total_api_duration_ms: Some(6_000),
             total_lines_added: Some(0),
