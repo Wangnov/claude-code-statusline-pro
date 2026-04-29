@@ -448,20 +448,51 @@ fn find_prefix_context_window(
     context_windows: &std::collections::HashMap<String, u64>,
     candidates: &[String],
 ) -> Option<u64> {
-    context_windows
-        .iter()
-        .filter_map(|(key, value)| {
-            let prefix = key.strip_suffix('*')?;
-            if prefix.eq_ignore_ascii_case("default") {
-                return None;
+    let mut best: Option<PrefixContextMatch<'_>> = None;
+
+    for (key, value) in context_windows {
+        let Some(prefix) = key.strip_suffix('*') else {
+            continue;
+        };
+        if prefix.eq_ignore_ascii_case("default") {
+            continue;
+        }
+
+        let normalized_prefix = prefix.to_ascii_lowercase();
+        if let Some(candidate_index) = candidates
+            .iter()
+            .position(|candidate| candidate.starts_with(&normalized_prefix))
+        {
+            let candidate_match = PrefixContextMatch {
+                candidate_index,
+                prefix_len: normalized_prefix.len(),
+                key,
+                value: *value,
+            };
+            if best.is_none_or(|current| candidate_match.is_better_than(current)) {
+                best = Some(candidate_match);
             }
-            candidates
-                .iter()
-                .any(|candidate| candidate.starts_with(&prefix.to_ascii_lowercase()))
-                .then_some((prefix.len(), *value))
-        })
-        .max_by_key(|(len, _)| *len)
-        .map(|(_, value)| value)
+        }
+    }
+
+    best.map(|candidate_match| candidate_match.value)
+}
+
+#[derive(Clone, Copy)]
+struct PrefixContextMatch<'a> {
+    candidate_index: usize,
+    prefix_len: usize,
+    key: &'a str,
+    value: u64,
+}
+
+impl PrefixContextMatch<'_> {
+    fn is_better_than(self, other: Self) -> bool {
+        self.candidate_index < other.candidate_index
+            || (self.candidate_index == other.candidate_index
+                && (self.prefix_len > other.prefix_len
+                    || (self.prefix_len == other.prefix_len && self.key < other.key)))
+    }
 }
 
 fn model_id_candidates(model_id: &str) -> Vec<String> {
@@ -971,6 +1002,28 @@ mod tests {
 
         assert!(output.visible);
         assert!(output.text.contains("(10000/1000000)"));
+    }
+
+    #[test]
+    fn test_prefix_context_window_prefers_full_model_candidate_over_stripped_alias() {
+        let mut context_windows = std::collections::HashMap::new();
+        context_windows.insert("acme/*".to_string(), 777_000);
+        context_windows.insert("mimo-*".to_string(), 1_000_000);
+
+        let window = context_window_from_map(&context_windows, "acme/mimo-v2-pro");
+
+        assert_eq!(window, Some(777_000));
+    }
+
+    #[test]
+    fn test_prefix_context_window_prefers_longer_prefix_for_same_candidate() {
+        let mut context_windows = std::collections::HashMap::new();
+        context_windows.insert("qwen3-*".to_string(), 262_144);
+        context_windows.insert("qwen3-coder-*".to_string(), 1_000_000);
+
+        let window = context_window_from_map(&context_windows, "qwen3-coder-plus");
+
+        assert_eq!(window, Some(1_000_000));
     }
 
     #[tokio::test]
