@@ -10,41 +10,11 @@ use std::fmt::Write;
 use crate::components::base::{Component, ComponentFactory, ComponentOutput, RenderContext};
 use crate::config::{BaseComponentConfig, Config, UsageComponentConfig};
 use crate::storage;
+use crate::utils::provider_profiles::{
+    builtin_endpoint_currency, builtin_model_currency, match_endpoint_currency_rules,
+    match_model_currency_rules, model_names_from_value, AUTO_CURRENCY, DEFAULT_CURRENCY,
+};
 use async_trait::async_trait;
-
-const AUTO_CURRENCY: &str = "auto";
-const DEFAULT_CURRENCY: &str = "USD";
-
-const BUILTIN_ENDPOINT_CURRENCY_RULES: &[(&str, &str)] = &[
-    ("open.bigmodel.cn", "CNY"),
-    ("api.z.ai", "USD"),
-    ("api.deepseek.com", "CNY"),
-    ("api.minimaxi.com", "CNY"),
-    ("api.minimax.io", "USD"),
-    ("api.moonshot.cn", "CNY"),
-    ("api.moonshot.ai", "USD"),
-    ("dashscope.aliyuncs.com", "CNY"),
-    ("dashscope-intl.aliyuncs.com", "USD"),
-    ("dashscope-us.aliyuncs.com", "USD"),
-    ("ark.cn-beijing.volces.com", "CNY"),
-    ("ark.ap-southeast.bytepluses.com", "USD"),
-    ("ark.eu-west.bytepluses.com", "USD"),
-    ("api.hunyuan.cloud.tencent.com", "CNY"),
-    ("qianfan.baidubce.com", "CNY"),
-    ("xiaomimimo.com", "USD"),
-];
-
-const BUILTIN_MODEL_CURRENCY_RULES: &[(&str, &str)] = &[
-    ("deepseek", "CNY"),
-    ("mimo", "USD"),
-    ("claude", "USD"),
-    ("anthropic", "USD"),
-    ("openai", "USD"),
-    ("gpt", "USD"),
-    ("o1", "USD"),
-    ("o3", "USD"),
-    ("o4", "USD"),
-];
 
 /// Official Session data interface from Claude Code stdin JSON format
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -262,18 +232,18 @@ impl UsageComponent {
             return configured_currency.to_string();
         }
 
-        let model_names = data.map_or_else(Vec::new, Self::extract_model_names);
+        let model_names = data.map_or_else(Vec::new, model_names_from_value);
 
         if let Some(endpoint) = endpoint {
             if let Some(currency) =
-                Self::match_endpoint_rules(endpoint, &self.config.currency_endpoint_rules)
+                match_endpoint_currency_rules(endpoint, &self.config.currency_endpoint_rules)
             {
                 return currency;
             }
         }
 
         if let Some(currency) =
-            Self::match_model_rules(&model_names, &self.config.currency_model_rules)
+            match_model_currency_rules(&model_names, &self.config.currency_model_rules)
         {
             return currency;
         }
@@ -283,12 +253,12 @@ impl UsageComponent {
         }
 
         if let Some(endpoint) = endpoint {
-            if let Some(currency) = Self::match_builtin_endpoint_rules(endpoint) {
+            if let Some(currency) = builtin_endpoint_currency(endpoint) {
                 return currency.to_string();
             }
         }
 
-        if let Some(currency) = Self::match_builtin_model_rules(&model_names) {
+        if let Some(currency) = builtin_model_currency(&model_names) {
             return currency.to_string();
         }
 
@@ -301,115 +271,6 @@ impl UsageComponent {
             .and_then(serde_json::Value::as_str)
             .map(str::trim)
             .filter(|currency| !currency.is_empty())
-    }
-
-    fn extract_model_names(data: &serde_json::Value) -> Vec<String> {
-        let mut names = Vec::new();
-
-        if let Some(model) = data.get("model") {
-            if let Some(model_name) = model.as_str() {
-                names.push(model_name.to_string());
-            }
-
-            for field in ["id", "display_name", "displayName", "name"] {
-                if let Some(model_name) = model.get(field).and_then(serde_json::Value::as_str) {
-                    names.push(model_name.to_string());
-                }
-            }
-        }
-
-        names
-    }
-
-    fn match_endpoint_rules(
-        endpoint: &str,
-        rules: &std::collections::HashMap<String, String>,
-    ) -> Option<String> {
-        let mut entries: Vec<_> = rules.iter().collect();
-        entries.sort_by(|(left, _), (right, _)| {
-            right.len().cmp(&left.len()).then_with(|| left.cmp(right))
-        });
-
-        entries.into_iter().find_map(|(pattern, currency)| {
-            Self::endpoint_matches(pattern, endpoint).then(|| currency.clone())
-        })
-    }
-
-    fn match_model_rules(
-        model_names: &[String],
-        rules: &std::collections::HashMap<String, String>,
-    ) -> Option<String> {
-        let mut entries: Vec<_> = rules.iter().collect();
-        entries.sort_by(|(left, _), (right, _)| {
-            right.len().cmp(&left.len()).then_with(|| left.cmp(right))
-        });
-
-        entries.into_iter().find_map(|(pattern, currency)| {
-            model_names
-                .iter()
-                .any(|model_name| Self::model_matches(pattern, model_name))
-                .then(|| currency.clone())
-        })
-    }
-
-    fn match_builtin_endpoint_rules(endpoint: &str) -> Option<&'static str> {
-        BUILTIN_ENDPOINT_CURRENCY_RULES
-            .iter()
-            .find_map(|(pattern, currency)| {
-                Self::endpoint_matches(pattern, endpoint).then_some(*currency)
-            })
-    }
-
-    fn match_builtin_model_rules(model_names: &[String]) -> Option<&'static str> {
-        BUILTIN_MODEL_CURRENCY_RULES
-            .iter()
-            .find_map(|(pattern, currency)| {
-                model_names
-                    .iter()
-                    .any(|model_name| Self::model_matches(pattern, model_name))
-                    .then_some(*currency)
-            })
-    }
-
-    fn endpoint_matches(pattern: &str, endpoint: &str) -> bool {
-        let pattern_host = Self::endpoint_host(pattern);
-        let endpoint_host = Self::endpoint_host(endpoint);
-
-        if pattern_host.is_empty() || endpoint_host.is_empty() {
-            return false;
-        }
-
-        endpoint_host == pattern_host
-            || endpoint_host
-                .strip_suffix(&pattern_host)
-                .is_some_and(|prefix| prefix.ends_with('.'))
-    }
-
-    fn endpoint_host(endpoint: &str) -> String {
-        let normalized = endpoint.trim().to_ascii_lowercase();
-        let without_scheme = normalized
-            .split_once("://")
-            .map_or(normalized.as_str(), |(_, rest)| rest);
-        let without_auth = without_scheme
-            .rsplit_once('@')
-            .map_or(without_scheme, |(_, host)| host);
-        let host_with_port = without_auth
-            .split(&['/', '?', '#'][..])
-            .next()
-            .unwrap_or_default();
-        host_with_port
-            .split(':')
-            .next()
-            .unwrap_or_default()
-            .trim_matches('.')
-            .to_string()
-    }
-
-    fn model_matches(pattern: &str, model_name: &str) -> bool {
-        let pattern = pattern.trim().to_ascii_lowercase();
-        let model_name = model_name.trim().to_ascii_lowercase();
-
-        !pattern.is_empty() && (model_name == pattern || model_name.contains(&pattern))
     }
 
     fn currency_prefix_for_code(currency: &str) -> String {
@@ -589,8 +450,6 @@ impl ComponentFactory for UsageComponentFactory {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::*;
 
     fn component_with_config(config: UsageComponentConfig) -> UsageComponent {
@@ -668,76 +527,6 @@ mod tests {
         });
 
         assert_eq!(component.resolve_currency_prefix(Some(&data)), "¥");
-    }
-
-    #[test]
-    fn custom_endpoint_rules_match_urls_and_hosts() {
-        let rules = HashMap::from([
-            ("api.minimax.io".to_string(), "CNY".to_string()),
-            (
-                "https://tenant.example.com/v1".to_string(),
-                "EUR".to_string(),
-            ),
-        ]);
-
-        assert_eq!(
-            UsageComponent::match_endpoint_rules("https://api.minimax.io/v1", &rules),
-            Some("CNY".to_string())
-        );
-        assert_eq!(
-            UsageComponent::match_endpoint_rules("https://tenant.example.com/v1/chat", &rules),
-            Some("EUR".to_string())
-        );
-    }
-
-    #[test]
-    fn custom_model_rules_match_case_insensitive_substrings() {
-        let rules = HashMap::from([("mimo".to_string(), "USD".to_string())]);
-        let model_names = ["Xiaomi-MiMo-V2.5-Pro".to_string()];
-
-        assert_eq!(
-            UsageComponent::match_model_rules(&model_names, &rules),
-            Some("USD".to_string())
-        );
-    }
-
-    #[test]
-    fn builtin_endpoint_rules_cover_common_cn_and_global_hosts() {
-        assert_eq!(
-            UsageComponent::match_builtin_endpoint_rules("https://api.deepseek.com/v1"),
-            Some("CNY")
-        );
-        assert_eq!(
-            UsageComponent::match_builtin_endpoint_rules("https://api.minimaxi.com/anthropic"),
-            Some("CNY")
-        );
-        assert_eq!(
-            UsageComponent::match_builtin_endpoint_rules("https://api.minimax.io/v1"),
-            Some("USD")
-        );
-        assert_eq!(
-            UsageComponent::match_builtin_endpoint_rules("https://api.moonshot.cn/v1"),
-            Some("CNY")
-        );
-        assert_eq!(
-            UsageComponent::match_builtin_endpoint_rules("https://api.xiaomimimo.com/v1"),
-            Some("USD")
-        );
-    }
-
-    #[test]
-    fn builtin_model_rules_cover_deepseek_and_mimo_fallbacks() {
-        let deepseek_models = ["deepseek-v4-pro".to_string()];
-        let mimo_models = ["mimo-v2-flash".to_string()];
-
-        assert_eq!(
-            UsageComponent::match_builtin_model_rules(&deepseek_models),
-            Some("CNY")
-        );
-        assert_eq!(
-            UsageComponent::match_builtin_model_rules(&mimo_models),
-            Some("USD")
-        );
     }
 
     #[test]

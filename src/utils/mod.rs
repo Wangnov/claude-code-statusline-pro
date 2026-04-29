@@ -4,6 +4,7 @@
 
 pub mod effort;
 pub mod model_parser;
+pub mod provider_profiles;
 
 use std::env;
 use std::path::PathBuf;
