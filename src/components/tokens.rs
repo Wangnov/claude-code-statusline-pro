@@ -10,6 +10,7 @@ use super::base::{Component, ComponentFactory, ComponentOutput, RenderContext};
 use crate::config::{BaseComponentConfig, Config, TokensComponentConfig};
 use crate::storage;
 use crate::utils::model_parser::parse_model_id;
+use crate::utils::provider_profiles::{context_window_from_model_map, DEFAULT_CONTEXT_WINDOW};
 
 #[derive(Clone, Debug)]
 struct TokenUsageInfo {
@@ -175,7 +176,7 @@ impl TokensComponent {
             .context_windows
             .get("default")
             .copied()
-            .unwrap_or(200_000)
+            .unwrap_or(DEFAULT_CONTEXT_WINDOW)
     }
 
     fn model_specific_context_window(&self, ctx: &RenderContext) -> Option<u64> {
@@ -183,7 +184,7 @@ impl TokensComponent {
 
         if let Some(id) = model.id.as_ref() {
             // Priority 1: Exact match from config
-            if let Some(value) = context_window_from_map(&self.config.context_windows, id) {
+            if let Some(value) = context_window_from_model_map(&self.config.context_windows, id) {
                 return Some(value);
             }
 
@@ -413,97 +414,6 @@ impl Component for TokensComponent {
     fn base_config(&self, _ctx: &RenderContext) -> Option<&BaseComponentConfig> {
         Some(&self.config.base)
     }
-}
-
-fn context_window_from_map(
-    context_windows: &std::collections::HashMap<String, u64>,
-    model_id: &str,
-) -> Option<u64> {
-    let candidates = model_id_candidates(model_id);
-
-    for candidate in &candidates {
-        if let Some(value) = find_exact_context_window(context_windows, candidate) {
-            return Some(value);
-        }
-    }
-
-    find_prefix_context_window(context_windows, &candidates)
-}
-
-fn find_exact_context_window(
-    context_windows: &std::collections::HashMap<String, u64>,
-    candidate: &str,
-) -> Option<u64> {
-    context_windows
-        .iter()
-        .find(|(key, _)| {
-            !key.eq_ignore_ascii_case("default")
-                && !key.ends_with('*')
-                && key.eq_ignore_ascii_case(candidate)
-        })
-        .map(|(_, value)| *value)
-}
-
-fn find_prefix_context_window(
-    context_windows: &std::collections::HashMap<String, u64>,
-    candidates: &[String],
-) -> Option<u64> {
-    let mut best: Option<PrefixContextMatch<'_>> = None;
-
-    for (key, value) in context_windows {
-        let Some(prefix) = key.strip_suffix('*') else {
-            continue;
-        };
-        if prefix.eq_ignore_ascii_case("default") {
-            continue;
-        }
-
-        let normalized_prefix = prefix.to_ascii_lowercase();
-        if let Some(candidate_index) = candidates
-            .iter()
-            .position(|candidate| candidate.starts_with(&normalized_prefix))
-        {
-            let candidate_match = PrefixContextMatch {
-                candidate_index,
-                prefix_len: normalized_prefix.len(),
-                key,
-                value: *value,
-            };
-            if best.is_none_or(|current| candidate_match.is_better_than(current)) {
-                best = Some(candidate_match);
-            }
-        }
-    }
-
-    best.map(|candidate_match| candidate_match.value)
-}
-
-#[derive(Clone, Copy)]
-struct PrefixContextMatch<'a> {
-    candidate_index: usize,
-    prefix_len: usize,
-    key: &'a str,
-    value: u64,
-}
-
-impl PrefixContextMatch<'_> {
-    fn is_better_than(self, other: Self) -> bool {
-        self.candidate_index < other.candidate_index
-            || (self.candidate_index == other.candidate_index
-                && (self.prefix_len > other.prefix_len
-                    || (self.prefix_len == other.prefix_len && self.key < other.key)))
-    }
-}
-
-fn model_id_candidates(model_id: &str) -> Vec<String> {
-    let normalized = model_id.trim().to_ascii_lowercase();
-    let mut candidates = vec![normalized.clone()];
-
-    if let Some((_, last)) = normalized.rsplit_once('/') {
-        candidates.push(last.to_string());
-    }
-
-    candidates
 }
 
 fn icon_for_kind(set: &crate::config::TokenIconSetConfig, kind: TokenStatusKind) -> Option<&str> {
@@ -1002,28 +912,6 @@ mod tests {
 
         assert!(output.visible);
         assert!(output.text.contains("(10000/1000000)"));
-    }
-
-    #[test]
-    fn test_prefix_context_window_prefers_full_model_candidate_over_stripped_alias() {
-        let mut context_windows = std::collections::HashMap::new();
-        context_windows.insert("acme/*".to_string(), 777_000);
-        context_windows.insert("mimo-*".to_string(), 1_000_000);
-
-        let window = context_window_from_map(&context_windows, "acme/mimo-v2-pro");
-
-        assert_eq!(window, Some(777_000));
-    }
-
-    #[test]
-    fn test_prefix_context_window_prefers_longer_prefix_for_same_candidate() {
-        let mut context_windows = std::collections::HashMap::new();
-        context_windows.insert("qwen3-*".to_string(), 262_144);
-        context_windows.insert("qwen3-coder-*".to_string(), 1_000_000);
-
-        let window = context_window_from_map(&context_windows, "qwen3-coder-plus");
-
-        assert_eq!(window, Some(1_000_000));
     }
 
     #[tokio::test]
