@@ -661,6 +661,18 @@ pub struct UsageComponentConfig {
     #[serde(default = "default_precision")]
     pub precision: u32,
 
+    /// Currency display mode or fixed currency code
+    #[serde(default = "default_auto_string")]
+    pub currency: String,
+
+    /// User-provided endpoint to currency mappings
+    #[serde(default)]
+    pub currency_endpoint_rules: HashMap<String, String>,
+
+    /// User-provided model name to currency mappings
+    #[serde(default)]
+    pub currency_model_rules: HashMap<String, String>,
+
     /// Show lines added
     #[serde(default)]
     pub show_lines_added: bool,
@@ -683,6 +695,9 @@ impl Default for UsageComponentConfig {
             },
             display_mode: default_smart(),
             precision: default_precision(),
+            currency: default_auto_string(),
+            currency_endpoint_rules: HashMap::new(),
+            currency_model_rules: HashMap::new(),
             show_lines_added: false,
             show_lines_removed: false,
         }
@@ -1065,6 +1080,10 @@ fn default_compact() -> String {
 
 fn default_smart() -> String {
     "smart".to_string()
+}
+
+fn default_auto_string() -> String {
+    "auto".to_string()
 }
 
 const fn default_precision() -> u32 {

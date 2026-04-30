@@ -219,6 +219,10 @@ pub struct CostInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_cost_usd: Option<f64>,
 
+    /// Currency code for the reported cost, when supplied by the upstream tool
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
+
     /// Total duration in milliseconds
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_duration_ms: Option<i64>,

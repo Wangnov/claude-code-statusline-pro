@@ -443,6 +443,12 @@ pub static SECTIONS: &[Section] = &[
                 help: "成本小数位数。",
             },
             Field {
+                label: "currency",
+                path: "components.usage.currency",
+                kind: FieldKind::Text,
+                help: "auto=自动推断;也可填任意固定币种代码,如 USD/CNY/AUD。",
+            },
+            Field {
                 label: "show_lines_added",
                 path: "components.usage.show_lines_added",
                 kind: FieldKind::Bool,
