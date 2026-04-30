@@ -349,6 +349,9 @@ critical = "[X]"
 
 # 上下文窗口大小映射 | Context window size mapping
 # 为不同模型定义上下文窗口大小（Token数）
+# 内置已包含常见 Claude、DeepSeek、Qwen、Kimi、MiniMax、MiMo、豆包、混元、GLM 模型。
+# 这里可以覆盖或补充模型窗口；精确 key 优先于带 * 的前缀匹配。
+# 命中模型专属窗口时，会覆盖 Claude Code stdin 中常见的 200K 通用窗口。
 [components.tokens.context_windows]
 default = 200_000                          # 默认窗口大小
 "claude-opus-4-1-20250805" = 200_000
@@ -358,6 +361,10 @@ default = 200_000                          # 默认窗口大小
 "claude-3-7-sonnet-20250219" = 200_000
 "claude-3-5-haiku-20241022" = 200_000
 "claude-3-haiku-20240307" = 200_000
+# 示例：第三方模型或自定义路由
+"deepseek-v4-*" = 1_000_000
+"qwen-long*" = 10_000_000
+"my-provider/my-model" = 500_000
 
 # -------------------- Usage组件 --------------------
 # 显示会话成本和代码行数统计

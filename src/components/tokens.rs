@@ -75,11 +75,27 @@ impl TokensComponent {
             return None;
         }
 
-        let total = context_window
+        let official_total = context_window
             .get("context_window_size")
             .or_else(|| context_window.get("contextWindowSize"))
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or_else(|| self.context_window_for_model(ctx));
+            .and_then(serde_json::Value::as_u64);
+        let model_total = self.model_specific_context_window(ctx);
+        let should_override_official_total = matches!(
+            (official_total, model_total),
+            (Some(200_000), Some(model_window)) if model_window != 200_000
+        );
+        let total = if should_override_official_total {
+            model_total.unwrap_or(200_000)
+        } else {
+            official_total
+                .or(model_total)
+                .unwrap_or_else(|| self.context_window_for_model(ctx))
+        };
+        let percentage = if should_override_official_total && used > 0 {
+            None
+        } else {
+            percentage
+        };
 
         Some(TokenUsageInfo {
             used,
@@ -150,32 +166,36 @@ impl TokensComponent {
     }
 
     fn context_window_for_model(&self, ctx: &RenderContext) -> u64 {
-        let default_window = self
-            .config
+        self.model_specific_context_window(ctx)
+            .unwrap_or_else(|| self.default_context_window())
+    }
+
+    fn default_context_window(&self) -> u64 {
+        self.config
             .context_windows
             .get("default")
             .copied()
-            .unwrap_or(200_000);
+            .unwrap_or(200_000)
+    }
 
-        let Some(model) = ctx.input.model.as_ref() else {
-            return default_window;
-        };
+    fn model_specific_context_window(&self, ctx: &RenderContext) -> Option<u64> {
+        let model = ctx.input.model.as_ref()?;
 
         if let Some(id) = model.id.as_ref() {
             // Priority 1: Exact match from config
-            if let Some(value) = self.config.context_windows.get(id) {
-                return *value;
+            if let Some(value) = context_window_from_map(&self.config.context_windows, id) {
+                return Some(value);
             }
 
             // Priority 2: Infer from model ID params (e.g., [1m])
             if let Some(parsed) = parse_model_id(id) {
                 if let Some(window) = parsed.infer_context_window() {
-                    return window;
+                    return Some(window);
                 }
             }
         }
 
-        default_window
+        None
     }
 
     fn build_progress_bar(&self, ctx: &RenderContext, percentage: f64) -> Option<String> {
@@ -393,6 +413,97 @@ impl Component for TokensComponent {
     fn base_config(&self, _ctx: &RenderContext) -> Option<&BaseComponentConfig> {
         Some(&self.config.base)
     }
+}
+
+fn context_window_from_map(
+    context_windows: &std::collections::HashMap<String, u64>,
+    model_id: &str,
+) -> Option<u64> {
+    let candidates = model_id_candidates(model_id);
+
+    for candidate in &candidates {
+        if let Some(value) = find_exact_context_window(context_windows, candidate) {
+            return Some(value);
+        }
+    }
+
+    find_prefix_context_window(context_windows, &candidates)
+}
+
+fn find_exact_context_window(
+    context_windows: &std::collections::HashMap<String, u64>,
+    candidate: &str,
+) -> Option<u64> {
+    context_windows
+        .iter()
+        .find(|(key, _)| {
+            !key.eq_ignore_ascii_case("default")
+                && !key.ends_with('*')
+                && key.eq_ignore_ascii_case(candidate)
+        })
+        .map(|(_, value)| *value)
+}
+
+fn find_prefix_context_window(
+    context_windows: &std::collections::HashMap<String, u64>,
+    candidates: &[String],
+) -> Option<u64> {
+    let mut best: Option<PrefixContextMatch<'_>> = None;
+
+    for (key, value) in context_windows {
+        let Some(prefix) = key.strip_suffix('*') else {
+            continue;
+        };
+        if prefix.eq_ignore_ascii_case("default") {
+            continue;
+        }
+
+        let normalized_prefix = prefix.to_ascii_lowercase();
+        if let Some(candidate_index) = candidates
+            .iter()
+            .position(|candidate| candidate.starts_with(&normalized_prefix))
+        {
+            let candidate_match = PrefixContextMatch {
+                candidate_index,
+                prefix_len: normalized_prefix.len(),
+                key,
+                value: *value,
+            };
+            if best.is_none_or(|current| candidate_match.is_better_than(current)) {
+                best = Some(candidate_match);
+            }
+        }
+    }
+
+    best.map(|candidate_match| candidate_match.value)
+}
+
+#[derive(Clone, Copy)]
+struct PrefixContextMatch<'a> {
+    candidate_index: usize,
+    prefix_len: usize,
+    key: &'a str,
+    value: u64,
+}
+
+impl PrefixContextMatch<'_> {
+    fn is_better_than(self, other: Self) -> bool {
+        self.candidate_index < other.candidate_index
+            || (self.candidate_index == other.candidate_index
+                && (self.prefix_len > other.prefix_len
+                    || (self.prefix_len == other.prefix_len && self.key < other.key)))
+    }
+}
+
+fn model_id_candidates(model_id: &str) -> Vec<String> {
+    let normalized = model_id.trim().to_ascii_lowercase();
+    let mut candidates = vec![normalized.clone()];
+
+    if let Some((_, last)) = normalized.rsplit_once('/') {
+        candidates.push(last.to_string());
+    }
+
+    candidates
 }
 
 fn icon_for_kind(set: &crate::config::TokenIconSetConfig, kind: TokenStatusKind) -> Option<&str> {
@@ -717,6 +828,202 @@ mod tests {
 
         assert!(output.visible);
         assert!(output.text.contains("(1075/200000)"));
+    }
+
+    #[tokio::test]
+    async fn test_tokens_builtin_model_window_overrides_generic_official_input() {
+        use crate::core::ModelInfo;
+
+        let input = build_input(|input| {
+            input.session_id = Some("deepseek-session".to_string());
+            input.model = Some(ModelInfo {
+                id: Some("deepseek-v4-pro".to_string()),
+                display_name: None,
+            });
+            input.extra = json!({
+                "context_window": {
+                    "context_window_size": 200_000u64,
+                    "used_percentage": 26.75f64,
+                    "current_usage": {
+                        "input_tokens": 53_500u64,
+                        "cache_creation_input_tokens": 0u64,
+                        "cache_read_input_tokens": 0u64
+                    }
+                }
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+            preview_mode: false,
+        };
+
+        let config = build_tokens_config(|config| {
+            config.show_progress_bar = false;
+            config.show_percentage = true;
+            config.show_raw_numbers = true;
+        });
+
+        let component = TokensComponent::new(config);
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert!(output.text.contains("5.3%"));
+        assert!(output.text.contains("(53500/1000000)"));
+    }
+
+    #[tokio::test]
+    async fn test_tokens_specific_official_context_window_overrides_builtin_model_window() {
+        use crate::core::ModelInfo;
+
+        let input = build_input(|input| {
+            input.session_id = Some("deepseek-session".to_string());
+            input.model = Some(ModelInfo {
+                id: Some("deepseek-v4-pro".to_string()),
+                display_name: None,
+            });
+            input.extra = json!({
+                "context_window": {
+                    "context_window_size": 1_048_576u64,
+                    "used_percentage": 5.1f64,
+                    "current_usage": {
+                        "input_tokens": 53_500u64,
+                        "cache_creation_input_tokens": 0u64,
+                        "cache_read_input_tokens": 0u64
+                    }
+                }
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+            preview_mode: false,
+        };
+
+        let config = build_tokens_config(|config| {
+            config.show_progress_bar = false;
+            config.show_percentage = false;
+            config.show_raw_numbers = true;
+        });
+
+        let component = TokensComponent::new(config);
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert!(output.text.contains("(53500/1048576)"));
+    }
+
+    #[tokio::test]
+    async fn test_tokens_user_exact_context_window_overrides_builtin_prefix() {
+        use crate::core::ModelInfo;
+
+        let input = build_input(|input| {
+            input.session_id = Some("deepseek-session".to_string());
+            input.model = Some(ModelInfo {
+                id: Some("deepseek-v4-pro".to_string()),
+                display_name: None,
+            });
+            input.extra = json!({
+                "context_window": {
+                    "context_window_size": 200_000u64,
+                    "current_usage": {
+                        "input_tokens": 10_000u64,
+                        "cache_creation_input_tokens": 0u64,
+                        "cache_read_input_tokens": 0u64
+                    }
+                }
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+            preview_mode: false,
+        };
+
+        let config = build_tokens_config(|config| {
+            config.show_progress_bar = false;
+            config.show_percentage = false;
+            config.show_raw_numbers = true;
+            config
+                .context_windows
+                .insert("deepseek-v4-pro".to_string(), 777_000);
+        });
+
+        let component = TokensComponent::new(config);
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert!(output.text.contains("(10000/777000)"));
+    }
+
+    #[tokio::test]
+    async fn test_tokens_namespaced_model_id_uses_builtin_context_window() {
+        use crate::core::ModelInfo;
+
+        let input = build_input(|input| {
+            input.session_id = Some("mimo-session".to_string());
+            input.model = Some(ModelInfo {
+                id: Some("xiaomi/mimo-v2.5-pro".to_string()),
+                display_name: None,
+            });
+            input.extra = json!({
+                "context_window": {
+                    "context_window_size": 200_000u64,
+                    "current_usage": {
+                        "input_tokens": 10_000u64,
+                        "cache_creation_input_tokens": 0u64,
+                        "cache_read_input_tokens": 0u64
+                    }
+                }
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+            preview_mode: false,
+        };
+
+        let config = build_tokens_config(|config| {
+            config.show_progress_bar = false;
+            config.show_percentage = false;
+            config.show_raw_numbers = true;
+        });
+
+        let component = TokensComponent::new(config);
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert!(output.text.contains("(10000/1000000)"));
+    }
+
+    #[test]
+    fn test_prefix_context_window_prefers_full_model_candidate_over_stripped_alias() {
+        let mut context_windows = std::collections::HashMap::new();
+        context_windows.insert("acme/*".to_string(), 777_000);
+        context_windows.insert("mimo-*".to_string(), 1_000_000);
+
+        let window = context_window_from_map(&context_windows, "acme/mimo-v2-pro");
+
+        assert_eq!(window, Some(777_000));
+    }
+
+    #[test]
+    fn test_prefix_context_window_prefers_longer_prefix_for_same_candidate() {
+        let mut context_windows = std::collections::HashMap::new();
+        context_windows.insert("qwen3-*".to_string(), 262_144);
+        context_windows.insert("qwen3-coder-*".to_string(), 1_000_000);
+
+        let window = context_window_from_map(&context_windows, "qwen3-coder-plus");
+
+        assert_eq!(window, Some(1_000_000));
     }
 
     #[tokio::test]

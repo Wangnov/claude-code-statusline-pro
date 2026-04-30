@@ -342,6 +342,13 @@ show_progress_bar = true     # 显示进度条
 show_percentage = true       # 显示百分比
 progress_width = 15          # 进度条宽度
 
+# 模型上下文窗口覆盖（内置已包含常见国产/第三方模型）
+# 精确 key 优先于通配前缀；命中模型专属窗口时会覆盖 Claude Code stdin 的通用 200K。
+[components.tokens.context_windows]
+"deepseek-v4-*" = 1_000_000
+"qwen-long*" = 10_000_000
+"my-provider/my-model" = 500_000
+
 # Token阈值配置
 [components.tokens.thresholds]
 warning = 60    # 60%显示黄色警告
@@ -788,6 +795,13 @@ show_gradient = true         # Enable colored gradient progress bar
 show_progress_bar = true     # Show progress bar
 show_percentage = true       # Show percentage
 progress_width = 15          # Progress bar width
+
+# Model context window overrides (common CN/third-party models are built in)
+# Exact keys win over wildcard prefixes; model-specific hits override Claude Code's generic 200K stdin value.
+[components.tokens.context_windows]
+"deepseek-v4-*" = 1_000_000
+"qwen-long*" = 10_000_000
+"my-provider/my-model" = 500_000
 
 # Token threshold configuration
 [components.tokens.thresholds]
