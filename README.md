@@ -242,13 +242,28 @@ mode = "conversation"  # 或 "session"
 
 ##### 💱 货币显示
 
-`usage` 组件默认使用 `currency = "auto"`。自动模式会先应用你配置的 endpoint/model 规则，再读取 Claude Code 传入的 `cost.currency`，随后匹配内置 endpoint/model 规则，最后回退到 USD。DeepSeek、MiniMax、Kimi、GLM、百炼、火山方舟、MiMo 等中外站点不同币种的 provider，建议优先用 endpoint 规则区分。
+`usage` 组件默认使用 `currency = "auto"`。自动模式会先应用你配置的 endpoint/model 规则，再匹配 `model_providers`，随后读取 Claude Code 传入的 `cost.currency`，最后回退到内置规则或 USD。DeepSeek、MiniMax、Kimi、GLM、百炼、火山方舟、MiMo 等 provider 已有默认 profile；其中中国站/国际站会分开匹配币种和价格。用户可以在 `model_providers` 中集中覆盖 endpoint、模型窗口、币种和价格。
 
 注意：`conversation` 模式读取的是历史聚合的 `total_cost_usd` 存储值。为避免只换符号、不换金额，`currency = "auto"` 在该模式下会显示 USD；如果你确认自己的聚合成本已经是其他币种，可用 `currency = "CNY"` 等固定值强制显示。
 
 ```toml
 [components.usage]
 currency = "auto" # auto | USD | CNY | EUR | GBP | JPY ...
+
+[model_providers.deepseek]
+endpoints = ["api.deepseek.com"]
+models = ["deepseek-*", "deepseek-chat", "deepseek-reasoner"]
+currency = "CNY"
+
+[model_providers.deepseek.context_windows]
+"deepseek-chat" = 1_000_000
+"deepseek-r1*" = 65_536
+
+[model_providers.deepseek.pricing.deepseek-chat]
+unit_tokens = 1_000_000
+input = 1.0
+output = 2.0
+cache_read = 0.02
 
 [components.usage.currency_endpoint_rules]
 "api.example.cn" = "CNY"
@@ -258,12 +273,9 @@ currency = "auto" # auto | USD | CNY | EUR | GBP | JPY ...
 "my-cny-model" = "CNY"
 ```
 
-##### 📊 成本计算公式
+##### 📊 成本计算方式
 
-```javascript
-cost = (inputTokens * inputPrice + outputTokens * outputPrice + 
-        cacheTokens * cachePrice) / 200_000
-```
+默认情况下，状态栏直接显示 Claude Code 传入的 `cost.total_cost_usd`。如果命中 `model_providers.<name>.pricing`，并且输入里包含 input/output/cache token 明细，则会按该 profile 的价格本地重算；缺少 token 明细时自动回退到上游金额。若 endpoint 已匹配到某个 provider，只会使用该 endpoint 所属 provider 的价格，避免中国站套用国际站价格。
 
 **注意**: 状态栏的成本计算与 `/cost` 命令采用不同逻辑和时间范围，确保各自场景的准确性。
 
@@ -696,13 +708,28 @@ mode = "conversation"  # or "session"
 
 ##### 💱 Currency Display
 
-The `usage` component defaults to `currency = "auto"`. Auto mode first applies your custom endpoint/model rules, then trusts `cost.currency` from Claude Code when present, then matches built-in endpoint/model rules, and finally falls back to USD. For providers with different China/global pricing, such as DeepSeek, MiniMax, Kimi, GLM, Model Studio, Volcengine/BytePlus, and MiMo, prefer endpoint rules.
+The `usage` component defaults to `currency = "auto"`. Auto mode first applies your custom endpoint/model rules, then matches `model_providers`, then trusts `cost.currency` from Claude Code when present, and finally falls back to built-in rules or USD. DeepSeek, MiniMax, Kimi, GLM, Model Studio, Volcengine/BytePlus, and MiMo ship with default provider profiles; CN/global endpoints are matched separately for currency and pricing. Users can override endpoints, context windows, currency, and pricing under `model_providers`.
 
 Note: `conversation` mode reads historical `total_cost_usd` aggregate values from storage. To avoid changing only the symbol without converting the amount, `currency = "auto"` displays USD in that mode; use a fixed value such as `currency = "CNY"` only when you know the aggregate costs are already in that currency.
 
 ```toml
 [components.usage]
 currency = "auto" # auto | USD | CNY | EUR | GBP | JPY ...
+
+[model_providers.deepseek]
+endpoints = ["api.deepseek.com"]
+models = ["deepseek-*", "deepseek-chat", "deepseek-reasoner"]
+currency = "CNY"
+
+[model_providers.deepseek.context_windows]
+"deepseek-chat" = 1_000_000
+"deepseek-r1*" = 65_536
+
+[model_providers.deepseek.pricing.deepseek-chat]
+unit_tokens = 1_000_000
+input = 1.0
+output = 2.0
+cache_read = 0.02
 
 [components.usage.currency_endpoint_rules]
 "api.example.cn" = "CNY"
@@ -712,12 +739,9 @@ currency = "auto" # auto | USD | CNY | EUR | GBP | JPY ...
 "my-cny-model" = "CNY"
 ```
 
-##### 📊 Cost Calculation Formula
+##### 📊 Cost Calculation
 
-```javascript
-cost = (inputTokens * inputPrice + outputTokens * outputPrice + 
-        cacheTokens * cachePrice) / 200_000
-```
+By default, the statusline displays `cost.total_cost_usd` from Claude Code. If a matching `model_providers.<name>.pricing` rule exists and the input includes input/output/cache token details, the usage component recalculates the cost locally from that profile. If token details are missing, it falls back to the upstream amount. When an endpoint matches a provider, pricing is restricted to that endpoint's provider so CN endpoints do not inherit global prices by model name alone.
 
 **Note**: The status bar's cost calculation uses different logic and time ranges from the `/cost` command, ensuring accuracy for their respective scenarios.
 

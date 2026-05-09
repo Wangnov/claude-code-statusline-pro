@@ -172,6 +172,37 @@ fine_progress = true
 # 胶囊主题的核心特性
 capsule_style = true
 
+# ==================== 模型/上游配置 ====================
+# 集中管理模型上游、上下文窗口、币种和可选计费规则。
+# 组件级旧配置仍可用；这里是推荐的新入口，便于用户覆盖第三方模型或中转站。
+#
+# 匹配逻辑：
+# - endpoints 按 host 后缀匹配 ANTHROPIC_BASE_URL，也可以写完整 base URL
+# - models 按大小写不敏感匹配，支持 * 后缀前缀匹配
+# - context_windows / pricing 中更具体的 model key 优先
+# - pricing 不配置时，usage 组件继续使用 Claude Code 传入的 cost.total_cost_usd
+#
+# 当前内置 provider：anthropic、deepseek、qwen_cn、qwen_global、kimi_cn、
+# kimi_global、minimax_cn、minimax_global、mimo、doubao_cn、doubao_global、
+# hunyuan、glm_cn、glm_global、qianfan、openai。
+#
+# 示例：覆盖或补充某个 provider。配置文件中的内容会和内置默认值合并。
+# [model_providers.deepseek]
+# enabled = true
+# endpoints = ["api.deepseek.com"]
+# models = ["deepseek-*", "deepseek-chat", "deepseek-reasoner"]
+# currency = "CNY"
+#
+# [model_providers.deepseek.context_windows]
+# "deepseek-chat" = 1_000_000
+# "deepseek-r1*" = 65_536
+#
+# [model_providers.deepseek.pricing.deepseek-chat]
+# unit_tokens = 1_000_000
+# input = 1.0
+# output = 2.0
+# cache_read = 0.02
+
 # ==================== 组件配置 ====================
 # 状态栏由多个组件组成，每个组件负责显示特定信息
 # 所有组件都支持三级图标系统：Nerd Font → Emoji → Text
@@ -349,8 +380,8 @@ critical = "[X]"
 
 # 上下文窗口大小映射 | Context window size mapping
 # 为不同模型定义上下文窗口大小（Token数）
-# 内置已包含常见 Claude、DeepSeek、Qwen、Kimi、MiniMax、MiMo、豆包、混元、GLM 模型。
-# 这里可以覆盖或补充模型窗口；精确 key 优先于带 * 的前缀匹配。
+# 推荐优先在 [model_providers.<name>.context_windows] 里集中管理。
+# 这里作为兼容/快速覆盖入口仍然有效；精确 key 优先于带 * 的前缀匹配。
 # 命中模型专属窗口时，会覆盖 Claude Code stdin 中常见的 200K 通用窗口。
 [components.tokens.context_windows]
 default = 200_000                          # 默认窗口大小
@@ -395,13 +426,13 @@ show_lines_added = true
 # 显示删除的代码行数 | Show lines removed  
 show_lines_removed = false
 
-# 自定义 endpoint -> currency 映射，优先级高于上游 cost.currency 和内置自动规则
+# 自定义 endpoint -> currency 映射，优先级高于 model_providers、上游 cost.currency 和内置自动规则
 # 规则 key 可以写 host，也可以写完整 base URL；按 host 后缀匹配
 [components.usage.currency_endpoint_rules]
 # "api.example.cn" = "CNY"
 # "https://api.example.com/v1" = "USD"
 
-# 自定义 model name -> currency 映射，优先级低于 endpoint 映射，高于上游 cost.currency 和内置规则
+# 自定义 model name -> currency 映射，优先级低于 endpoint 映射，高于 model_providers、上游 cost.currency 和内置规则
 # 规则 key 按大小写不敏感的子串匹配
 [components.usage.currency_model_rules]
 # "my-cny-model" = "CNY"
