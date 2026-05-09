@@ -8,11 +8,12 @@
 use std::fmt::Write;
 
 use crate::components::base::{Component, ComponentFactory, ComponentOutput, RenderContext};
-use crate::config::{BaseComponentConfig, Config, UsageComponentConfig};
+use crate::config::{BaseComponentConfig, Config, ModelPricingConfig, UsageComponentConfig};
 use crate::storage;
 use crate::utils::provider_profiles::{
     builtin_endpoint_currency, builtin_model_currency, match_endpoint_currency_rules,
-    match_model_currency_rules, model_names_from_value, AUTO_CURRENCY, DEFAULT_CURRENCY,
+    match_model_currency_rules, model_names_from_value, provider_currency, provider_pricing,
+    provider_pricing_currency, AUTO_CURRENCY, DEFAULT_CURRENCY,
 };
 use async_trait::async_trait;
 
@@ -137,13 +138,11 @@ impl UsageComponent {
         ctx: &RenderContext,
     ) -> ComponentOutput {
         let icon = self.select_icon(ctx);
-        let currency_prefix = self.resolve_currency_prefix(Some(data));
-        let display_text = self.build_official_display_text(data, &currency_prefix);
-        let cost = data
-            .get("cost")
-            .and_then(|c| c.get("total_cost_usd"))
-            .and_then(serde_json::Value::as_f64)
-            .unwrap_or(0.0);
+        let endpoint = std::env::var("ANTHROPIC_BASE_URL").ok();
+        let cost = Self::resolve_display_cost(data, endpoint.as_deref(), ctx);
+        let currency_code = self.resolve_currency_code(data, endpoint.as_deref(), ctx);
+        let currency_prefix = Self::currency_prefix_for_code(&currency_code);
+        let display_text = self.build_official_display_text(data, &currency_prefix, cost);
         let color = Self::get_usage_color(cost);
 
         ComponentOutput::new(display_text)
@@ -157,13 +156,8 @@ impl UsageComponent {
         &self,
         data: &serde_json::Value,
         currency_prefix: &str,
+        cost: f64,
     ) -> String {
-        let cost = data
-            .get("cost")
-            .and_then(|c| c.get("total_cost_usd"))
-            .and_then(serde_json::Value::as_f64)
-            .unwrap_or(0.0);
-
         let lines_added = data
             .get("cost")
             .and_then(|c| c.get("total_lines_added"))
@@ -208,7 +202,9 @@ impl UsageComponent {
 
     fn resolve_currency_prefix(&self, data: Option<&serde_json::Value>) -> String {
         let endpoint = std::env::var("ANTHROPIC_BASE_URL").ok();
-        Self::currency_prefix_for_code(&self.resolve_currency_code(data, endpoint.as_deref()))
+        Self::currency_prefix_for_code(
+            &self.resolve_currency_code_option(data, endpoint.as_deref()),
+        )
     }
 
     fn resolve_conversation_currency_prefix(&self) -> String {
@@ -223,6 +219,62 @@ impl UsageComponent {
     }
 
     fn resolve_currency_code(
+        &self,
+        data: &serde_json::Value,
+        endpoint: Option<&str>,
+        ctx: &RenderContext,
+    ) -> String {
+        let configured_currency = self.config.currency.trim();
+        if !configured_currency.eq_ignore_ascii_case(AUTO_CURRENCY) {
+            return configured_currency.to_string();
+        }
+
+        let model_names = model_names_from_value(data);
+        let pricing_currency =
+            provider_pricing_currency(&ctx.config.model_providers, &model_names, endpoint);
+
+        if let Some(endpoint) = endpoint {
+            if let Some(currency) =
+                match_endpoint_currency_rules(endpoint, &self.config.currency_endpoint_rules)
+            {
+                return currency;
+            }
+        }
+
+        if let Some(currency) =
+            match_model_currency_rules(&model_names, &self.config.currency_model_rules)
+        {
+            return currency;
+        }
+
+        if let Some(currency) = pricing_currency {
+            return currency;
+        }
+
+        if let Some(currency) =
+            provider_currency(&ctx.config.model_providers, &model_names, endpoint)
+        {
+            return currency;
+        }
+
+        if let Some(currency) = Self::extract_cost_currency(data) {
+            return currency.to_string();
+        }
+
+        if let Some(endpoint) = endpoint {
+            if let Some(currency) = builtin_endpoint_currency(endpoint) {
+                return currency.to_string();
+            }
+        }
+
+        if let Some(currency) = builtin_model_currency(&model_names) {
+            return currency.to_string();
+        }
+
+        DEFAULT_CURRENCY.to_string()
+    }
+
+    fn resolve_currency_code_option(
         &self,
         data: Option<&serde_json::Value>,
         endpoint: Option<&str>,
@@ -288,6 +340,101 @@ impl UsageComponent {
             }
             _ => trimmed.to_string(),
         }
+    }
+
+    fn resolve_display_cost(
+        data: &serde_json::Value,
+        endpoint: Option<&str>,
+        ctx: &RenderContext,
+    ) -> f64 {
+        let upstream = Self::extract_upstream_cost(data);
+        let model_names = model_names_from_value(data);
+
+        if let Some(pricing) = provider_pricing(&ctx.config.model_providers, &model_names, endpoint)
+        {
+            if let Some(calculated) = Self::calculate_priced_cost(data, &pricing) {
+                return calculated;
+            }
+        }
+
+        upstream
+    }
+
+    fn extract_upstream_cost(data: &serde_json::Value) -> f64 {
+        data.get("cost")
+            .and_then(|cost| cost.get("total_cost_usd"))
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0)
+    }
+
+    fn calculate_priced_cost(
+        data: &serde_json::Value,
+        pricing: &ModelPricingConfig,
+    ) -> Option<f64> {
+        if pricing.unit_tokens <= 0.0 {
+            return None;
+        }
+
+        let cost = data.get("cost")?;
+
+        let cache_read = token_field(
+            cost,
+            &[
+                "cache_read_tokens",
+                "cacheReadTokens",
+                "cache_read_input_tokens",
+                "cacheReadInputTokens",
+                "prompt_cache_hit_tokens",
+                "promptCacheHitTokens",
+            ],
+        );
+        let cache_write = token_field(
+            cost,
+            &[
+                "cache_write_tokens",
+                "cacheWriteTokens",
+                "cache_creation_input_tokens",
+                "cacheCreationInputTokens",
+            ],
+        );
+        let input = token_field(cost, &["input_tokens", "inputTokens"])
+            .or_else(|| token_field(cost, &["prompt_cache_miss_tokens", "promptCacheMissTokens"]))
+            .or_else(|| {
+                token_field(cost, &["prompt_tokens", "promptTokens"]).map(|prompt_tokens| {
+                    (prompt_tokens - cache_read.unwrap_or(0.0) - cache_write.unwrap_or(0.0))
+                        .max(0.0)
+                })
+            });
+        let output = token_field(
+            cost,
+            &[
+                "output_tokens",
+                "outputTokens",
+                "completion_tokens",
+                "completionTokens",
+            ],
+        );
+
+        if input.is_none() && output.is_none() && cache_read.is_none() && cache_write.is_none() {
+            return None;
+        }
+
+        let input = input.unwrap_or(0.0);
+        let output = output.unwrap_or(0.0);
+        let cache_read = cache_read.unwrap_or(0.0);
+        let cache_write = cache_write.unwrap_or(0.0);
+        let cache_read_price = pricing.cache_read.unwrap_or(pricing.input);
+        let cache_write_price = pricing.cache_write.unwrap_or(pricing.input);
+
+        let raw = input.mul_add(
+            pricing.input,
+            output.mul_add(
+                pricing.output,
+                cache_read.mul_add(cache_read_price, cache_write * cache_write_price),
+            ),
+        );
+
+        Some(raw / pricing.unit_tokens)
     }
 
     /// 获取使用信息的颜色 | Get usage info color based on cost amount
@@ -363,6 +510,12 @@ impl UsageComponent {
             }
         }
     }
+}
+
+fn token_field(value: &serde_json::Value, names: &[&str]) -> Option<f64> {
+    names
+        .iter()
+        .find_map(|name| value.get(*name).and_then(serde_json::Value::as_f64))
 }
 
 #[async_trait]
@@ -451,6 +604,8 @@ impl ComponentFactory for UsageComponentFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::TerminalCapabilities;
+    use crate::core::InputData;
 
     fn component_with_config(config: UsageComponentConfig) -> UsageComponent {
         UsageComponent::new("usage".to_string(), config)
@@ -486,7 +641,37 @@ mod tests {
             }
         });
 
-        assert_eq!(component.resolve_currency_code(Some(&data), None), "EUR");
+        assert_eq!(
+            component.resolve_currency_code_option(Some(&data), None),
+            "EUR"
+        );
+    }
+
+    #[test]
+    fn provider_currency_overrides_upstream_currency_when_endpoint_matches() {
+        let component = component_with_config(UsageComponentConfig::default());
+        let data = serde_json::json!({
+            "model": { "id": "MiniMax-M2.7" },
+            "cost": {
+                "total_cost_usd": 1.23,
+                "currency": "USD"
+            }
+        });
+        let ctx = RenderContext {
+            input: std::sync::Arc::new(InputData::default()),
+            config: std::sync::Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+            preview_mode: false,
+        };
+
+        assert_eq!(
+            component.resolve_currency_code(
+                &data,
+                Some("https://api.minimaxi.com/anthropic"),
+                &ctx
+            ),
+            "CNY"
+        );
     }
 
     #[test]
@@ -533,5 +718,77 @@ mod tests {
     fn formats_custom_currency_codes_with_separator() {
         assert_eq!(UsageComponent::currency_prefix_for_code("AUD"), "AUD ");
         assert_eq!(UsageComponent::format_cost(1.234, 2, "AUD "), "AUD 1.23");
+    }
+
+    #[test]
+    fn provider_pricing_recalculates_cost_when_tokens_are_available() {
+        let data = serde_json::json!({
+            "model": { "id": "glm-4.6" },
+            "cost": {
+                "total_cost_usd": 99.0,
+                "input_tokens": 1_000_000,
+                "output_tokens": 500_000,
+                "cache_read_tokens": 100_000
+            }
+        });
+        let ctx = RenderContext {
+            input: std::sync::Arc::new(InputData::default()),
+            config: std::sync::Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+            preview_mode: false,
+        };
+
+        let cost = UsageComponent::resolve_display_cost(&data, None, &ctx);
+
+        assert!((cost - 1.711).abs() < 1e-9);
+    }
+
+    #[test]
+    fn provider_pricing_respects_endpoint_region() {
+        let data = serde_json::json!({
+            "model": { "id": "MiniMax-M2.7" },
+            "cost": {
+                "total_cost_usd": 12.34,
+                "input_tokens": 1_000_000,
+                "output_tokens": 1_000_000
+            }
+        });
+        let ctx = RenderContext {
+            input: std::sync::Arc::new(InputData::default()),
+            config: std::sync::Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+            preview_mode: false,
+        };
+
+        let cn_cost = UsageComponent::resolve_display_cost(
+            &data,
+            Some("https://api.minimaxi.com/anthropic"),
+            &ctx,
+        );
+        let global_cost =
+            UsageComponent::resolve_display_cost(&data, Some("https://api.minimax.io/v1"), &ctx);
+
+        assert!((cn_cost - 12.34).abs() < 1e-9);
+        assert!((global_cost - 1.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn provider_pricing_falls_back_to_upstream_without_token_breakdown() {
+        let data = serde_json::json!({
+            "model": { "id": "glm-4.6" },
+            "cost": {
+                "total_cost_usd": 1.23
+            }
+        });
+        let ctx = RenderContext {
+            input: std::sync::Arc::new(InputData::default()),
+            config: std::sync::Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+            preview_mode: false,
+        };
+
+        let cost = UsageComponent::resolve_display_cost(&data, None, &ctx);
+
+        assert!((cost - 1.23).abs() < 1e-9);
     }
 }

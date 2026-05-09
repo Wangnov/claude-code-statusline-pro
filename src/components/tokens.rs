@@ -10,7 +10,9 @@ use super::base::{Component, ComponentFactory, ComponentOutput, RenderContext};
 use crate::config::{BaseComponentConfig, Config, TokensComponentConfig};
 use crate::storage;
 use crate::utils::model_parser::parse_model_id;
-use crate::utils::provider_profiles::{context_window_from_model_map, DEFAULT_CONTEXT_WINDOW};
+use crate::utils::provider_profiles::{
+    context_window_from_model_map, context_window_from_providers, DEFAULT_CONTEXT_WINDOW,
+};
 
 #[derive(Clone, Debug)]
 struct TokenUsageInfo {
@@ -188,7 +190,15 @@ impl TokensComponent {
                 return Some(value);
             }
 
-            // Priority 2: Infer from model ID params (e.g., [1m])
+            // Priority 2: Shared model provider profiles
+            let endpoint = std::env::var("ANTHROPIC_BASE_URL").ok();
+            if let Some(value) =
+                context_window_from_providers(&ctx.config.model_providers, id, endpoint.as_deref())
+            {
+                return Some(value);
+            }
+
+            // Priority 3: Infer from model ID params (e.g., [1m])
             if let Some(parsed) = parse_model_id(id) {
                 if let Some(window) = parsed.infer_context_window() {
                     return Some(window);
@@ -912,6 +922,49 @@ mod tests {
 
         assert!(output.visible);
         assert!(output.text.contains("(10000/1000000)"));
+    }
+
+    #[tokio::test]
+    async fn test_tokens_use_provider_context_window_when_legacy_map_has_no_match() {
+        use crate::core::ModelInfo;
+
+        let input = build_input(|input| {
+            input.session_id = Some("minimax-session".to_string());
+            input.model = Some(ModelInfo {
+                id: Some("MiniMax-M2.7".to_string()),
+                display_name: None,
+            });
+            input.extra = json!({
+                "context_window": {
+                    "context_window_size": 200_000u64,
+                    "current_usage": {
+                        "input_tokens": 20_480u64,
+                        "cache_creation_input_tokens": 0u64,
+                        "cache_read_input_tokens": 0u64
+                    }
+                }
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+            preview_mode: false,
+        };
+
+        let config = build_tokens_config(|config| {
+            config.context_windows.clear();
+            config.show_progress_bar = false;
+            config.show_percentage = false;
+            config.show_raw_numbers = true;
+        });
+
+        let component = TokensComponent::new(config);
+        let output = component.render(&ctx).await;
+
+        assert!(output.visible);
+        assert!(output.text.contains("(20480/204800)"));
     }
 
     #[tokio::test]
