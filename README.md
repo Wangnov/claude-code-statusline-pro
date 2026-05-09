@@ -19,7 +19,7 @@
 - 🛠️ **灵活的配置系统**: 支持TOML配置文件和命令行参数覆盖
 - 📊 **精准Token计算**: 与Claude官方API完全一致的token统计，支持渐变可视化进度条
 - 🧠 **智能状态识别**: 基于tokens数量精准识别Thinking vs Ready状态
-- 🚀 **预设系统**: 通过字母组合快速配置组件排布 (`PMBTUS`, `MT`, `BT`)
+- 🚀 **预设系统**: 通过字母组合快速配置组件排布 (`PMBTURS`, `MT`, `BT`)
 - 🌈 **跨平台兼容**: Windows、macOS、Linux智能适配，支持各种终端
 - 🧩 **多行小组件系统**: 支持网格布局、静态/ API 数据源、检测与过滤器，自由扩展状态栏
 - ⚡ **高性能优化**: 缓存机制，300ms更新间隔，符合Claude Code官方建议
@@ -97,6 +97,7 @@ npm --version
 - **B** = Branch (Git分支)
 - **T** = Tokens (Token使用情况)
 - **U** = Usage (使用量统计)
+- **R** = Rate Limit (Claude.ai 订阅计划 5h / 7d 限额)
 - **S** = Status (状态信息)
 
 #### 快速配置命令
@@ -105,7 +106,7 @@ npm --version
 
 ```bash
 # 显示所有组件（推荐）
-npx ccsp@latest --preset PMBTUS --theme powerline
+npx ccsp@latest --preset PMBTURS --theme powerline
 
 # 只显示模型、Token和使用量
 npx ccsp@latest --preset MTU --theme classic
@@ -122,7 +123,7 @@ npx ccsp@latest --preset BT --theme capsule
 - **小组件类型**：内置 `static`（静态文本）与 `api`（HTTP 请求）两种类型，API 小组件支持模板渲染、环境变量替换。
 - **自动检测**：通过 `detection` 段读取环境变量，可配置 `equals` / `contains` / `pattern` 触发条件，也可以配合 `force` 手动开启或关闭。
 - **结果过滤**：`filter` 支持 JSONPath + `equals` / `contains` / `pattern` 匹配，只在命中关键字时刷新；可用于最近请求等场景。
-- **模板示例**：项目内提供 `configs/components/usage.template.toml`，复制到 `~/.claude/statusline-pro/components/usage.toml` 后按需改写。
+- **模板示例**：项目内提供 `configs/components/usage.template.toml` 与 `configs/components/rate_limit.template.toml`，复制到 `~/.claude/statusline-pro/components/` 后按需改写。
 
 #### 快速启用
 
@@ -334,7 +335,7 @@ npx ccsp@latest config init --force
 
 ```toml
 # 默认预设和主题
-preset = "PMBTUS"
+preset = "PMBTURS"
 theme = "powerline"
 
 # 主题特性配置
@@ -345,7 +346,7 @@ fine_progress = true
 
 # 组件顺序配置
 [components]
-order = ["project", "model", "branch", "tokens", "usage", "status"]
+order = ["project", "model", "branch", "tokens", "usage", "rate_limit", "status"]
 
 # Token组件详细配置
 [components.tokens]
@@ -485,7 +486,7 @@ echo '{"model":{"id":"claude-sonnet-4"}}' | npx ccsp@latest --preset MT --theme 
 - 🛠️ **Flexible Configuration System**: Support for TOML configuration files and command-line parameter overrides
 - 📊 **Precise Token Calculation**: Token statistics fully consistent with Claude's official API, supporting gradient visualization progress bar
 - 🧠 **Smart Status Recognition**: Precise identification of Thinking vs Ready status based on token count
-- 🚀 **Preset System**: Quick component configuration through letter combinations (`PMBTUS`, `MT`, `BT`)
+- 🚀 **Preset System**: Quick component configuration through letter combinations (`PMBTURS`, `MT`, `BT`)
 - 🌈 **Cross-platform Compatibility**: Smart adaptation for Windows, macOS, Linux, supporting various terminals
 - 🧩 **Multiline Widget System**: Grid-based widgets with static/API sources, auto-detection, and JSONPath filters
 - ⚡ **High Performance Optimization**: Caching mechanism, 300ms update interval, following Claude Code official recommendations
@@ -563,6 +564,7 @@ Quickly customize status bar content through simple letter combinations:
 - **B** = Branch (Git branch)
 - **T** = Tokens (token usage)
 - **U** = Usage (usage statistics)
+- **R** = Rate Limit (Claude.ai subscription 5h / 7d limits)
 - **S** = Status (status information)
 
 #### Quick Configuration Commands
@@ -571,7 +573,7 @@ Note: These commands are all written in settings.json, not executed directly in 
 
 ```bash
 # Show all components (recommended)
-npx ccsp@latest --preset PMBTUS --theme powerline
+npx ccsp@latest --preset PMBTURS --theme powerline
 
 # Show only model, tokens, and usage
 npx ccsp@latest --preset MTU --theme classic
@@ -588,7 +590,7 @@ The multiline engine turns the status bar into a grid of independently refreshin
 - **Widget types**: Built-in `static` (text) and `api` (HTTP request) widgets with template rendering and environment variable substitution.
 - **Auto detection**: `detection` blocks read environment variables and support `equals` / `contains` / `pattern`, with optional `force` overrides.
 - **Result filters**: `filter` combines JSONPath with `equals` / `contains` / `pattern` so widgets refresh only when keywords match—perfect for last-request panels.
-- **Starter templates**: Copy `configs/components/usage.template.toml` to `~/.claude/statusline-pro/components/usage.toml` and customize.
+- **Starter templates**: Copy `configs/components/usage.template.toml` and `configs/components/rate_limit.template.toml` to `~/.claude/statusline-pro/components/` and customize.
 
 #### Quick Enable
 
@@ -800,7 +802,7 @@ After system initialization, a complete `config.toml` configuration file will be
 
 ```toml
 # Default preset and theme
-preset = "PMBTUS"
+preset = "PMBTURS"
 theme = "powerline"
 
 # Theme feature configuration
@@ -811,7 +813,7 @@ fine_progress = true
 
 # Component order configuration
 [components]
-order = ["project", "model", "branch", "tokens", "usage", "status"]
+order = ["project", "model", "branch", "tokens", "usage", "rate_limit", "status"]
 
 # Token component detailed configuration
 [components.tokens]

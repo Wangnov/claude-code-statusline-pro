@@ -1,0 +1,56 @@
+# ====================================================================
+# Rate Limit 组件扩展配置模板
+# ====================================================================
+#
+# 这个配置文件演示如何显示 Claude.ai 订阅计划的官方 rate limit 信息。
+#
+# 数据源：
+# - Claude Code 注入 stdin 的 rate_limits 字段
+# - 无需额外 HTTP 请求或 API key
+#
+# 使用说明：
+# 1. 复制此文件到 ~/.claude/statusline-pro/components/rate_limit.toml
+# 2. 主配置文件中确保 components.order 包含 "rate_limit"
+# 3. 主配置文件中确保 multiline.enabled = true
+#
+# 字段缺失时 widget 会静默隐藏，适合非订阅用户或会话首次响应前的状态。
+
+[meta]
+description = "Claude.ai 官方 rate limit 显示"
+version = "1.0"
+
+[widgets]
+
+[widgets.claude_rate_limit_5h]
+enabled = true
+type = "input"
+row = 2
+col = 0
+nerd_icon = "\uf2c8"
+emoji_icon = "⏳"
+text_icon = "[5h]"
+template = "5h {used_percentage:.0f}% · 重置 {resets_at - now():.Hm}"
+
+[widgets.claude_rate_limit_5h.api]
+data_path = "$.rate_limits.five_hour"
+
+[widgets.claude_rate_limit_7d]
+enabled = true
+type = "input"
+row = 2
+col = 1
+nerd_icon = "\uf073"
+emoji_icon = "📅"
+text_icon = "[7d]"
+template = "7d {used_percentage:.0f}% · 重置 {resets_at - now():.DHm}"
+
+[widgets.claude_rate_limit_7d.api]
+data_path = "$.rate_limits.seven_day"
+
+# 时间格式化选项：
+# {resets_at - now():.D}     -> 天数（向上取整），例：3 天
+# {resets_at - now():.H}     -> 小时数，例：51 小时
+# {resets_at - now():.m}     -> 分钟数，例：3060 分钟
+# {resets_at - now():.Hm}    -> 2小时15分钟
+# {resets_at - now():.DHm}   -> 2天3小时15分钟
+# {resets_at - now():.HmS}   -> 51小时15分钟30秒

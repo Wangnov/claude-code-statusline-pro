@@ -24,9 +24,9 @@
 
 # 组件预设字符串 | Component preset string
 # 定义状态栏显示的组件及其顺序，每个字符对应一个组件
-# P=项目名, M=模型名, B=Git分支, T=Token使用, U=使用成本, S=状态
+# P=项目名, M=模型名, B=Git分支, T=Token使用, U=使用成本, R=Rate Limit, S=状态
 # 可以自由组合，如 "PMB" 只显示项目、模型和分支
-preset = "PMBTUS"
+preset = "PMBTURS"
 
 # 主题名称 | Theme name  
 # 支持三种内置主题：classic（经典）, powerline（电力线）, capsule（胶囊）
@@ -210,7 +210,7 @@ capsule_style = true
 [components]
 # 组件显示顺序 | Component display order
 # 定义组件在状态栏中的排列顺序，可以调整或删除不需要的组件
-order = ["project", "model", "branch", "tokens", "usage", "status"]
+order = ["project", "model", "branch", "tokens", "usage", "rate_limit", "status"]
 
 # -------------------- 项目组件 --------------------
 # 显示当前项目或工作区名称
@@ -437,6 +437,19 @@ show_lines_removed = false
 [components.usage.currency_model_rules]
 # "my-cny-model" = "CNY"
 
+# -------------------- Rate Limit组件 --------------------
+# 显示 Claude.ai 官方订阅计划 5h / 7d rate limit；字段缺失时自动隐藏
+[components.rate_limit]
+enabled = true
+icon_color = "magenta"
+text_color = "white"
+emoji_icon = "⏱️"
+nerd_icon = ""
+text_icon = "[R]"
+show_five_hour = true
+show_seven_day = true
+show_reset = true
+
 # -------------------- Status组件 --------------------
 # 显示Claude Code的当前状态和最近错误信息
 [components.status]
@@ -489,6 +502,7 @@ M = "model"   # M字符对应模型组件
 B = "branch"  # B字符对应分支组件
 T = "tokens"  # T字符对应Token组件
 U = "usage"   # U字符对应Usage组件
+R = "rate_limit" # R字符对应Rate Limit组件
 S = "status"  # S字符对应Status组件
 
 # ==================== 高级配置 ====================

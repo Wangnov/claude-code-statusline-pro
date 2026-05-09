@@ -174,6 +174,7 @@ impl MultiLineRenderer {
             "branch" => self.config.components.branch.base.enabled,
             "tokens" => self.config.components.tokens.base.enabled,
             "usage" => self.config.components.usage.base.enabled,
+            "rate_limit" => self.config.components.rate_limit.base.enabled,
             "status" => self.config.components.status.base.enabled,
             _ => true,
         }

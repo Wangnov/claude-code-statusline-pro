@@ -507,7 +507,7 @@ async fn test_all_presets() -> Result<()> {
     };
 
     // Multi-component presets should produce output
-    let multi_component_presets = vec!["PMBTUS", "PMB", "MT", "BT", "PMBT"];
+    let multi_component_presets = vec!["PMBTURS", "PMB", "MT", "BT", "PMBT"];
 
     for preset in multi_component_presets {
         let config = Config::default();
@@ -523,7 +523,7 @@ async fn test_all_presets() -> Result<()> {
 
     // Single-component presets may or may not produce output depending on data
     // Just ensure they don't panic
-    let single_component_presets = vec!["P", "M", "B", "T", "U", "S"];
+    let single_component_presets = vec!["P", "M", "B", "T", "U", "R", "S"];
 
     for preset in single_component_presets {
         let config = Config::default();

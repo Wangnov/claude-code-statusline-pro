@@ -9,7 +9,7 @@ use std::collections::HashMap;
 /// Main configuration structure
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
-    /// Component preset string (e.g., "PMBTUS")
+    /// Component preset string (e.g., "PMBTURS")
     #[serde(default)]
     pub preset: Option<String>,
 
@@ -57,7 +57,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            preset: Some("PMBTUS".to_string()),
+            preset: Some("PMBTURS".to_string()),
             theme: default_theme(),
             language: default_language(),
             debug: false,
@@ -279,6 +279,9 @@ pub struct ComponentsConfig {
 
     #[serde(default)]
     pub usage: UsageComponentConfig,
+
+    #[serde(default)]
+    pub rate_limit: RateLimitComponentConfig,
 
     #[serde(default)]
     pub status: StatusComponentConfig,
@@ -769,6 +772,43 @@ impl Default for UsageComponentConfig {
             currency_model_rules: HashMap::new(),
             show_lines_added: false,
             show_lines_removed: false,
+        }
+    }
+}
+
+/// Rate limit component configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RateLimitComponentConfig {
+    #[serde(flatten)]
+    pub base: BaseComponentConfig,
+
+    /// Show the 5-hour rolling window
+    #[serde(default = "default_true")]
+    pub show_five_hour: bool,
+
+    /// Show the 7-day weekly window
+    #[serde(default = "default_true")]
+    pub show_seven_day: bool,
+
+    /// Show reset countdowns when `resets_at` is available
+    #[serde(default = "default_true")]
+    pub show_reset: bool,
+}
+
+impl Default for RateLimitComponentConfig {
+    fn default() -> Self {
+        Self {
+            base: BaseComponentConfig {
+                enabled: true,
+                icon_color: "magenta".to_string(),
+                text_color: "white".to_string(),
+                emoji_icon: "⏱️".to_string(),
+                nerd_icon: "\u{f017}".to_string(),
+                text_icon: "[R]".to_string(),
+            },
+            show_five_hour: true,
+            show_seven_day: true,
+            show_reset: true,
         }
     }
 }

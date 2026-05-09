@@ -223,10 +223,10 @@ mod tests {
     fn test_preserves_comments() -> Result<()> {
         let src = "# 顶部注释\npreset = \"PMBT\"\n";
         let mut doc = src.parse::<DocumentMut>()?;
-        set_string(&mut doc, "preset", "PMBTUS")?;
+        set_string(&mut doc, "preset", "PMBTURS")?;
         let out = doc.to_string();
         assert!(out.contains("# 顶部注释"));
-        assert!(out.contains("PMBTUS"));
+        assert!(out.contains("PMBTURS"));
         Ok(())
     }
 
@@ -256,11 +256,11 @@ mod tests {
 
         // 第二次写同一个路径(关键:这次目标文件已经存在)
         let mut doc2 = DocumentMut::new();
-        set_string(&mut doc2, "preset", "PMBTUS")?;
+        set_string(&mut doc2, "preset", "PMBTURS")?;
         save(&path, &doc2)?;
 
         let content2 = std::fs::read_to_string(&path)?;
-        assert!(content2.contains("\"PMBTUS\""));
+        assert!(content2.contains("\"PMBTURS\""));
         assert!(!content2.contains("\"PMBT\"\n"));
         Ok(())
     }

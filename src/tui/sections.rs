@@ -67,7 +67,7 @@ pub static SECTIONS: &[Section] = &[
                 label: "preset",
                 path: "preset",
                 kind: FieldKind::Text,
-                help: "组件预设字符串,例如 PMBTUS。字母映射见 preset_mapping。",
+                help: "组件预设字符串,例如 PMBTURS。字母映射见 preset_mapping。",
             },
             Field {
                 label: "theme",

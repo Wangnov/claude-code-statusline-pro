@@ -27,7 +27,7 @@ use mock_data::MockDataGenerator;
 #[command(name = "claude-code-statusline-pro")]
 #[command(author, version, about = "Claude Code Statusline Pro - Rust Edition", long_about = None)]
 struct Cli {
-    /// 预设字符串（例如 PMBT、PMBTUS）
+    /// 预设字符串（例如 PMBT、PMBTURS）
     #[arg(value_name = "PRESET")]
     preset: Option<String>,
 

@@ -22,6 +22,7 @@ const POWERLINE_PALETTE: &[(&str, &str)] = &[
     ("branch", "green"),
     ("tokens", "yellow"),
     ("usage", "orange"),
+    ("rate_limit", "magenta"),
     ("status", "magenta"),
 ];
 
@@ -31,6 +32,7 @@ const CAPSULE_PALETTE: &[(&str, &str)] = &[
     ("branch", "bright_green"),
     ("tokens", "yellow"),
     ("usage", "bright_orange"),
+    ("rate_limit", "bright_magenta"),
     ("status", "bright_magenta"),
 ];
 
@@ -157,7 +159,8 @@ impl StatuslineGenerator {
     fn initialize_components(&mut self) {
         use crate::components::{
             BranchComponentFactory, ModelComponentFactory, ProjectComponentFactory,
-            StatusComponentFactory, TokensComponentFactory, UsageComponentFactory,
+            RateLimitComponentFactory, StatusComponentFactory, TokensComponentFactory,
+            UsageComponentFactory,
         };
 
         // Register all component factories
@@ -173,6 +176,10 @@ impl StatuslineGenerator {
             .insert("status".to_string(), Box::new(StatusComponentFactory));
         self.component_registry
             .insert("usage".to_string(), Box::new(UsageComponentFactory));
+        self.component_registry.insert(
+            "rate_limit".to_string(),
+            Box::new(RateLimitComponentFactory),
+        );
     }
 
     fn refresh_multiline_renderer(&mut self) {
@@ -183,7 +190,7 @@ impl StatuslineGenerator {
 
     /// Apply a preset configuration
     fn apply_preset(&mut self, preset: &str) {
-        // Parse preset string (e.g., "PMBTUS" -> ["P", "M", "B", "T", "U", "S"])
+        // Parse preset string (e.g., "PMBTURS" -> ["P", "M", "B", "T", "U", "R", "S"])
         let component_map = Self::parse_preset(preset);
 
         // Update config.components.order based on preset
@@ -217,6 +224,7 @@ impl StatuslineGenerator {
                 'B' => Some("branch"),
                 'T' => Some("tokens"),
                 'U' => Some("usage"),
+                'R' => Some("rate_limit"),
                 'S' => Some("status"),
                 _ => None,
             })
@@ -366,6 +374,7 @@ impl StatuslineGenerator {
             "branch" => self.config.components.branch.base.icon_color.clone(),
             "tokens" => self.config.components.tokens.base.icon_color.clone(),
             "usage" => self.config.components.usage.base.icon_color.clone(),
+            "rate_limit" => self.config.components.rate_limit.base.icon_color.clone(),
             "status" => self.config.components.status.base.icon_color.clone(),
             other => {
                 eprintln!(
@@ -409,6 +418,7 @@ impl StatuslineGenerator {
             "branch".to_string(),
             "tokens".to_string(),
             "usage".to_string(),
+            "rate_limit".to_string(),
             "status".to_string(),
         ];
 
@@ -507,6 +517,9 @@ mod tests {
         // Test with invalid characters
         let order = StatuslineGenerator::parse_preset("PM-BT");
         assert_eq!(order, vec!["project", "model", "branch", "tokens"]);
+
+        let order = StatuslineGenerator::parse_preset("UR");
+        assert_eq!(order, vec!["usage", "rate_limit"]);
     }
 
     #[test]
