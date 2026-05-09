@@ -18,8 +18,9 @@ pub use loader::{
 };
 pub use schema::{
     AutoDetect, BaseComponentConfig, BranchComponentConfig, ComponentsConfig, Config,
-    ModelComponentConfig, MultilineConfig, MultilineRowConfig, ProjectComponentConfig,
-    StatusComponentConfig, StorageConfig, StyleConfig, TerminalConfig, TokenIconSetConfig,
-    TokensColorConfig, TokensComponentConfig, TokensProgressBarCharsConfig,
-    TokensStatusIconsConfig, TokensThresholdsConfig, UsageComponentConfig,
+    ModelComponentConfig, ModelPricingConfig, ModelProviderConfig, MultilineConfig,
+    MultilineRowConfig, ProjectComponentConfig, StatusComponentConfig, StorageConfig, StyleConfig,
+    TerminalConfig, TokenIconSetConfig, TokensColorConfig, TokensComponentConfig,
+    TokensProgressBarCharsConfig, TokensStatusIconsConfig, TokensThresholdsConfig,
+    UsageComponentConfig,
 };

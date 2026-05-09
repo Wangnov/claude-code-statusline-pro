@@ -37,6 +37,10 @@ pub struct Config {
     #[serde(default)]
     pub style: StyleConfig,
 
+    /// Shared model/provider profiles consumed by multiple components
+    #[serde(default)]
+    pub model_providers: HashMap<String, ModelProviderConfig>,
+
     /// Component configurations
     #[serde(default)]
     pub components: ComponentsConfig,
@@ -60,9 +64,74 @@ impl Default for Config {
             terminal: TerminalConfig::default(),
             storage: StorageConfig::default(),
             style: StyleConfig::default(),
+            model_providers: default_model_providers(),
             components: ComponentsConfig::default(),
             multiline: Some(MultilineConfig::default()),
             themes: ThemesConfig::default(),
+        }
+    }
+}
+
+/// Shared model/provider profile.
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ModelProviderConfig {
+    /// Enable this profile
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Endpoint hosts or base URLs matched against `ANTHROPIC_BASE_URL`
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub endpoints: Vec<String>,
+
+    /// Model name patterns matched case-insensitively
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub models: Vec<String>,
+
+    /// Preferred currency code for this provider
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
+
+    /// Model context windows keyed by exact model name or `*` suffix prefix
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub context_windows: HashMap<String, u64>,
+
+    /// Per-model pricing rules keyed by exact model name or `*` suffix prefix
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub pricing: HashMap<String, ModelPricingConfig>,
+}
+
+/// Per-model token pricing.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ModelPricingConfig {
+    /// Number of tokens the prices apply to, usually 1,000,000
+    #[serde(default = "default_pricing_unit_tokens")]
+    pub unit_tokens: f64,
+
+    /// Standard or cache-miss input price per `unit_tokens`
+    #[serde(default)]
+    pub input: f64,
+
+    /// Output price per `unit_tokens`
+    #[serde(default)]
+    pub output: f64,
+
+    /// Cached-input/read price per `unit_tokens`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_read: Option<f64>,
+
+    /// Cache-write or cache-miss input price per `unit_tokens`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_write: Option<f64>,
+}
+
+impl Default for ModelPricingConfig {
+    fn default() -> Self {
+        Self {
+            unit_tokens: default_pricing_unit_tokens(),
+            input: 0.0,
+            output: 0.0,
+            cache_read: None,
+            cache_write: None,
         }
     }
 }
@@ -1180,6 +1249,14 @@ const fn default_critical_threshold() -> f64 {
 
 fn default_context_windows() -> HashMap<String, u64> {
     crate::utils::provider_profiles::default_context_windows()
+}
+
+fn default_model_providers() -> HashMap<String, ModelProviderConfig> {
+    crate::utils::provider_profiles::default_model_providers()
+}
+
+const fn default_pricing_unit_tokens() -> f64 {
+    1_000_000.0
 }
 
 fn default_emoji_icon_set() -> TokenIconSetConfig {
