@@ -70,7 +70,7 @@ git2 = { version = "0.20.4", default-features = false, features = [
 ] }
 
 # Async runtime (for async config loading and file operations)
-tokio = { version = "1.51", features = [
+tokio = { version = "1.52", features = [
     "rt",
     "rt-multi-thread",
     "macros",
@@ -90,7 +90,7 @@ criterion = { version = "0.8.2", features = ["html_reports"] }
 pretty_assertions = "1.4"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 serial_test = "3.4"
-tokio = { version = "1.51", features = ["rt", "macros", "test-util"] }
+tokio = { version = "1.52", features = ["rt", "macros", "test-util"] }
 assert_cmd = "2.2"
 predicates = "3.1"
 
