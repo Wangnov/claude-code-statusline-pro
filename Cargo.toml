@@ -62,7 +62,7 @@ ureq = { version = "2.12", default-features = false, features = [
 dateparser = "0.3"
 
 # Git integration
-git2 = { version = "0.20.4", default-features = false, features = [
+git2 = { version = "0.21.0", default-features = false, features = [
     "https",
     "ssh",
     "vendored-libgit2",

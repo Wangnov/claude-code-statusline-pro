@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use git2::{BranchType, DescribeOptions, Repository, Status, StatusOptions};
 
 use super::types::{
@@ -123,7 +123,7 @@ impl GitService {
                 |oid| format!("HEAD@{}", &oid.to_string()[..7]),
             )
         } else {
-            head.shorthand().unwrap_or("HEAD").to_string()
+            head.shorthand()?.to_string()
         };
 
         let mut info = GitBranchInfo {
@@ -136,9 +136,7 @@ impl GitService {
             return Ok(info);
         }
 
-        let shorthand = head
-            .shorthand()
-            .ok_or_else(|| anyhow!("Unable to resolve branch name"))?;
+        let shorthand = head.shorthand()?;
 
         let local_branch = self.repo.find_branch(shorthand, BranchType::Local)?;
         if let Ok(upstream) = local_branch.upstream() {
@@ -240,7 +238,7 @@ impl GitService {
 
         let commit_id = commit.id().to_string();
         let short_commit_id: String = commit.id().to_string().chars().take(7).collect();
-        let message = commit.summary().unwrap_or("").to_string();
+        let message = commit.summary()?.unwrap_or("").to_string();
         let author = commit
             .author()
             .name()
