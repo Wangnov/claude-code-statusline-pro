@@ -1117,11 +1117,29 @@ fn model_id_candidates(model_id: &str) -> Vec<String> {
     let normalized = model_id.trim().to_ascii_lowercase();
     let mut candidates = vec![normalized.clone()];
 
+    // 形如 `deepseek-v4-pro[1m]` 的参数后缀会让精确 pricing / context key 匹配失败,
+    // 追加一个剥离 `[...]` 后缀的候选,使其回落到基础模型名再匹配一次。
+    if let Some(base) = strip_param_suffix(&normalized) {
+        candidates.push(base.to_string());
+    }
+
     if let Some((_, last)) = normalized.rsplit_once('/') {
         candidates.push(last.to_string());
+        if let Some(base) = strip_param_suffix(last) {
+            candidates.push(base.to_string());
+        }
     }
 
     candidates
+}
+
+/// Strip a trailing parameter suffix such as `[1m]` from a model id, returning the
+/// base name. Returns `None` when there is no suffix or the base would be empty.
+fn strip_param_suffix(model: &str) -> Option<&str> {
+    model
+        .split_once('[')
+        .map(|(base, _)| base.trim_end())
+        .filter(|base| !base.is_empty())
 }
 
 fn model_candidates(model_names: &[String]) -> Vec<String> {
@@ -1192,6 +1210,45 @@ fn model_pattern_matches(pattern: &str, model_name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strip_param_suffix_extracts_base_model_name() {
+        assert_eq!(
+            strip_param_suffix("deepseek-v4-pro[1m]"),
+            Some("deepseek-v4-pro")
+        );
+        assert_eq!(strip_param_suffix("deepseek-v4-pro"), None);
+        assert_eq!(strip_param_suffix("[1m]"), None);
+    }
+
+    #[test]
+    fn deepseek_1m_suffix_resolves_builtin_pricing() {
+        let providers = default_model_providers();
+
+        // deepseek-v4-pro 的内置 pricing:input 3 / output 6 / cache_read 0.025
+        let is_v4_pro_pricing = |pricing: &ModelPricingConfig| {
+            (pricing.input - 3.0).abs() < 1e-9
+                && (pricing.output - 6.0).abs() < 1e-9
+                && pricing.cache_read.is_some_and(|v| (v - 0.025).abs() < 1e-9)
+        };
+
+        // 不带后缀:命中内置 pricing
+        assert!(
+            provider_pricing(&providers, &["deepseek-v4-pro".to_string()], None)
+                .as_ref()
+                .is_some_and(&is_v4_pro_pricing),
+            "plain deepseek-v4-pro should resolve builtin pricing"
+        );
+
+        // 回归 issue #75:带 [1m] 后缀的模型名剥离后缀后回落到同一条内置 pricing,
+        // 不再因匹配失败而 fallback 到上游虚高 cost。
+        assert!(
+            provider_pricing(&providers, &["deepseek-v4-pro[1m]".to_string()], None)
+                .as_ref()
+                .is_some_and(&is_v4_pro_pricing),
+            "deepseek-v4-pro[1m] should resolve builtin pricing after stripping [1m]"
+        );
+    }
 
     #[test]
     fn prefix_context_window_prefers_full_model_candidate_over_stripped_alias() {
