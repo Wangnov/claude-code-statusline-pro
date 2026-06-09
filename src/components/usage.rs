@@ -791,4 +791,30 @@ mod tests {
 
         assert!((cost - 1.23).abs() < 1e-9);
     }
+
+    #[test]
+    fn deepseek_1m_suffix_recalculates_instead_of_passing_through_upstream() {
+        // 回归 issue #75:模型名带 [1m] 后缀时,旧逻辑因 pricing 匹配失败而把上游
+        // 虚高的 total_cost_usd(16.54)原样透传;修复后应使用内置 deepseek 价重算。
+        let data = serde_json::json!({
+            "model": { "id": "deepseek-v4-pro[1m]" },
+            "cost": {
+                "total_cost_usd": 16.54,
+                "input_tokens": 793_900,
+                "output_tokens": 129_600,
+                "cache_read_tokens": 18_700_000
+            }
+        });
+        let ctx = RenderContext {
+            input: std::sync::Arc::new(InputData::default()),
+            config: std::sync::Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+            preview_mode: false,
+        };
+
+        let cost = UsageComponent::resolve_display_cost(&data, None, &ctx);
+
+        // 793.9k×3 + 129.6k×6 + 18.7M×0.025 = 3,626,800 / 1_000_000 = 3.6268
+        assert!((cost - 3.6268).abs() < 1e-6, "expected ~3.6268, got {cost}");
+    }
 }
