@@ -40,3 +40,8 @@ updates:
       - "dependencies"
     reviewers:
       - "wangnov"
+
+    # 该 Action 的 ref 用于选择 Rust 工具链（例如 MSRV 1.88.0），
+    # 并非待升级的 Action 版本；自动更新会使 MSRV 检查失真。
+    ignore:
+      - dependency-name: "dtolnay/rust-toolchain"
