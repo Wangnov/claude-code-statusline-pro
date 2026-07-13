@@ -102,7 +102,7 @@ jobs:
       # Check out the exact commit the tag points at so the npm wrappers
       # packaged here match the binaries in the GitHub Release (addresses
       # Codex P2 for workflow_dispatch reruns after main has advanced).
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: ${{ steps.release.outputs.exists == 'true' }}
         with:
           ref: ${{ steps.tag.outputs.tag }}

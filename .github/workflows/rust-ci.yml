@@ -42,7 +42,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -70,17 +70,17 @@ jobs:
         run: cargo build --release --workspace --all-features
 
   msrv:
-    name: MSRV check (1.85)
+    name: MSRV check (1.88)
     runs-on: ubuntu-latest
     needs: lint-test
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain (MSRV)
-        uses: dtolnay/rust-toolchain@1.85.0
+        uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -89,10 +89,10 @@ jobs:
           shared-key: msrv
 
       - name: Cargo check (MSRV)
-        run: cargo check --workspace --all-targets
+        run: cargo +1.88.0 check --workspace --all-targets --all-features --locked
 
       - name: Run tests (MSRV)
-        run: cargo test --workspace --all-targets -- --nocapture
+        run: cargo +1.88.0 test --workspace --all-targets --all-features --locked -- --nocapture
 
   security-audit:
     name: Security audit
@@ -102,7 +102,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

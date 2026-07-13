@@ -400,10 +400,10 @@ impl MultiLineRenderer {
         let selected =
             if let Some(path) = widget.api.as_ref().and_then(|api| api.data_path.as_deref()) {
                 match jsonpath::select(&input_json, path) {
-                    Ok(matches) => match matches.first() {
-                        Some(value) => (*value).clone(),
-                        None => return None,
-                    },
+                    Ok(matches) => {
+                        let value = matches.first()?;
+                        (*value).clone()
+                    }
                     Err(err) => {
                         eprintln!("[statusline] input widget JSONPath {path:?} error: {err}");
                         return None;
@@ -466,24 +466,49 @@ impl MultiLineRenderer {
         let method_str = method_str.to_string();
 
         let json_result = tokio::task::spawn_blocking(move || -> Result<Value> {
-            let mut request =
-                ureq::request(&method_str, &url_clone).timeout(Duration::from_millis(timeout_ms));
+            // ureq 2 normalized non-ASCII and unescaped URL characters before
+            // sending. http::Request does not, so retain the previous behavior.
+            let normalized_url =
+                url::Url::parse(&url_clone).context("Failed to parse widget API URL")?;
+            let mut request_builder = ureq::http::Request::builder()
+                .method(method_str.as_str())
+                .uri(normalized_url.as_str());
 
             // 添加headers
             for (key, value) in &headers {
                 let substituted_value = substitute_env(value);
-                request = request.set(key, &substituted_value);
+                request_builder = request_builder.header(key.as_str(), substituted_value.as_str());
             }
 
-            // 添加User-Agent
-            request = request.set("User-Agent", "claude-code-statusline/3.0");
+            let mut request = request_builder
+                .body(())
+                .context("Failed to build ureq request")?;
+            request.headers_mut().insert(
+                ureq::http::header::USER_AGENT,
+                ureq::http::HeaderValue::from_static("claude-code-statusline/3.0"),
+            );
+
+            let agent: ureq::Agent = ureq::Agent::config_builder()
+                // ureq 3 enables environment proxies by default; ureq 2 did not
+                // with this crate's previous feature set, so preserve direct access.
+                .proxy(None)
+                .max_redirects(5)
+                .timeout_global(Some(Duration::from_millis(timeout_ms)))
+                .build()
+                .into();
 
             // 发送请求
-            let response = request.call().context("ureq request failed")?;
+            let mut response = agent.run(request).context("ureq request failed")?;
 
             // 解析JSON
             let json: Value = response
-                .into_json()
+                .body_mut()
+                // read_json() adds a 10 MiB limit in ureq 3. Keep the unbounded
+                // ureq 2 behavior for existing widgets; the global timeout still
+                // bounds how long the response may take to arrive.
+                .with_config()
+                .limit(u64::MAX)
+                .read_json()
                 .context("Failed to parse JSON response")?;
 
             Ok(json)
@@ -1356,7 +1381,10 @@ mod tests {
     use anyhow::{Context, Result};
     use serde_json::json;
     use std::collections::HashMap;
+    use std::io::{Read, Write as IoWrite};
+    use std::net::TcpListener;
     use std::sync::Arc;
+    use std::time::Duration as StdDuration;
 
     type TestResult<T = ()> = Result<T>;
 
@@ -1463,6 +1491,101 @@ method = "GET"
         let result = renderer.render_extension_lines(&context).await;
         assert!(result.success);
         assert!(result.lines.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_api_widget_fetches_json_with_ureq_3() -> TestResult {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let address = listener.local_addr()?;
+        let server = std::thread::spawn(move || -> TestResult {
+            let (mut stream, _) = listener.accept()?;
+            stream.set_read_timeout(Some(StdDuration::from_secs(5)))?;
+
+            let mut request = Vec::new();
+            while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                let mut chunk = [0_u8; 1024];
+                let size = stream.read(&mut chunk)?;
+                if size == 0 {
+                    break;
+                }
+                request.extend_from_slice(&chunk[..size]);
+                if request.len() > 16 * 1024 {
+                    anyhow::bail!("test request headers exceeded 16 KiB");
+                }
+            }
+            let request = String::from_utf8_lossy(&request).to_ascii_lowercase();
+            assert!(request
+                .starts_with("post /%e7%8a%b6%e6%80%81?q=%e6%b5%8b%e8%af%95%20value http/1.1\r\n"));
+            assert!(request.contains("x-statusline-test: migrated"));
+            assert!(request.contains("user-agent: claude-code-statusline/3.0"));
+
+            let body = r#"{"payload":{"value":42}}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes())?;
+            Ok(())
+        });
+
+        let renderer = MultiLineRenderer::new(Config::default(), None);
+        let api_config = WidgetApiConfig {
+            endpoint: Some(format!("http://{address}/状态?q=测试 value")),
+            method: WidgetApiMethod::POST,
+            timeout: 5_000,
+            headers: HashMap::from([("X-Statusline-Test".to_string(), "migrated".to_string())]),
+            data_path: Some("$.payload".to_string()),
+            ..WidgetApiConfig::default()
+        };
+
+        let data = renderer.fetch_api_data(&api_config).await?;
+        assert_eq!(data.selected, json!({"value": 42}));
+        server
+            .join()
+            .map_err(|_| anyhow!("test server panicked"))??;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_api_widget_accepts_json_larger_than_ureq_default_limit() -> TestResult {
+        const VALUE_SIZE: usize = 10 * 1024 * 1024;
+
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let address = listener.local_addr()?;
+        let server = std::thread::spawn(move || -> TestResult {
+            let (mut stream, _) = listener.accept()?;
+            stream.set_read_timeout(Some(StdDuration::from_secs(30)))?;
+
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request)?;
+
+            let body = format!(r#"{{"value":"{}"}}"#, "x".repeat(VALUE_SIZE));
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            )?;
+            stream.write_all(body.as_bytes())?;
+            Ok(())
+        });
+
+        let renderer = MultiLineRenderer::new(Config::default(), None);
+        let api_config = WidgetApiConfig {
+            endpoint: Some(format!("http://{address}/large")),
+            timeout: 30_000,
+            ..WidgetApiConfig::default()
+        };
+
+        let data = renderer.fetch_api_data(&api_config).await?;
+        assert_eq!(
+            data.selected["value"].as_str().map(str::len),
+            Some(VALUE_SIZE)
+        );
+        server
+            .join()
+            .map_err(|_| anyhow!("test server panicked"))??;
         Ok(())
     }
 
