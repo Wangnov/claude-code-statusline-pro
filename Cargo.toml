@@ -2,7 +2,7 @@
 name = "claude-code-statusline-pro"
 version = "4.1.1"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 authors = ["wangnov"]
 license = "MIT"
 description = "Enhanced statusline for Claude Code with 10x performance"
@@ -55,10 +55,11 @@ regex = "1.12"
 async-trait = "0.1"
 dialoguer = "0.12.0"
 jsonpath_lib = "0.3"
-ureq = { version = "2.12", default-features = false, features = [
+ureq = { version = "3.3.0", default-features = false, features = [
     "json",
-    "tls",
+    "rustls",
 ] }
+url = "2.5.8"
 dateparser = "0.3"
 
 # Git integration
