@@ -1381,12 +1381,57 @@ mod tests {
     use anyhow::{Context, Result};
     use serde_json::json;
     use std::collections::HashMap;
-    use std::io::{Read, Write as IoWrite};
-    use std::net::TcpListener;
+    use std::io::{ErrorKind, Read, Write as IoWrite};
+    use std::net::{Shutdown, TcpListener, TcpStream};
     use std::sync::Arc;
     use std::time::Duration as StdDuration;
 
     type TestResult<T = ()> = Result<T>;
+
+    fn read_http_request_headers(stream: &mut TcpStream) -> TestResult<Vec<u8>> {
+        let mut request = Vec::new();
+        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+            let mut chunk = [0_u8; 1024];
+            let size = stream.read(&mut chunk)?;
+            if size == 0 {
+                anyhow::bail!("test client closed before sending complete headers");
+            }
+            request.extend_from_slice(&chunk[..size]);
+            if request.len() > 16 * 1024 {
+                anyhow::bail!("test request headers exceeded 16 KiB");
+            }
+        }
+        Ok(request)
+    }
+
+    fn finish_http_response(stream: &mut TcpStream) -> TestResult {
+        stream.flush()?;
+        stream.shutdown(Shutdown::Write)?;
+
+        // Keep the socket alive until the client has consumed the response.
+        // Closing immediately after write_all can surface as WSAECONNABORTED on
+        // Windows even though every response byte was queued successfully.
+        let mut buffer = [0_u8; 256];
+        loop {
+            match stream.read(&mut buffer) {
+                Ok(0) => return Ok(()),
+                Ok(_) => {}
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        ErrorKind::WouldBlock
+                            | ErrorKind::TimedOut
+                            | ErrorKind::ConnectionReset
+                            | ErrorKind::ConnectionAborted
+                            | ErrorKind::NotConnected
+                    ) =>
+                {
+                    return Ok(());
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
 
     #[tokio::test]
     async fn test_static_widget_rendering() -> TestResult {
@@ -1502,18 +1547,7 @@ method = "GET"
             let (mut stream, _) = listener.accept()?;
             stream.set_read_timeout(Some(StdDuration::from_secs(5)))?;
 
-            let mut request = Vec::new();
-            while !request.windows(4).any(|window| window == b"\r\n\r\n") {
-                let mut chunk = [0_u8; 1024];
-                let size = stream.read(&mut chunk)?;
-                if size == 0 {
-                    break;
-                }
-                request.extend_from_slice(&chunk[..size]);
-                if request.len() > 16 * 1024 {
-                    anyhow::bail!("test request headers exceeded 16 KiB");
-                }
-            }
+            let request = read_http_request_headers(&mut stream)?;
             let request = String::from_utf8_lossy(&request).to_ascii_lowercase();
             assert!(request
                 .starts_with("post /%e7%8a%b6%e6%80%81?q=%e6%b5%8b%e8%af%95%20value http/1.1\r\n"));
@@ -1527,7 +1561,7 @@ method = "GET"
                 body
             );
             stream.write_all(response.as_bytes())?;
-            Ok(())
+            finish_http_response(&mut stream)
         });
 
         let renderer = MultiLineRenderer::new(Config::default(), None);
@@ -1558,8 +1592,7 @@ method = "GET"
             let (mut stream, _) = listener.accept()?;
             stream.set_read_timeout(Some(StdDuration::from_secs(30)))?;
 
-            let mut request = [0_u8; 1024];
-            let _ = stream.read(&mut request)?;
+            let _request = read_http_request_headers(&mut stream)?;
 
             let body = format!(r#"{{"value":"{}"}}"#, "x".repeat(VALUE_SIZE));
             write!(
@@ -1568,7 +1601,7 @@ method = "GET"
                 body.len()
             )?;
             stream.write_all(body.as_bytes())?;
-            Ok(())
+            finish_http_response(&mut stream)
         });
 
         let renderer = MultiLineRenderer::new(Config::default(), None);
