@@ -4,19 +4,38 @@
 
 use super::base::{Component, ComponentFactory, ComponentOutput, RenderContext};
 use crate::config::{BaseComponentConfig, Config, ModelComponentConfig};
-use crate::utils::effort::resolve_effort_level;
+use crate::utils::effort::{
+    resolve_effort_level, resolve_effort_level_with, EffortEnv, EffortLevel,
+};
 use crate::utils::model_parser::parse_model_id;
 use async_trait::async_trait;
 
 /// Model component
 pub struct ModelComponent {
     config: ModelComponentConfig,
+    /// Environment snapshot used to resolve the effort level.
+    ///
+    /// `None` — the production case — reads the live process environment at
+    /// render time. Tests inject an explicit snapshot so they neither depend on
+    /// nor race over process-global env state.
+    effort_env: Option<EffortEnv>,
 }
 
 impl ModelComponent {
     #[must_use]
     pub const fn new(config: ModelComponentConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            effort_env: None,
+        }
+    }
+
+    /// Resolve the effort level, honouring an injected environment when present.
+    fn effort_level(&self, ctx: &RenderContext) -> Option<EffortLevel> {
+        self.effort_env.as_ref().map_or_else(
+            || resolve_effort_level(ctx.input.as_ref()),
+            |env| resolve_effort_level_with(ctx.input.as_ref(), env),
+        )
     }
 
     /// Get the model name to display
@@ -76,7 +95,7 @@ impl Component for ModelComponent {
             return ComponentOutput::hidden();
         };
 
-        if let Some(level) = resolve_effort_level(ctx.input.as_ref()) {
+        if let Some(level) = self.effort_level(ctx) {
             text.push(' ');
             text.push_str(level.symbol());
         }
@@ -138,6 +157,24 @@ mod tests {
         input
     }
 
+    /// Build a component that reports no effort level, keeping name-formatting
+    /// tests independent of the process environment.
+    fn build_component(config: ModelComponentConfig) -> ModelComponent {
+        build_component_with_effort(config, EffortEnv::default())
+    }
+
+    /// Build a component whose effort resolution is pinned to `effort_env`
+    /// instead of reading `std::env`.
+    fn build_component_with_effort(
+        config: ModelComponentConfig,
+        effort_env: EffortEnv,
+    ) -> ModelComponent {
+        ModelComponent {
+            config,
+            effort_env: Some(effort_env),
+        }
+    }
+
     fn create_test_context_with_model(
         id: Option<String>,
         display_name: Option<String>,
@@ -158,7 +195,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_short_name_with_params() {
-        let component = ModelComponent::new(ModelComponentConfig::default());
+        let component = build_component(ModelComponentConfig::default());
         let ctx = create_test_context_with_model(
             Some("claude-sonnet-4-5-20250929[1m]".to_string()),
             None,
@@ -171,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_short_name_major_only() {
-        let component = ModelComponent::new(ModelComponentConfig::default());
+        let component = build_component(ModelComponentConfig::default());
         let ctx = create_test_context_with_model(Some("claude-haiku-3-20240307".to_string()), None);
 
         let output = component.render(&ctx).await;
@@ -181,7 +218,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_short_name_opus() {
-        let component = ModelComponent::new(ModelComponentConfig::default());
+        let component = build_component(ModelComponentConfig::default());
         let ctx =
             create_test_context_with_model(Some("claude-opus-4-1-20250805".to_string()), None);
 
@@ -198,7 +235,7 @@ mod tests {
             config.show_full_name = true;
         });
 
-        let component = ModelComponent::new(config);
+        let component = build_component(config);
         let ctx = create_test_context_with_model(
             Some("claude-sonnet-4-5-20250929[1m]".to_string()),
             None,
@@ -215,7 +252,7 @@ mod tests {
             config.show_full_name = true;
         });
 
-        let component = ModelComponent::new(config);
+        let component = build_component(config);
         let ctx = create_test_context_with_model(Some("claude-haiku-3-20240307".to_string()), None);
 
         let output = component.render(&ctx).await;
@@ -229,7 +266,7 @@ mod tests {
             config.show_full_name = true;
         });
 
-        let component = ModelComponent::new(config);
+        let component = build_component(config);
         let ctx =
             create_test_context_with_model(Some("claude-opus-4-1-20250805".to_string()), None);
 
@@ -249,7 +286,7 @@ mod tests {
             );
         });
 
-        let component = ModelComponent::new(config);
+        let component = build_component(config);
         let ctx = create_test_context_with_model(
             Some("claude-sonnet-4-5-20250929[1m]".to_string()),
             None,
@@ -270,7 +307,7 @@ mod tests {
             );
         });
 
-        let component = ModelComponent::new(config);
+        let component = build_component(config);
         let ctx =
             create_test_context_with_model(Some("claude-opus-4-1-20250805".to_string()), None);
 
@@ -283,7 +320,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fallback_to_original_id_on_parse_failure() {
-        let component = ModelComponent::new(ModelComponentConfig::default());
+        let component = build_component(ModelComponentConfig::default());
         let ctx = create_test_context_with_model(Some("invalid-format".to_string()), None);
 
         let output = component.render(&ctx).await;
@@ -294,7 +331,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fallback_to_display_name_when_no_id() {
-        let component = ModelComponent::new(ModelComponentConfig::default());
+        let component = build_component(ModelComponentConfig::default());
         let ctx = create_test_context_with_model(None, Some("Some Model Name".to_string()));
 
         let output = component.render(&ctx).await;
@@ -303,11 +340,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_model_appends_effort_symbol_from_env() -> Result<()> {
-        let original_effort = env::var_os("CLAUDE_CODE_EFFORT_LEVEL");
-        env::set_var("CLAUDE_CODE_EFFORT_LEVEL", "xhigh");
-
         let input = build_input(|input| {
             input.model = Some(ModelInfo {
                 id: Some("claude-opus-4-1-20250805".to_string()),
@@ -325,26 +358,25 @@ mod tests {
             preview_mode: false,
         };
 
-        let component = ModelComponent::new(ModelComponentConfig::default());
+        let component = build_component_with_effort(
+            ModelComponentConfig::default(),
+            EffortEnv {
+                env_level: Some("xhigh".to_string()),
+                ..EffortEnv::default()
+            },
+        );
 
         let output = component.render(&ctx).await;
         assert!(output.visible);
         assert_eq!(output.text, "O4.1 ◉");
 
-        restore_env("CLAUDE_CODE_EFFORT_LEVEL", original_effort);
         Ok(())
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_model_appends_effort_symbol_from_settings() -> Result<()> {
         let home = tempdir()?;
         let project = tempdir()?;
-        let original_home = env::var_os("HOME");
-        let original_effort = env::var_os("CLAUDE_CODE_EFFORT_LEVEL");
-
-        env::set_var("HOME", home.path());
-        env::remove_var("CLAUDE_CODE_EFFORT_LEVEL");
 
         let settings_path = project.path().join(".claude/settings.local.json");
         if let Some(parent) = settings_path.parent() {
@@ -375,15 +407,59 @@ mod tests {
             preview_mode: false,
         };
 
-        let component = ModelComponent::new(ModelComponentConfig::default());
+        // `home` is an empty temp dir standing in for the user-level settings
+        // location, so the project-level file is what actually resolves.
+        let component = build_component_with_effort(
+            ModelComponentConfig::default(),
+            EffortEnv {
+                home: Some(home.path().to_path_buf()),
+                ..EffortEnv::default()
+            },
+        );
         let output = component.render(&ctx).await;
 
         assert!(output.visible);
         assert_eq!(output.text, "S4.5 ◈");
 
-        restore_env("HOME", original_home);
-        restore_env("CLAUDE_CODE_EFFORT_LEVEL", original_effort);
         Ok(())
+    }
+
+    /// Covers the production path: [`ModelComponent::new`] must fall back to the
+    /// live process environment. Every other test in this module injects an
+    /// [`EffortEnv`], so this is the only one that reads process-global state —
+    /// hence `#[serial]`.
+    #[tokio::test]
+    #[serial]
+    async fn test_model_reads_effort_from_process_env() {
+        let original_effort = env::var_os("CLAUDE_CODE_EFFORT_LEVEL");
+        env::set_var("CLAUDE_CODE_EFFORT_LEVEL", "xhigh");
+
+        let input = build_input(|input| {
+            input.model = Some(ModelInfo {
+                id: Some("claude-opus-4-1-20250805".to_string()),
+                display_name: None,
+            });
+            input.extra = serde_json::json!({
+                "version": "2.1.90"
+            });
+        });
+
+        let ctx = RenderContext {
+            input: Arc::new(input),
+            config: Arc::new(Config::default()),
+            terminal: TerminalCapabilities::default(),
+            preview_mode: false,
+        };
+
+        let output = ModelComponent::new(ModelComponentConfig::default())
+            .render(&ctx)
+            .await;
+
+        // Restore before asserting so a failure cannot leak the override.
+        restore_env("CLAUDE_CODE_EFFORT_LEVEL", original_effort);
+
+        assert!(output.visible);
+        assert_eq!(output.text, "O4.1 ◉");
     }
 
     // ==================== 边缘情况测试 ====================
@@ -394,7 +470,7 @@ mod tests {
             config.base.enabled = false;
         });
 
-        let component = ModelComponent::new(config);
+        let component = build_component(config);
         let ctx =
             create_test_context_with_model(Some("claude-sonnet-4-5-20250929".to_string()), None);
 
@@ -404,7 +480,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_model_info() {
-        let component = ModelComponent::new(ModelComponentConfig::default());
+        let component = build_component(ModelComponentConfig::default());
         let input = build_input(|input| {
             input.model = None;
         });
