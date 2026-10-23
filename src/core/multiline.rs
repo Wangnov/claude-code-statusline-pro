@@ -1535,7 +1535,7 @@ method = "GET"
 
         let result = renderer.render_extension_lines(&context).await;
         assert!(result.success);
-        assert!(result.lines.is_empty());
+        assert_eq!(result.lines, [] as [String; 0]);
         Ok(())
     }
 
