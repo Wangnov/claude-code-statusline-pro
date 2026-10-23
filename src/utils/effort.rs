@@ -50,25 +50,61 @@ impl EffortLevel {
     }
 }
 
+/// The process-global inputs that effort resolution consults.
+///
+/// Resolution reads an environment variable and the user's home directory, both
+/// of which are per-process rather than per-call. Reading them inline forced
+/// every test touching effort resolution to mutate `std::env`, which leaked
+/// into unrelated tests running in parallel and made them flaky. Capturing the
+/// values up front keeps [`resolve_effort_level_with`] a pure function of its
+/// arguments, so tests cover each layer by constructing this struct instead.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EffortEnv {
+    /// Raw `CLAUDE_CODE_EFFORT_LEVEL` value, when set.
+    pub env_level: Option<String>,
+    /// Whether `CLAUDECODE` is present, marking a live Claude Code session.
+    pub claude_code_active: bool,
+    /// Home directory used to locate the user-level `settings.json`.
+    pub home: Option<PathBuf>,
+}
+
+impl EffortEnv {
+    /// Snapshot the live process environment.
+    #[must_use]
+    pub fn from_process() -> Self {
+        Self {
+            env_level: env::var(ENV_KEY).ok(),
+            claude_code_active: env::var_os(CLAUDECODE_ENV_KEY).is_some(),
+            home: home_dir(),
+        }
+    }
+}
+
 #[must_use]
 pub fn resolve_effort_level(input: &InputData) -> Option<EffortLevel> {
-    if !has_claude_code_context(input) {
+    resolve_effort_level_with(input, &EffortEnv::from_process())
+}
+
+/// Resolve the effort level from `input` against an explicit environment
+/// snapshot, rather than whatever the process environment currently holds.
+#[must_use]
+pub fn resolve_effort_level_with(input: &InputData, env: &EffortEnv) -> Option<EffortLevel> {
+    if !has_claude_code_context(input, env) {
         return None;
     }
 
-    env::var(ENV_KEY)
-        .ok()
-        .and_then(|value| EffortLevel::from_value(&value))
-        .or_else(|| resolve_settings_effort(input))
+    env.env_level
+        .as_deref()
+        .and_then(EffortLevel::from_value)
+        .or_else(|| resolve_settings_effort(input, env))
 }
 
-fn has_claude_code_context(input: &InputData) -> bool {
-    env::var_os(CLAUDECODE_ENV_KEY).is_some()
-        || input.extra.get("version").and_then(Value::as_str).is_some()
+fn has_claude_code_context(input: &InputData, env: &EffortEnv) -> bool {
+    env.claude_code_active || input.extra.get("version").and_then(Value::as_str).is_some()
 }
 
-fn resolve_settings_effort(input: &InputData) -> Option<EffortLevel> {
-    for path in settings_candidates(input) {
+fn resolve_settings_effort(input: &InputData, env: &EffortEnv) -> Option<EffortLevel> {
+    for path in settings_candidates(input, env) {
         if let Some(level) = read_effort_from_settings(path.as_path()) {
             return Some(level);
         }
@@ -77,7 +113,7 @@ fn resolve_settings_effort(input: &InputData) -> Option<EffortLevel> {
     None
 }
 
-fn settings_candidates(input: &InputData) -> Vec<PathBuf> {
+fn settings_candidates(input: &InputData, env: &EffortEnv) -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
     if let Some(project_root) = input.project_root_dir().or_else(|| input.project_dir()) {
@@ -86,7 +122,7 @@ fn settings_candidates(input: &InputData) -> Vec<PathBuf> {
         paths.push(base.join(SETTINGS_FILE));
     }
 
-    if let Some(home) = home_dir() {
+    if let Some(home) = env.home.as_ref() {
         paths.push(home.join(SETTINGS_DIR).join(SETTINGS_FILE));
     }
 
@@ -123,15 +159,9 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_env_takes_priority_over_settings() -> Result<()> {
         let home = tempdir()?;
         let project = tempdir()?;
-        let original_home = env::var_os("HOME");
-        let original_effort = env::var_os(ENV_KEY);
-
-        env::set_var("HOME", home.path());
-        env::set_var(ENV_KEY, "xhigh");
 
         write_settings(
             home.path().join(".claude/settings.json"),
@@ -143,23 +173,23 @@ mod tests {
         )?;
 
         let input = input_with_project(project.path().to_string_lossy().as_ref());
-        assert_eq!(resolve_effort_level(&input), Some(EffortLevel::XHigh));
+        let env = EffortEnv {
+            env_level: Some("xhigh".to_string()),
+            home: Some(home.path().to_path_buf()),
+            ..EffortEnv::default()
+        };
 
-        restore_env("HOME", original_home);
-        restore_env(ENV_KEY, original_effort);
+        assert_eq!(
+            resolve_effort_level_with(&input, &env),
+            Some(EffortLevel::XHigh)
+        );
         Ok(())
     }
 
     #[test]
-    #[serial]
     fn test_local_settings_override_project_and_user() -> Result<()> {
         let home = tempdir()?;
         let project = tempdir()?;
-        let original_home = env::var_os("HOME");
-        let original_effort = env::var_os(ENV_KEY);
-
-        env::set_var("HOME", home.path());
-        env::remove_var(ENV_KEY);
 
         write_settings(
             home.path().join(".claude/settings.json"),
@@ -175,22 +205,21 @@ mod tests {
         )?;
 
         let input = input_with_project(project.path().to_string_lossy().as_ref());
-        assert_eq!(resolve_effort_level(&input), Some(EffortLevel::High));
+        let env = EffortEnv {
+            home: Some(home.path().to_path_buf()),
+            ..EffortEnv::default()
+        };
 
-        restore_env("HOME", original_home);
-        restore_env(ENV_KEY, original_effort);
+        assert_eq!(
+            resolve_effort_level_with(&input, &env),
+            Some(EffortLevel::High)
+        );
         Ok(())
     }
 
     #[test]
-    #[serial]
     fn test_settings_support_max_level() -> Result<()> {
         let home = tempdir()?;
-        let original_home = env::var_os("HOME");
-        let original_effort = env::var_os(ENV_KEY);
-
-        env::set_var("HOME", home.path());
-        env::remove_var(ENV_KEY);
 
         write_settings(
             home.path().join(".claude/settings.json"),
@@ -198,11 +227,63 @@ mod tests {
         )?;
 
         let input = input_with_project(home.path().to_string_lossy().as_ref());
-        assert_eq!(resolve_effort_level(&input), Some(EffortLevel::Max));
+        let env = EffortEnv {
+            home: Some(home.path().to_path_buf()),
+            ..EffortEnv::default()
+        };
 
-        restore_env("HOME", original_home);
-        restore_env(ENV_KEY, original_effort);
+        assert_eq!(
+            resolve_effort_level_with(&input, &env),
+            Some(EffortLevel::Max)
+        );
         Ok(())
+    }
+
+    #[test]
+    fn test_no_effort_without_claude_code_context() {
+        // Neither `CLAUDECODE` nor a `version` field: nothing to report, even
+        // though the env var names a level.
+        let input = InputData::default();
+        let env = EffortEnv {
+            env_level: Some("xhigh".to_string()),
+            ..EffortEnv::default()
+        };
+
+        assert_eq!(resolve_effort_level_with(&input, &env), None);
+    }
+
+    #[test]
+    fn test_claudecode_flag_supplies_context() {
+        let input = InputData::default();
+        let env = EffortEnv {
+            env_level: Some("high".to_string()),
+            claude_code_active: true,
+            ..EffortEnv::default()
+        };
+
+        assert_eq!(
+            resolve_effort_level_with(&input, &env),
+            Some(EffortLevel::High)
+        );
+    }
+
+    /// Covers the glue between the process environment and [`EffortEnv`]. Every
+    /// other test here injects a snapshot, so this is the only one that reads
+    /// process-global state — hence `#[serial]`. It deliberately asserts on
+    /// `env_level` alone: `home` depends on `HOME`, which other test modules
+    /// mutate.
+    #[test]
+    #[serial]
+    fn test_from_process_reads_env_level() {
+        let original = env::var_os(ENV_KEY);
+
+        env::set_var(ENV_KEY, "high");
+        assert_eq!(EffortEnv::from_process().env_level.as_deref(), Some("high"));
+
+        env::remove_var(ENV_KEY);
+        assert_eq!(EffortEnv::from_process().env_level, None);
+
+        restore_env(ENV_KEY, original);
     }
 
     fn input_with_project(project_dir: &str) -> InputData {
