@@ -1236,7 +1236,7 @@ mod tests {
         assert!(
             provider_pricing(&providers, &["deepseek-v4-pro".to_string()], None)
                 .as_ref()
-                .is_some_and(&is_v4_pro_pricing),
+                .is_some_and(is_v4_pro_pricing),
             "plain deepseek-v4-pro should resolve builtin pricing"
         );
 
@@ -1245,7 +1245,7 @@ mod tests {
         assert!(
             provider_pricing(&providers, &["deepseek-v4-pro[1m]".to_string()], None)
                 .as_ref()
-                .is_some_and(&is_v4_pro_pricing),
+                .is_some_and(is_v4_pro_pricing),
             "deepseek-v4-pro[1m] should resolve builtin pricing after stripping [1m]"
         );
     }
