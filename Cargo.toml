@@ -48,7 +48,7 @@ ratatui = "0.30"
 ansi-to-tui = "8.0.1"
 
 # System utilities
-dirs = "6.0.0"
+dirs = "7.0.0"
 chrono = { version = "0.4", features = ["serde"] }
 lazy_static = "1.4"
 regex = "1.12"
